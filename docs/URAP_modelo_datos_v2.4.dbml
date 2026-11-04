@@ -1,0 +1,983 @@
+// =====================================================================
+// URAP - Modelo de datos v2.4
+// Sistema de informacion para el seguimiento, control y analisis de los
+// proyectos docentes del programa de Administracion Industrial - UdeC
+//
+// Cambios frente a la v1:
+//   1. Un usuario puede tener varios roles (usuario_rol) + permisos por modulo
+//   2. Un proyecto docente puede tener varios docentes (hasta 3, segun formato)
+//   3. Rubricas versionadas y escala de valoracion parametrizable por programa
+//   4. Calendario de sesiones, festivos y tipos de sesion especiales
+//   5. Estudiantes, matricula e inasistencias
+//   6. Medicion de RAP por estudiante e indicador (FO-DO/PC-023),
+//      incorporada al alcance el 27/10/2026 (OBJ-08, RF-30 a RF-32)
+//   7. Historial de revision/aprobacion con las 3 firmas del formato
+//   8. Notificaciones y parametros del sistema
+//   9. Sesiones de usuario, para poder revocar un JWT al cerrar sesion
+//      (v2.2, 03/11/2026 - HU-01-02 exigia rechazar el token tras el
+//      logout y el modelo no tenia donde registrarlo)
+//  10. v2.3 (03/11/2026): precision explicita en los decimales de porcentaje,
+//      created_at con valor por defecto en el motor, y aclaracion de que la
+//      expiracion del token no es un parametro de base de datos.
+//      updated_at NO lleva default: ON UPDATE CURRENT_TIMESTAMP no se puede
+//      expresar en DBML, asi que lo maneja el ORM (@updatedAt en Prisma).
+//  11. v2.4 (04/11/2026): todas las marcas de tiempo pasan de timestamp a
+//      datetime. MySQL limita timestamp al 19-01-2038 y el modelo ya usaba
+//      datetime en el resto de las columnas de fecha; ahora es homogeneo.
+//
+// Trazabilidad: cada bloque indica el requisito (RF/NFR) que lo sustenta
+// en Requisitos_URAP_v1.0.xlsx
+// =====================================================================
+
+
+// =====================================================================
+// 1. SEGURIDAD: USUARIOS, ROLES Y PERMISOS          (RF-01, RF-02, RF-03)
+// =====================================================================
+
+Table rol {
+  id integer [primary key, increment]
+  nombre varchar [unique] // Administrador, Departamento, Docente, Lider RAP, Direccion, Estudiante
+  descripcion varchar
+  activo boolean [default: true]
+  created_at datetime [default: `now()`]
+  updated_at datetime
+}
+
+Table usuario {
+  id integer [primary key, increment]
+  nombres varchar
+  apellidos varchar
+  email varchar [unique] // correo institucional
+  password_hash varchar  // NFR-005: hash + salt, nunca texto plano
+  identificacion varchar [unique]
+  id_programa integer    // programa al que pertenece (opcional para admin)
+  activo boolean [default: true]
+  ultimo_acceso datetime
+  intentos_fallidos integer [default: 0] // RF-01: bloqueo tras 5 intentos
+  bloqueado_hasta datetime
+  created_at datetime [default: `now()`]
+  updated_at datetime
+}
+
+// CAMBIO PRINCIPAL: relacion N:M. Reemplaza usuario.id_rol de la v1.
+// Permite que un mismo usuario sea, por ejemplo, Docente y Lider RAP,
+// o Docente y Departamento academico, en el mismo periodo.
+Table usuario_rol {
+  id integer [primary key, increment]
+  id_usuario integer
+  id_rol integer
+  id_programa integer // alcance del rol; null = alcance global (admin)
+  activo boolean [default: true]
+  id_asignado_por integer
+  fecha_asignacion datetime
+  fecha_revocacion datetime // RF-02 / NFR-017: revocacion logica, no borrado
+
+  // PK sustituta en lugar de PK compuesta: id_programa admite null para los
+  // roles globales y MySQL no permite columnas null en una clave primaria.
+  // Ojo: MySQL trata cada null como distinto en un indice unico, asi que la
+  // unicidad del caso global se valida ademas en el backend.
+  indexes {
+    (id_usuario, id_rol, id_programa) [unique]
+  }
+}
+
+// NUEVO v2.2 - RF-01: un JWT es autocontenido y el servidor no lo puede
+// "olvidar" por si solo. Para que una peticion posterior al logout sea
+// rechazada, cada token emitido se registra aqui por su identificador (jti)
+// y el guard verifica que la sesion siga vigente. Sirve ademas para que el
+// administrador revise los accesos al sistema.
+Table sesion {
+  id integer [primary key, increment]
+  id_usuario integer
+  jti varchar [unique] // identificador unico del token emitido
+  emitida_en datetime
+  expira_en datetime
+  revocada_en datetime // null mientras la sesion siga activa
+  motivo_revocacion varchar // logout | expiracion | revocada_por_admin | cambio_password
+  ip varchar
+  user_agent varchar
+
+  indexes {
+    (id_usuario, revocada_en)
+  }
+}
+
+// RF-03: matriz de permisos por modulo (Tabla 17 del Producto 1)
+Table modulo {
+  id integer [primary key, increment]
+  codigo varchar [unique] // usuarios, estructura, proyectos, rap, clases, documentos, reportes, auditoria
+  nombre varchar
+  orden integer
+}
+
+Table permiso {
+  id integer [primary key, increment]
+  codigo varchar [unique] // leer, crear, actualizar, eliminar, generar, administrar, aprobar
+  nombre varchar
+}
+
+Table rol_permiso {
+  id_rol integer
+  id_modulo integer
+  id_permiso integer
+
+  indexes {
+    (id_rol, id_modulo, id_permiso) [pk]
+  }
+}
+
+
+// =====================================================================
+// 2. ESTRUCTURA ACADEMICA                                      (RF-04)
+// =====================================================================
+
+Table facultad {
+  id integer [primary key, increment]
+  nombre varchar [unique]
+  id_decano integer // firma APRUEBA del formato FO-DO/PC-001
+  activo boolean [default: true]
+  created_at datetime [default: `now()`]
+  updated_at datetime
+}
+
+Table programa {
+  id integer [primary key, increment]
+  id_facultad integer
+  nombre varchar
+  codigo varchar
+  id_director integer // firma REVISA del formato FO-DO/PC-001
+  id_escala_activa integer // RF-07: escala de valoracion RAP vigente
+  activo boolean [default: true]
+  created_at datetime [default: `now()`]
+  updated_at datetime
+
+  indexes {
+    (id_facultad, nombre) [unique]
+  }
+}
+
+Table asignatura {
+  id integer [primary key, increment]
+  id_programa integer
+  codigo_interno varchar  // Ej: FP15503
+  nombre varchar
+  semestre integer        // NUEVO: nivel del plan de estudios (I a X)
+  componente varchar      // NUEVO: BASICO | PROFESIONAL | COMPLEMENTARIO
+  tipo_curso varchar      // NUEVO: Obligatorio | Electivo
+  creditos integer
+  horas_ti integer        // trabajo independiente
+  horas_tde integer       // acompanamiento directo teoricas
+  horas_tdp integer       // acompanamiento directo practicas
+  horas_totales integer   // RF-04: validacion creditos vs horas (2 cr = 96 h)
+  activo boolean [default: true]
+  created_at datetime [default: `now()`]
+  updated_at datetime
+
+  indexes {
+    (id_programa, codigo_interno) [unique]
+  }
+}
+
+// NUEVO - RF-04: prerrequisitos y correquisitos del formato (punto 1)
+Table asignatura_requisito {
+  id_asignatura integer
+  id_asignatura_requerida integer
+  tipo varchar // prerrequisito | correquisito
+
+  indexes {
+    (id_asignatura, id_asignatura_requerida, tipo) [pk]
+  }
+}
+
+Table periodo_academico {
+  id integer [primary key, increment]
+  codigo varchar [unique] // 2026-1, 2026-2
+  fecha_inicio date
+  fecha_fin date
+  numero_semanas integer // RF-15 / RF-19: base del contenido y del calendario
+  activo boolean [default: true]
+  cerrado boolean [default: false] // RF-17: bloquea envios y registros
+}
+
+// NUEVO - RF-19: festivos de Colombia (Ley 51 de 1983), por ano
+Table dia_festivo {
+  id integer [primary key, increment]
+  fecha date
+  nombre varchar
+  anio integer
+  origen varchar // ley | institucional | ajuste_manual
+  created_at datetime [default: `now()`]
+
+  indexes {
+    (fecha) [unique]
+  }
+}
+
+
+// =====================================================================
+// 3. RESULTADOS DE APRENDIZAJE DEL PROGRAMA (RAP)   (RF-05, RF-06, RF-07)
+// =====================================================================
+
+Table rap {
+  id integer [primary key, increment]
+  id_programa integer
+  codigo varchar // RAP 1 ... RAP 7
+  numero integer // numero segun el Proyecto Educativo del Programa
+  descripcion text
+  competencia_asociada varchar
+  perfil_egreso text
+  activo boolean [default: true]
+  created_at datetime [default: `now()`]
+  updated_at datetime
+
+  indexes {
+    (id_programa, codigo) [unique]
+  }
+}
+
+// NUEVO - RF-05: mapeo curricular. Que asignaturas contribuyen a cada RAP.
+// Es independiente de los RAC: existe aunque no haya proyecto docente creado.
+Table asignatura_rap {
+  id_asignatura integer
+  id_rap integer
+  activo boolean [default: true]
+
+  indexes {
+    (id_asignatura, id_rap) [pk]
+  }
+}
+
+Table indicador_rap {
+  id integer [primary key, increment]
+  id_rap integer
+  numero integer // Indicador de Desempeno 1, 2, 3, 4
+  descripcion text
+  activo boolean [default: true]
+  created_at datetime [default: `now()`]
+  updated_at datetime
+
+  indexes {
+    (id_rap, numero) [unique]
+  }
+}
+
+// NUEVO - RF-07: cada programa define su propia escala de valoracion.
+// Admon Industrial usa 4 niveles (1 Principiante ... 4 Ejemplar).
+Table escala_valoracion {
+  id integer [primary key, increment]
+  id_programa integer
+  nombre varchar
+  numero_niveles integer
+  umbral_cumplimiento integer // nivel desde el cual se considera logrado (3)
+  porcentaje_esperado decimal(5,2) // % esperado en niveles 3+4 (FO-DO/PC-023)
+  vigente boolean [default: true]
+  created_at datetime [default: `now()`]
+}
+
+Table nivel_escala {
+  id integer [primary key, increment]
+  id_escala integer
+  valor integer    // 1, 2, 3, 4
+  etiqueta varchar // Principiante, En Desarrollo, Competente, Ejemplar
+  descripcion text
+
+  indexes {
+    (id_escala, valor) [unique]
+  }
+}
+
+// NUEVO - RF-06: rubrica por programa y RAP, versionada.
+// El versionado evita que editar una rubrica altere mediciones ya hechas.
+Table rubrica {
+  id integer [primary key, increment]
+  id_rap integer
+  id_escala integer
+  version integer
+  estado varchar // borrador | vigente | historica
+  id_creado_por integer
+  fecha_vigencia_inicio date
+  fecha_vigencia_fin date
+  created_at datetime [default: `now()`]
+  updated_at datetime
+
+  indexes {
+    (id_rap, version) [unique]
+  }
+}
+
+// Descripcion del desempeno esperado por indicador y nivel (celda de la rubrica)
+Table rubrica_descriptor {
+  id integer [primary key, increment]
+  id_rubrica integer
+  id_indicador integer
+  id_nivel integer
+  descripcion text
+
+  indexes {
+    (id_rubrica, id_indicador, id_nivel) [unique]
+  }
+}
+
+Table lider_rap {
+  id integer [primary key, increment]
+  id_rap integer
+  id_usuario integer
+  id_periodo integer
+  activo boolean [default: true]
+  created_at datetime [default: `now()`]
+  updated_at datetime
+
+  indexes {
+    (id_rap, id_usuario, id_periodo) [unique]
+  }
+}
+
+
+// =====================================================================
+// 4. PROYECTO DOCENTE                        (RF-08, RF-09, RF-10, RF-11)
+// =====================================================================
+
+Table estado_proyecto {
+  id integer [primary key, increment]
+  codigo varchar [unique] // en_diligenciamiento, enviado, devuelto, aprobado, en_ejecucion, cerrado
+  nombre varchar
+  descripcion varchar
+  orden integer
+  permite_edicion boolean // RF-11: bloquea edicion en aprobado/cerrado
+}
+
+Table proyecto_docente {
+  id integer [primary key, increment]
+  id_asignatura integer
+  id_periodo integer
+  id_estado integer
+  grupo varchar
+  descripcion text          // punto 2 del formato - RF-11
+  id_proyecto_origen integer // RF-09: proyecto del que fue duplicado
+  origen varchar             // manual | duplicado | importado_excel (RF-08/09/10)
+  id_creado_por integer
+  fecha_envio datetime
+  fecha_aprobacion datetime
+  fecha_creacion datetime
+  fecha_actualizacion datetime
+
+  // CAMBIO: la unicidad ya no depende del docente, porque un proyecto
+  // puede tener varios. Un curso = asignatura + periodo + grupo.
+  indexes {
+    (id_asignatura, id_periodo, grupo) [unique]
+  }
+}
+
+// NUEVO - el formato FO-DO/PC-001 admite hasta 3 docentes por proyecto
+Table proyecto_docente_docente {
+  id_proyecto_docente integer
+  id_usuario integer
+  responsable boolean [default: false] // quien firma ELABORO y diligencia
+  orden integer
+
+  indexes {
+    (id_proyecto_docente, id_usuario) [pk]
+  }
+}
+
+// NUEVO - RF-08 paso 3: los RAP se eligen al crear el proyecto,
+// antes de que existan los RAC. Fija la rubrica vigente de cada RAP.
+Table proyecto_docente_rap {
+  id_proyecto_docente integer
+  id_rap integer
+  id_rubrica integer // version de rubrica congelada para este periodo
+
+  indexes {
+    (id_proyecto_docente, id_rap) [pk]
+  }
+}
+
+Table plan_curso {
+  id integer [primary key, increment]
+  id_proyecto_docente integer [unique]
+  recursos_educativos text
+  observaciones_iniciales text
+  created_at datetime [default: `now()`]
+  updated_at datetime
+  // Se retiraron 'metodologia' y 'criterios_evaluacion' de la v1:
+  // quedaban duplicados con estrategia_metodologica (RF-13)
+  // y con evaluacion_rac (RF-14).
+}
+
+
+// =====================================================================
+// 5. PLANEACION ACADEMICA DEL CURSO      (RF-12, RF-13, RF-14, RF-15, RF-16)
+// =====================================================================
+
+Table rac {
+  id integer [primary key, increment]
+  id_proyecto_docente integer
+  codigo varchar // RAC 6.1, RAC 7.1
+  descripcion text
+  orden integer
+  created_at datetime [default: `now()`]
+  updated_at datetime
+}
+
+// RF-12: un RAC puede contribuir a varios RAP (RN-05 del Producto 1)
+Table rac_rap {
+  id_rac integer
+  id_rap integer
+  descripcion_contribucion text
+
+  indexes {
+    (id_rac, id_rap) [pk]
+  }
+}
+
+// RF-14: punto 5 del formato - evaluacion de los resultados de aprendizaje
+Table evaluacion_rac {
+  id integer [primary key, increment]
+  id_rac integer
+  instrumento varchar // taller, ensayo, informe, sustentacion...
+  descripcion text
+  porcentaje decimal(5,2) // peso del instrumento dentro del RAC, 0 a 100
+  created_at datetime [default: `now()`]
+  updated_at datetime
+}
+
+// RF-13: punto 4 del formato
+Table estrategia_metodologica {
+  id integer [primary key, increment]
+  id_proyecto_docente integer
+  descripcion text
+  orden integer
+  created_at datetime [default: `now()`]
+  updated_at datetime
+}
+
+// RF-15: punto 6 del formato - una fila por semana
+Table contenido_programatico {
+  id integer [primary key, increment]
+  id_proyecto_docente integer
+  semana integer
+  tema varchar
+  horas_tde integer
+  horas_tdp integer
+  horas_ti integer
+  created_at datetime [default: `now()`]
+  updated_at datetime
+
+  indexes {
+    (id_proyecto_docente, semana) [unique]
+  }
+}
+
+// RF-16: punto 7 del formato
+Table bibliografia {
+  id integer [primary key, increment]
+  id_proyecto_docente integer
+  referencia text
+  orden integer
+  created_at datetime [default: `now()`]
+  updated_at datetime
+}
+
+
+// =====================================================================
+// 6. REVISION Y APROBACION                            (RF-17, RF-18)
+// =====================================================================
+
+// NUEVO - historial completo. Reemplaza el cambio de estado sin rastro.
+// Conserva las 3 firmas del formato: ELABORO (docente, al enviar),
+// REVISO (director/coordinador) y APROBO (decano/director de instituto).
+Table revision_proyecto {
+  id integer [primary key, increment]
+  id_proyecto_docente integer
+  id_usuario integer
+  tipo varchar     // elaboracion | revision | aprobacion
+  resultado varchar // enviado | aprobado | devuelto
+  id_estado_anterior integer
+  id_estado_nuevo integer
+  observacion_general text
+  fecha datetime
+}
+
+// Observaciones por seccion, para que el docente sepa que corregir
+Table observacion_revision {
+  id integer [primary key, increment]
+  id_revision integer
+  seccion varchar // descripcion | rac | estrategias | evaluacion | contenidos | bibliografia
+  observacion text
+  resuelta boolean [default: false]
+}
+
+
+// =====================================================================
+// 7. EJECUCION: CALENDARIO Y REGISTRO DE CLASES  (RF-19 a RF-23)
+// =====================================================================
+
+// NUEVO - RF-19: dias y horas de clase, base para generar el calendario
+Table horario_curso {
+  id integer [primary key, increment]
+  id_proyecto_docente integer
+  dia_semana integer // 1=lunes ... 6=sabado
+  hora_inicio time
+  hora_fin time
+}
+
+// NUEVO - RF-21: catalogo parametrizable de tipos de sesion
+Table tipo_sesion {
+  id integer [primary key, increment]
+  codigo varchar [unique] // clase | parcial | festivo | actividad_complementaria
+  nombre varchar
+  exige_tema boolean      // false para parcial, festivo y actividad
+  cuenta_como_dictada boolean
+  activo boolean [default: true]
+}
+
+// Reemplaza registro_clase de la v1. Ahora la sesion existe desde que se
+// genera el calendario (RF-19), no solo cuando el docente la diligencia.
+Table sesion_clase {
+  id integer [primary key, increment]
+  id_proyecto_docente integer
+  id_tipo_sesion integer
+  semana integer
+  fecha date
+  dia_semana integer
+  estado varchar // programada | registrada | vencida (RF-23, calculado)
+  descripcion varchar // parcial o actividad complementaria (RF-21)
+  observaciones text
+  id_dia_festivo integer // marcado automatico por RF-19
+  id_registrado_por integer
+  fecha_registro datetime
+  created_at datetime [default: `now()`]
+  updated_at datetime
+
+  indexes {
+    (id_proyecto_docente, fecha) [unique]
+  }
+}
+
+// NUEVO - RF-20: el docente selecciona los temas dictados desde el
+// contenido programatico; varios temas por sesion y un mismo tema puede
+// abarcar varias sesiones.
+Table sesion_tema {
+  id integer [primary key, increment]
+  id_sesion integer
+  id_contenido integer // null si fue un tema no planeado
+  tema_adicional varchar // RF-20 excepcion: tema fuera del contenido
+}
+
+
+// =====================================================================
+// 8. ESTUDIANTES, MATRICULA E INASISTENCIAS           (RF-22, RF-27)
+// =====================================================================
+// Depende del supuesto SUP-03: la lista de matriculados se carga por
+// archivo mientras no exista integracion con el sistema academico.
+// NFR-020: datos personales - acceso restringido a roles autorizados.
+
+Table estudiante {
+  id integer [primary key, increment]
+  id_usuario integer // null si el estudiante no tiene acceso al sistema
+  identificacion varchar [unique]
+  nombres varchar
+  apellidos varchar
+  email varchar
+  id_programa integer
+  activo boolean [default: true]
+  created_at datetime [default: `now()`]
+}
+
+Table matricula {
+  id integer [primary key, increment]
+  id_proyecto_docente integer
+  id_estudiante integer
+  estado varchar // matriculado | retirado
+  fecha_carga datetime
+  id_cargado_por integer
+
+  indexes {
+    (id_proyecto_docente, id_estudiante) [unique]
+  }
+}
+
+// RF-22: estudiantes que faltaron, seleccionados desde la lista del grupo
+Table inasistencia {
+  id_sesion integer
+  id_matricula integer
+  justificada boolean [default: false]
+  observacion varchar
+
+  indexes {
+    (id_sesion, id_matricula) [pk]
+  }
+}
+
+
+// =====================================================================
+// 9. MEDICION DE RAP (FO-DO/PC-023)             (RF-30, RF-31, RF-32)
+// =====================================================================
+// Incorporado al alcance el 27/10/2026 (OBJ-08).
+// Cubre el nucleo del formato 023: la valoracion por estudiante e
+// indicador (hoja Valoracion) y el consolidado con acciones de mejora
+// (hoja Evaluacion). Es el bloque que sustenta el componente de
+// "analisis" del titulo del proyecto.
+
+Table medicion_rap {
+  id integer [primary key, increment]
+  id_proyecto_docente integer
+  id_rap integer
+  id_rubrica integer // version de rubrica usada
+  tipo_valoracion varchar // formativa | sumativa
+  periodo_toma varchar // primer | segundo
+  anio_toma integer
+  tamano_cohorte integer
+  porcentaje_esperado decimal(5,2) // nivel de desempeno esperado (%)
+  estado varchar // borrador | cerrada
+  acciones_implementadas text // hoja Evaluacion del formato 023
+  resultados_obtenidos text
+  acciones_propuestas text
+  id_registrado_por integer // docente que registra la valoracion (RF-30)
+  id_cerrado_por integer    // docente o lider RAP que cierra el analisis (RF-31)
+  fecha_cierre datetime
+  created_at datetime [default: `now()`]
+  updated_at datetime
+
+  indexes {
+    (id_proyecto_docente, id_rap, tipo_valoracion, anio_toma) [unique]
+  }
+}
+
+// Instrumento con el que se evaluo cada indicador en esta medicion
+Table medicion_indicador {
+  id integer [primary key, increment]
+  id_medicion integer
+  id_indicador integer
+  instrumento varchar
+  descripcion_instrumento text
+
+  indexes {
+    (id_medicion, id_indicador) [unique]
+  }
+}
+
+// Hoja Valoracion del formato 023: un nivel (1-4) por estudiante e indicador.
+// Las tablas resumen y porcentual NO se almacenan: se calculan desde aqui.
+Table valoracion_estudiante {
+  id integer [primary key, increment]
+  id_medicion_indicador integer
+  id_matricula integer
+  id_nivel integer // nivel alcanzado segun la escala del programa
+
+  indexes {
+    (id_medicion_indicador, id_matricula) [unique]
+  }
+}
+
+
+// =====================================================================
+// 10. EVIDENCIAS Y DOCUMENTOS                          (RF-24, NFR-007)
+// =====================================================================
+
+// NUEVO - RF-24: evidencias fotograficas asociadas a un RAP
+Table evidencia_rap {
+  id integer [primary key, increment]
+  id_proyecto_docente integer
+  id_rap integer
+  id_sesion integer // opcional: sesion en la que se tomo la evidencia
+  nombre_original varchar
+  url varchar // ruta en S3, nunca publica (NFR-007)
+  tipo varchar // JPG | PNG | PDF
+  tamano_bytes integer
+  descripcion text
+  fecha date
+  id_subido_por integer
+  fecha_subida datetime
+}
+
+Table documento_soporte {
+  id integer [primary key, increment]
+  id_proyecto_docente integer
+  id_subido_por integer
+  nombre_original varchar
+  url varchar
+  tipo varchar // PDF | Word | Excel | Imagen
+  categoria varchar // soporte | importacion_excel (RF-10: archivo original)
+  tamano_bytes integer
+  descripcion text
+  fecha_subida datetime
+}
+
+
+// =====================================================================
+// 11. NOTIFICACIONES, REPORTES, AUDITORIA Y PARAMETROS
+// =====================================================================
+
+// NUEVO - RF-26: eventos notificables configurables por el administrador
+Table tipo_notificacion {
+  id integer [primary key, increment]
+  codigo varchar [unique] // asignacion_proyecto, sesion_por_vencer, sesion_vencida,
+                          // proyecto_devuelto, proyecto_aprobado, cierre_periodo
+  nombre varchar
+  plantilla text
+  envia_email boolean [default: true]
+  activo boolean [default: true]
+}
+
+Table notificacion {
+  id integer [primary key, increment]
+  id_tipo_notificacion integer
+  id_usuario integer
+  titulo varchar
+  mensaje text
+  entidad varchar  // proyecto_docente | sesion_clase | medicion_rap
+  id_entidad integer
+  url_destino varchar
+  leida boolean [default: false]
+  fecha_lectura datetime
+  estado_envio varchar // pendiente | enviado | fallido
+  intentos integer [default: 0]
+  fecha_envio datetime
+  created_at datetime [default: `now()`]
+}
+
+Table reporte_academico {
+  id integer [primary key, increment]
+  id_programa integer
+  id_periodo integer
+  id_generado_por integer
+  nombre varchar
+  tipo varchar // cumplimiento | ejecucion_contenidos | contribucion_rac_rap | medicion_rap
+  parametros json // filtros aplicados
+  url varchar
+  fecha_generacion datetime
+}
+
+Table auditoria {
+  id integer [primary key, increment]
+  id_usuario integer
+  accion varchar // crear | actualizar | eliminar | aprobar | consulta_sensible
+  tabla_afectada varchar
+  id_registro integer
+  valor_anterior json
+  valor_nuevo json
+  fecha datetime
+  ip varchar
+}
+
+// NUEVO - parametros de negocio configurables sin tocar codigo
+// Ej: dias_alerta_previa=2 (RF-23), intentos_maximos_login=5 (RF-01),
+//     minutos_bloqueo_login=15 (RF-01), tamano_max_archivo_mb=10 (NFR-019),
+//     tipos_archivo_permitidos.
+// NO van aqui los parametros de seguridad del despliegue: el secreto JWT y la
+// expiracion del token son variables de entorno, no datos editables por un
+// administrador desde la aplicacion.
+Table parametro_sistema {
+  id integer [primary key, increment]
+  clave varchar [unique]
+  valor varchar
+  tipo_dato varchar
+  descripcion varchar
+  id_actualizado_por integer
+  updated_at datetime
+}
+
+
+// =====================================================================
+// RELACIONES
+// =====================================================================
+
+// Seguridad
+Ref: usuario_rol.id_usuario > usuario.id
+Ref: usuario_rol.id_rol > rol.id
+Ref: usuario_rol.id_programa > programa.id
+Ref: usuario_rol.id_asignado_por > usuario.id
+Ref: usuario.id_programa > programa.id
+Ref: sesion.id_usuario > usuario.id
+Ref: rol_permiso.id_rol > rol.id
+Ref: rol_permiso.id_modulo > modulo.id
+Ref: rol_permiso.id_permiso > permiso.id
+
+// Estructura academica
+Ref: facultad.id_decano > usuario.id
+Ref: programa.id_facultad > facultad.id
+Ref: programa.id_director > usuario.id
+Ref: programa.id_escala_activa > escala_valoracion.id
+Ref: asignatura.id_programa > programa.id
+Ref: asignatura_requisito.id_asignatura > asignatura.id
+Ref: asignatura_requisito.id_asignatura_requerida > asignatura.id
+
+// RAP
+Ref: rap.id_programa > programa.id
+Ref: asignatura_rap.id_asignatura > asignatura.id
+Ref: asignatura_rap.id_rap > rap.id
+Ref: indicador_rap.id_rap > rap.id
+Ref: escala_valoracion.id_programa > programa.id
+Ref: nivel_escala.id_escala > escala_valoracion.id
+Ref: rubrica.id_rap > rap.id
+Ref: rubrica.id_escala > escala_valoracion.id
+Ref: rubrica.id_creado_por > usuario.id
+Ref: rubrica_descriptor.id_rubrica > rubrica.id
+Ref: rubrica_descriptor.id_indicador > indicador_rap.id
+Ref: rubrica_descriptor.id_nivel > nivel_escala.id
+Ref: lider_rap.id_rap > rap.id
+Ref: lider_rap.id_usuario > usuario.id
+Ref: lider_rap.id_periodo > periodo_academico.id
+
+// Proyecto docente
+Ref: proyecto_docente.id_asignatura > asignatura.id
+Ref: proyecto_docente.id_periodo > periodo_academico.id
+Ref: proyecto_docente.id_estado > estado_proyecto.id
+Ref: proyecto_docente.id_proyecto_origen > proyecto_docente.id
+Ref: proyecto_docente.id_creado_por > usuario.id
+Ref: proyecto_docente_docente.id_proyecto_docente > proyecto_docente.id
+Ref: proyecto_docente_docente.id_usuario > usuario.id
+Ref: proyecto_docente_rap.id_proyecto_docente > proyecto_docente.id
+Ref: proyecto_docente_rap.id_rap > rap.id
+Ref: proyecto_docente_rap.id_rubrica > rubrica.id
+Ref: plan_curso.id_proyecto_docente - proyecto_docente.id
+
+// Planeacion academica
+Ref: rac.id_proyecto_docente > proyecto_docente.id
+Ref: rac_rap.id_rac > rac.id
+Ref: rac_rap.id_rap > rap.id
+Ref: evaluacion_rac.id_rac > rac.id
+Ref: estrategia_metodologica.id_proyecto_docente > proyecto_docente.id
+Ref: contenido_programatico.id_proyecto_docente > proyecto_docente.id
+Ref: bibliografia.id_proyecto_docente > proyecto_docente.id
+
+// Revision
+Ref: revision_proyecto.id_proyecto_docente > proyecto_docente.id
+Ref: revision_proyecto.id_usuario > usuario.id
+Ref: revision_proyecto.id_estado_anterior > estado_proyecto.id
+Ref: revision_proyecto.id_estado_nuevo > estado_proyecto.id
+Ref: observacion_revision.id_revision > revision_proyecto.id
+
+// Ejecucion
+Ref: horario_curso.id_proyecto_docente > proyecto_docente.id
+Ref: sesion_clase.id_proyecto_docente > proyecto_docente.id
+Ref: sesion_clase.id_tipo_sesion > tipo_sesion.id
+Ref: sesion_clase.id_dia_festivo > dia_festivo.id
+Ref: sesion_clase.id_registrado_por > usuario.id
+Ref: sesion_tema.id_sesion > sesion_clase.id
+Ref: sesion_tema.id_contenido > contenido_programatico.id
+
+// Estudiantes
+Ref: estudiante.id_usuario > usuario.id
+Ref: estudiante.id_programa > programa.id
+Ref: matricula.id_proyecto_docente > proyecto_docente.id
+Ref: matricula.id_estudiante > estudiante.id
+Ref: matricula.id_cargado_por > usuario.id
+Ref: inasistencia.id_sesion > sesion_clase.id
+Ref: inasistencia.id_matricula > matricula.id
+
+// Medicion RAP
+Ref: medicion_rap.id_proyecto_docente > proyecto_docente.id
+Ref: medicion_rap.id_rap > rap.id
+Ref: medicion_rap.id_rubrica > rubrica.id
+Ref: medicion_rap.id_registrado_por > usuario.id
+Ref: medicion_rap.id_cerrado_por > usuario.id
+Ref: medicion_indicador.id_medicion > medicion_rap.id
+Ref: medicion_indicador.id_indicador > indicador_rap.id
+Ref: valoracion_estudiante.id_medicion_indicador > medicion_indicador.id
+Ref: valoracion_estudiante.id_matricula > matricula.id
+Ref: valoracion_estudiante.id_nivel > nivel_escala.id
+
+// Evidencias y documentos
+Ref: evidencia_rap.id_proyecto_docente > proyecto_docente.id
+Ref: evidencia_rap.id_rap > rap.id
+Ref: evidencia_rap.id_sesion > sesion_clase.id
+Ref: evidencia_rap.id_subido_por > usuario.id
+Ref: documento_soporte.id_proyecto_docente > proyecto_docente.id
+Ref: documento_soporte.id_subido_por > usuario.id
+
+// Transversales
+Ref: notificacion.id_tipo_notificacion > tipo_notificacion.id
+Ref: notificacion.id_usuario > usuario.id
+Ref: reporte_academico.id_programa > programa.id
+Ref: reporte_academico.id_periodo > periodo_academico.id
+Ref: reporte_academico.id_generado_por > usuario.id
+Ref: auditoria.id_usuario > usuario.id
+Ref: parametro_sistema.id_actualizado_por > usuario.id
+
+
+// =====================================================================
+// AGRUPACION PARA EL DIAGRAMA
+// =====================================================================
+
+TableGroup seguridad {
+  rol
+  usuario
+  usuario_rol
+  sesion
+  modulo
+  permiso
+  rol_permiso
+}
+
+TableGroup estructura_academica {
+  facultad
+  programa
+  asignatura
+  asignatura_requisito
+  periodo_academico
+  dia_festivo
+}
+
+TableGroup resultados_aprendizaje {
+  rap
+  asignatura_rap
+  indicador_rap
+  escala_valoracion
+  nivel_escala
+  rubrica
+  rubrica_descriptor
+  lider_rap
+}
+
+TableGroup proyecto_docente_grupo {
+  estado_proyecto
+  proyecto_docente
+  proyecto_docente_docente
+  proyecto_docente_rap
+  plan_curso
+  rac
+  rac_rap
+  evaluacion_rac
+  estrategia_metodologica
+  contenido_programatico
+  bibliografia
+}
+
+TableGroup revision {
+  revision_proyecto
+  observacion_revision
+}
+
+TableGroup ejecucion {
+  horario_curso
+  tipo_sesion
+  sesion_clase
+  sesion_tema
+}
+
+TableGroup estudiantes {
+  estudiante
+  matricula
+  inasistencia
+}
+
+TableGroup medicion {
+  medicion_rap
+  medicion_indicador
+  valoracion_estudiante
+}
+
+TableGroup documentos {
+  evidencia_rap
+  documento_soporte
+}
+
+TableGroup transversales {
+  tipo_notificacion
+  notificacion
+  reporte_academico
+  auditoria
+  parametro_sistema
+}

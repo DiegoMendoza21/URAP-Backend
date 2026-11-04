@@ -1,0 +1,860 @@
+// Modelos de URAP para Prisma.
+//
+// La línea base (prisma/migrations/0_init) se obtuvo una sola vez con `prisma db pull` sobre
+// la base creada con docs/URAP_esquema_mysql_v2.4.sql. Desde ahí este archivo se mantiene a
+// mano: cada cambio empieza en el DBML, se refleja aquí y llega a la base como migración
+// (`npm run db:migrar`). Ningún cambio está terminado hasta que el DBML y la migración digan
+// lo mismo (ver docs/modelo-datos.md).
+//
+// Todo campo `updated_at` lleva @updatedAt: el DDL no tiene ON UPDATE y lo actualiza Prisma.
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  importFileExtension = "js"
+  moduleFormat        = "esm"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model asignatura {
+  id                                                                            Int                    @id @default(autoincrement())
+  id_programa                                                                   Int?
+  codigo_interno                                                                String?                @db.VarChar(255)
+  nombre                                                                        String?                @db.VarChar(255)
+  semestre                                                                      Int?
+  componente                                                                    String?                @db.VarChar(255)
+  tipo_curso                                                                    String?                @db.VarChar(255)
+  creditos                                                                      Int?
+  horas_ti                                                                      Int?
+  horas_tde                                                                     Int?
+  horas_tdp                                                                     Int?
+  horas_totales                                                                 Int?
+  activo                                                                        Boolean?               @default(true)
+  created_at                                                                    DateTime?              @default(dbgenerated("(now())")) @db.DateTime(0)
+  updated_at                                                                    DateTime?              @updatedAt @db.DateTime(0)
+  programa                                                                      programa?              @relation(fields: [id_programa], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "asignatura_ibfk_1")
+  asignatura_rap                                                                asignatura_rap[]
+  asignatura_requisito_asignatura_requisito_id_asignaturaToasignatura           asignatura_requisito[] @relation("asignatura_requisito_id_asignaturaToasignatura")
+  asignatura_requisito_asignatura_requisito_id_asignatura_requeridaToasignatura asignatura_requisito[] @relation("asignatura_requisito_id_asignatura_requeridaToasignatura")
+  proyecto_docente                                                              proyecto_docente[]
+
+  @@unique([id_programa, codigo_interno], map: "asignatura_index_3")
+}
+
+model asignatura_rap {
+  id_asignatura Int
+  id_rap        Int
+  activo        Boolean?   @default(true)
+  asignatura    asignatura @relation(fields: [id_asignatura], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "asignatura_rap_ibfk_1")
+  rap           rap        @relation(fields: [id_rap], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "asignatura_rap_ibfk_2")
+
+  @@id([id_asignatura, id_rap])
+  @@index([id_rap], map: "id_rap")
+}
+
+model asignatura_requisito {
+  id_asignatura                                                       Int
+  id_asignatura_requerida                                             Int
+  tipo                                                                String     @db.VarChar(255)
+  asignatura_asignatura_requisito_id_asignaturaToasignatura           asignatura @relation("asignatura_requisito_id_asignaturaToasignatura", fields: [id_asignatura], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "asignatura_requisito_ibfk_1")
+  asignatura_asignatura_requisito_id_asignatura_requeridaToasignatura asignatura @relation("asignatura_requisito_id_asignatura_requeridaToasignatura", fields: [id_asignatura_requerida], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "asignatura_requisito_ibfk_2")
+
+  @@id([id_asignatura, id_asignatura_requerida, tipo])
+  @@index([id_asignatura_requerida], map: "id_asignatura_requerida")
+}
+
+model auditoria {
+  id             Int       @id @default(autoincrement())
+  id_usuario     Int?
+  accion         String?   @db.VarChar(255)
+  tabla_afectada String?   @db.VarChar(255)
+  id_registro    Int?
+  valor_anterior Json?
+  valor_nuevo    Json?
+  fecha          DateTime? @db.DateTime(0)
+  ip             String?   @db.VarChar(255)
+  usuario        usuario?  @relation(fields: [id_usuario], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "auditoria_ibfk_1")
+
+  @@index([id_usuario], map: "id_usuario")
+}
+
+model bibliografia {
+  id                  Int               @id @default(autoincrement())
+  id_proyecto_docente Int?
+  referencia          String?           @db.Text
+  orden               Int?
+  created_at          DateTime?         @default(dbgenerated("(now())")) @db.DateTime(0)
+  updated_at          DateTime?         @updatedAt @db.DateTime(0)
+  proyecto_docente    proyecto_docente? @relation(fields: [id_proyecto_docente], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "bibliografia_ibfk_1")
+
+  @@index([id_proyecto_docente], map: "id_proyecto_docente")
+}
+
+model contenido_programatico {
+  id                  Int               @id @default(autoincrement())
+  id_proyecto_docente Int?
+  semana              Int?
+  tema                String?           @db.VarChar(255)
+  horas_tde           Int?
+  horas_tdp           Int?
+  horas_ti            Int?
+  created_at          DateTime?         @default(dbgenerated("(now())")) @db.DateTime(0)
+  updated_at          DateTime?         @updatedAt @db.DateTime(0)
+  proyecto_docente    proyecto_docente? @relation(fields: [id_proyecto_docente], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "contenido_programatico_ibfk_1")
+  sesion_tema         sesion_tema[]
+
+  @@unique([id_proyecto_docente, semana], map: "contenido_programatico_index_12")
+}
+
+model dia_festivo {
+  id           Int            @id @default(autoincrement())
+  fecha        DateTime?      @unique(map: "dia_festivo_index_4") @db.Date
+  nombre       String?        @db.VarChar(255)
+  anio         Int?
+  origen       String?        @db.VarChar(255)
+  created_at   DateTime?      @default(dbgenerated("(now())")) @db.DateTime(0)
+  sesion_clase sesion_clase[]
+}
+
+model documento_soporte {
+  id                  Int               @id @default(autoincrement())
+  id_proyecto_docente Int?
+  id_subido_por       Int?
+  nombre_original     String?           @db.VarChar(255)
+  url                 String?           @db.VarChar(255)
+  tipo                String?           @db.VarChar(255)
+  categoria           String?           @db.VarChar(255)
+  tamano_bytes        Int?
+  descripcion         String?           @db.Text
+  fecha_subida        DateTime?         @db.DateTime(0)
+  proyecto_docente    proyecto_docente? @relation(fields: [id_proyecto_docente], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "documento_soporte_ibfk_1")
+  usuario             usuario?          @relation(fields: [id_subido_por], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "documento_soporte_ibfk_2")
+
+  @@index([id_proyecto_docente], map: "id_proyecto_docente")
+  @@index([id_subido_por], map: "id_subido_por")
+}
+
+model escala_valoracion {
+  id                                                    Int            @id @default(autoincrement())
+  id_programa                                           Int?
+  nombre                                                String?        @db.VarChar(255)
+  numero_niveles                                        Int?
+  umbral_cumplimiento                                   Int?
+  porcentaje_esperado                                   Decimal?       @db.Decimal(5, 2)
+  vigente                                               Boolean?       @default(true)
+  created_at                                            DateTime?      @default(dbgenerated("(now())")) @db.DateTime(0)
+  programa_escala_valoracion_id_programaToprograma      programa?      @relation("escala_valoracion_id_programaToprograma", fields: [id_programa], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "escala_valoracion_ibfk_1")
+  nivel_escala                                          nivel_escala[]
+  programa_programa_id_escala_activaToescala_valoracion programa[]     @relation("programa_id_escala_activaToescala_valoracion")
+  rubrica                                               rubrica[]
+
+  @@index([id_programa], map: "id_programa")
+}
+
+model estado_proyecto {
+  id                                                                      Int                 @id @default(autoincrement())
+  codigo                                                                  String?             @unique(map: "codigo") @db.VarChar(255)
+  nombre                                                                  String?             @db.VarChar(255)
+  descripcion                                                             String?             @db.VarChar(255)
+  orden                                                                   Int?
+  permite_edicion                                                         Boolean?
+  proyecto_docente                                                        proyecto_docente[]
+  revision_proyecto_revision_proyecto_id_estado_anteriorToestado_proyecto revision_proyecto[] @relation("revision_proyecto_id_estado_anteriorToestado_proyecto")
+  revision_proyecto_revision_proyecto_id_estado_nuevoToestado_proyecto    revision_proyecto[] @relation("revision_proyecto_id_estado_nuevoToestado_proyecto")
+}
+
+model estrategia_metodologica {
+  id                  Int               @id @default(autoincrement())
+  id_proyecto_docente Int?
+  descripcion         String?           @db.Text
+  orden               Int?
+  created_at          DateTime?         @default(dbgenerated("(now())")) @db.DateTime(0)
+  updated_at          DateTime?         @updatedAt @db.DateTime(0)
+  proyecto_docente    proyecto_docente? @relation(fields: [id_proyecto_docente], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "estrategia_metodologica_ibfk_1")
+
+  @@index([id_proyecto_docente], map: "id_proyecto_docente")
+}
+
+model estudiante {
+  id             Int         @id @default(autoincrement())
+  id_usuario     Int?
+  identificacion String?     @unique(map: "identificacion") @db.VarChar(255)
+  nombres        String?     @db.VarChar(255)
+  apellidos      String?     @db.VarChar(255)
+  email          String?     @db.VarChar(255)
+  id_programa    Int?
+  activo         Boolean?    @default(true)
+  created_at     DateTime?   @default(dbgenerated("(now())")) @db.DateTime(0)
+  usuario        usuario?    @relation(fields: [id_usuario], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "estudiante_ibfk_1")
+  programa       programa?   @relation(fields: [id_programa], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "estudiante_ibfk_2")
+  matricula      matricula[]
+
+  @@index([id_programa], map: "id_programa")
+  @@index([id_usuario], map: "id_usuario")
+}
+
+model evaluacion_rac {
+  id          Int       @id @default(autoincrement())
+  id_rac      Int?
+  instrumento String?   @db.VarChar(255)
+  descripcion String?   @db.Text
+  porcentaje  Decimal?  @db.Decimal(5, 2)
+  created_at  DateTime? @default(dbgenerated("(now())")) @db.DateTime(0)
+  updated_at  DateTime? @updatedAt @db.DateTime(0)
+  rac         rac?      @relation(fields: [id_rac], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "evaluacion_rac_ibfk_1")
+
+  @@index([id_rac], map: "id_rac")
+}
+
+model evidencia_rap {
+  id                  Int               @id @default(autoincrement())
+  id_proyecto_docente Int?
+  id_rap              Int?
+  id_sesion           Int?
+  nombre_original     String?           @db.VarChar(255)
+  url                 String?           @db.VarChar(255)
+  tipo                String?           @db.VarChar(255)
+  tamano_bytes        Int?
+  descripcion         String?           @db.Text
+  fecha               DateTime?         @db.Date
+  id_subido_por       Int?
+  fecha_subida        DateTime?         @db.DateTime(0)
+  proyecto_docente    proyecto_docente? @relation(fields: [id_proyecto_docente], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "evidencia_rap_ibfk_1")
+  rap                 rap?              @relation(fields: [id_rap], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "evidencia_rap_ibfk_2")
+  sesion_clase        sesion_clase?     @relation(fields: [id_sesion], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "evidencia_rap_ibfk_3")
+  usuario             usuario?          @relation(fields: [id_subido_por], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "evidencia_rap_ibfk_4")
+
+  @@index([id_proyecto_docente], map: "id_proyecto_docente")
+  @@index([id_rap], map: "id_rap")
+  @@index([id_sesion], map: "id_sesion")
+  @@index([id_subido_por], map: "id_subido_por")
+}
+
+model facultad {
+  id         Int        @id @default(autoincrement())
+  nombre     String?    @unique(map: "nombre") @db.VarChar(255)
+  id_decano  Int?
+  activo     Boolean?   @default(true)
+  created_at DateTime?  @default(dbgenerated("(now())")) @db.DateTime(0)
+  updated_at DateTime?  @updatedAt @db.DateTime(0)
+  usuario    usuario?   @relation(fields: [id_decano], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "facultad_ibfk_1")
+  programa   programa[]
+
+  @@index([id_decano], map: "id_decano")
+}
+
+model horario_curso {
+  id                  Int               @id @default(autoincrement())
+  id_proyecto_docente Int?
+  dia_semana          Int?
+  hora_inicio         DateTime?         @db.Time(0)
+  hora_fin            DateTime?         @db.Time(0)
+  proyecto_docente    proyecto_docente? @relation(fields: [id_proyecto_docente], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "horario_curso_ibfk_1")
+
+  @@index([id_proyecto_docente], map: "id_proyecto_docente")
+}
+
+model inasistencia {
+  id_sesion    Int
+  id_matricula Int
+  justificada  Boolean?     @default(false)
+  observacion  String?      @db.VarChar(255)
+  sesion_clase sesion_clase @relation(fields: [id_sesion], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "inasistencia_ibfk_1")
+  matricula    matricula    @relation(fields: [id_matricula], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "inasistencia_ibfk_2")
+
+  @@id([id_sesion, id_matricula])
+  @@index([id_matricula], map: "id_matricula")
+}
+
+model indicador_rap {
+  id                 Int                  @id @default(autoincrement())
+  id_rap             Int?
+  numero             Int?
+  descripcion        String?              @db.Text
+  activo             Boolean?             @default(true)
+  created_at         DateTime?            @default(dbgenerated("(now())")) @db.DateTime(0)
+  updated_at         DateTime?            @updatedAt @db.DateTime(0)
+  rap                rap?                 @relation(fields: [id_rap], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "indicador_rap_ibfk_1")
+  medicion_indicador medicion_indicador[]
+  rubrica_descriptor rubrica_descriptor[]
+
+  @@unique([id_rap, numero], map: "indicador_rap_index_6")
+}
+
+model lider_rap {
+  id                Int                @id @default(autoincrement())
+  id_rap            Int?
+  id_usuario        Int?
+  id_periodo        Int?
+  activo            Boolean?           @default(true)
+  created_at        DateTime?          @default(dbgenerated("(now())")) @db.DateTime(0)
+  updated_at        DateTime?          @updatedAt @db.DateTime(0)
+  rap               rap?               @relation(fields: [id_rap], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "lider_rap_ibfk_1")
+  usuario           usuario?           @relation(fields: [id_usuario], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "lider_rap_ibfk_2")
+  periodo_academico periodo_academico? @relation(fields: [id_periodo], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "lider_rap_ibfk_3")
+
+  @@unique([id_rap, id_usuario, id_periodo], map: "lider_rap_index_10")
+  @@index([id_periodo], map: "id_periodo")
+  @@index([id_usuario], map: "id_usuario")
+}
+
+model matricula {
+  id                    Int                     @id @default(autoincrement())
+  id_proyecto_docente   Int?
+  id_estudiante         Int?
+  estado                String?                 @db.VarChar(255)
+  fecha_carga           DateTime?               @db.DateTime(0)
+  id_cargado_por        Int?
+  inasistencia          inasistencia[]
+  proyecto_docente      proyecto_docente?       @relation(fields: [id_proyecto_docente], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "matricula_ibfk_1")
+  estudiante            estudiante?             @relation(fields: [id_estudiante], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "matricula_ibfk_2")
+  usuario               usuario?                @relation(fields: [id_cargado_por], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "matricula_ibfk_3")
+  valoracion_estudiante valoracion_estudiante[]
+
+  @@unique([id_proyecto_docente, id_estudiante], map: "matricula_index_14")
+  @@index([id_cargado_por], map: "id_cargado_por")
+  @@index([id_estudiante], map: "id_estudiante")
+}
+
+model medicion_indicador {
+  id                      Int                     @id @default(autoincrement())
+  id_medicion             Int?
+  id_indicador            Int?
+  instrumento             String?                 @db.VarChar(255)
+  descripcion_instrumento String?                 @db.Text
+  medicion_rap            medicion_rap?           @relation(fields: [id_medicion], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "medicion_indicador_ibfk_1")
+  indicador_rap           indicador_rap?          @relation(fields: [id_indicador], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "medicion_indicador_ibfk_2")
+  valoracion_estudiante   valoracion_estudiante[]
+
+  @@unique([id_medicion, id_indicador], map: "medicion_indicador_index_16")
+  @@index([id_indicador], map: "id_indicador")
+}
+
+model medicion_rap {
+  id                                              Int                  @id @default(autoincrement())
+  id_proyecto_docente                             Int?
+  id_rap                                          Int?
+  id_rubrica                                      Int?
+  tipo_valoracion                                 String?              @db.VarChar(255)
+  periodo_toma                                    String?              @db.VarChar(255)
+  anio_toma                                       Int?
+  tamano_cohorte                                  Int?
+  porcentaje_esperado                             Decimal?             @db.Decimal(5, 2)
+  estado                                          String?              @db.VarChar(255)
+  acciones_implementadas                          String?              @db.Text
+  resultados_obtenidos                            String?              @db.Text
+  acciones_propuestas                             String?              @db.Text
+  id_registrado_por                               Int?
+  id_cerrado_por                                  Int?
+  fecha_cierre                                    DateTime?            @db.DateTime(0)
+  created_at                                      DateTime?            @default(dbgenerated("(now())")) @db.DateTime(0)
+  updated_at                                      DateTime?            @updatedAt @db.DateTime(0)
+  medicion_indicador                              medicion_indicador[]
+  proyecto_docente                                proyecto_docente?    @relation(fields: [id_proyecto_docente], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "medicion_rap_ibfk_1")
+  rap                                             rap?                 @relation(fields: [id_rap], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "medicion_rap_ibfk_2")
+  rubrica                                         rubrica?             @relation(fields: [id_rubrica], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "medicion_rap_ibfk_3")
+  usuario_medicion_rap_id_registrado_porTousuario usuario?             @relation("medicion_rap_id_registrado_porTousuario", fields: [id_registrado_por], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "medicion_rap_ibfk_4")
+  usuario_medicion_rap_id_cerrado_porTousuario    usuario?             @relation("medicion_rap_id_cerrado_porTousuario", fields: [id_cerrado_por], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "medicion_rap_ibfk_5")
+
+  @@unique([id_proyecto_docente, id_rap, tipo_valoracion, anio_toma], map: "medicion_rap_index_15")
+  @@index([id_cerrado_por], map: "id_cerrado_por")
+  @@index([id_rap], map: "id_rap")
+  @@index([id_registrado_por], map: "id_registrado_por")
+  @@index([id_rubrica], map: "id_rubrica")
+}
+
+model modulo {
+  id          Int           @id @default(autoincrement())
+  codigo      String?       @unique(map: "codigo") @db.VarChar(255)
+  nombre      String?       @db.VarChar(255)
+  orden       Int?
+  rol_permiso rol_permiso[]
+}
+
+model nivel_escala {
+  id                    Int                     @id @default(autoincrement())
+  id_escala             Int?
+  valor                 Int?
+  etiqueta              String?                 @db.VarChar(255)
+  descripcion           String?                 @db.Text
+  escala_valoracion     escala_valoracion?      @relation(fields: [id_escala], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "nivel_escala_ibfk_1")
+  rubrica_descriptor    rubrica_descriptor[]
+  valoracion_estudiante valoracion_estudiante[]
+
+  @@unique([id_escala, valor], map: "nivel_escala_index_7")
+}
+
+model notificacion {
+  id                   Int                @id @default(autoincrement())
+  id_tipo_notificacion Int?
+  id_usuario           Int?
+  titulo               String?            @db.VarChar(255)
+  mensaje              String?            @db.Text
+  entidad              String?            @db.VarChar(255)
+  id_entidad           Int?
+  url_destino          String?            @db.VarChar(255)
+  leida                Boolean?           @default(false)
+  fecha_lectura        DateTime?          @db.DateTime(0)
+  estado_envio         String?            @db.VarChar(255)
+  intentos             Int?               @default(0)
+  fecha_envio          DateTime?          @db.DateTime(0)
+  created_at           DateTime?          @default(dbgenerated("(now())")) @db.DateTime(0)
+  tipo_notificacion    tipo_notificacion? @relation(fields: [id_tipo_notificacion], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "notificacion_ibfk_1")
+  usuario              usuario?           @relation(fields: [id_usuario], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "notificacion_ibfk_2")
+
+  @@index([id_tipo_notificacion], map: "id_tipo_notificacion")
+  @@index([id_usuario], map: "id_usuario")
+}
+
+model observacion_revision {
+  id                Int                @id @default(autoincrement())
+  id_revision       Int?
+  seccion           String?            @db.VarChar(255)
+  observacion       String?            @db.Text
+  resuelta          Boolean?           @default(false)
+  revision_proyecto revision_proyecto? @relation(fields: [id_revision], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "observacion_revision_ibfk_1")
+
+  @@index([id_revision], map: "id_revision")
+}
+
+model parametro_sistema {
+  id                 Int       @id @default(autoincrement())
+  clave              String?   @unique(map: "clave") @db.VarChar(255)
+  valor              String?   @db.VarChar(255)
+  tipo_dato          String?   @db.VarChar(255)
+  descripcion        String?   @db.VarChar(255)
+  id_actualizado_por Int?
+  updated_at         DateTime? @updatedAt @db.DateTime(0)
+  usuario            usuario?  @relation(fields: [id_actualizado_por], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "parametro_sistema_ibfk_1")
+
+  @@index([id_actualizado_por], map: "id_actualizado_por")
+}
+
+model periodo_academico {
+  id                Int                 @id @default(autoincrement())
+  codigo            String?             @unique(map: "codigo") @db.VarChar(255)
+  fecha_inicio      DateTime?           @db.Date
+  fecha_fin         DateTime?           @db.Date
+  numero_semanas    Int?
+  activo            Boolean?            @default(true)
+  cerrado           Boolean?            @default(false)
+  lider_rap         lider_rap[]
+  proyecto_docente  proyecto_docente[]
+  reporte_academico reporte_academico[]
+}
+
+model permiso {
+  id          Int           @id @default(autoincrement())
+  codigo      String?       @unique(map: "codigo") @db.VarChar(255)
+  nombre      String?       @db.VarChar(255)
+  rol_permiso rol_permiso[]
+}
+
+model plan_curso {
+  id                      Int               @id @default(autoincrement())
+  id_proyecto_docente     Int?              @unique(map: "id_proyecto_docente")
+  recursos_educativos     String?           @db.Text
+  observaciones_iniciales String?           @db.Text
+  created_at              DateTime?         @default(dbgenerated("(now())")) @db.DateTime(0)
+  updated_at              DateTime?         @updatedAt @db.DateTime(0)
+  proyecto_docente        proyecto_docente?
+}
+
+model programa {
+  id                                                             Int                 @id @default(autoincrement())
+  id_facultad                                                    Int?
+  nombre                                                         String?             @db.VarChar(255)
+  codigo                                                         String?             @db.VarChar(255)
+  id_director                                                    Int?
+  id_escala_activa                                               Int?
+  activo                                                         Boolean?            @default(true)
+  created_at                                                     DateTime?           @default(dbgenerated("(now())")) @db.DateTime(0)
+  updated_at                                                     DateTime?           @updatedAt @db.DateTime(0)
+  asignatura                                                     asignatura[]
+  escala_valoracion_escala_valoracion_id_programaToprograma      escala_valoracion[] @relation("escala_valoracion_id_programaToprograma")
+  estudiante                                                     estudiante[]
+  facultad                                                       facultad?           @relation(fields: [id_facultad], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "programa_ibfk_1")
+  usuario_programa_id_directorTousuario                          usuario?            @relation("programa_id_directorTousuario", fields: [id_director], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "programa_ibfk_2")
+  escala_valoracion_programa_id_escala_activaToescala_valoracion escala_valoracion?  @relation("programa_id_escala_activaToescala_valoracion", fields: [id_escala_activa], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "programa_ibfk_3")
+  rap                                                            rap[]
+  reporte_academico                                              reporte_academico[]
+  usuario_usuario_id_programaToprograma                          usuario[]           @relation("usuario_id_programaToprograma")
+  usuario_rol                                                    usuario_rol[]
+
+  @@unique([id_facultad, nombre], map: "programa_index_2")
+  @@index([id_director], map: "id_director")
+  @@index([id_escala_activa], map: "id_escala_activa")
+}
+
+model proyecto_docente {
+  id                       Int                        @id @default(autoincrement())
+  id_asignatura            Int?
+  id_periodo               Int?
+  id_estado                Int?
+  grupo                    String?                    @db.VarChar(255)
+  descripcion              String?                    @db.Text
+  id_proyecto_origen       Int?
+  origen                   String?                    @db.VarChar(255)
+  id_creado_por            Int?
+  fecha_envio              DateTime?                  @db.DateTime(0)
+  fecha_aprobacion         DateTime?                  @db.DateTime(0)
+  fecha_creacion           DateTime?                  @db.DateTime(0)
+  fecha_actualizacion      DateTime?                  @db.DateTime(0)
+  bibliografia             bibliografia[]
+  contenido_programatico   contenido_programatico[]
+  documento_soporte        documento_soporte[]
+  estrategia_metodologica  estrategia_metodologica[]
+  evidencia_rap            evidencia_rap[]
+  horario_curso            horario_curso[]
+  matricula                matricula[]
+  medicion_rap             medicion_rap[]
+  asignatura               asignatura?                @relation(fields: [id_asignatura], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "proyecto_docente_ibfk_1")
+  periodo_academico        periodo_academico?         @relation(fields: [id_periodo], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "proyecto_docente_ibfk_2")
+  estado_proyecto          estado_proyecto?           @relation(fields: [id_estado], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "proyecto_docente_ibfk_3")
+  proyecto_docente         proyecto_docente?          @relation("proyecto_docenteToproyecto_docente", fields: [id_proyecto_origen], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "proyecto_docente_ibfk_4")
+  other_proyecto_docente   proyecto_docente[]         @relation("proyecto_docenteToproyecto_docente")
+  usuario                  usuario?                   @relation(fields: [id_creado_por], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "proyecto_docente_ibfk_5")
+  plan_curso               plan_curso                 @relation(fields: [id], references: [id_proyecto_docente], onDelete: NoAction, onUpdate: NoAction, map: "proyecto_docente_ibfk_6")
+  proyecto_docente_docente proyecto_docente_docente[]
+  proyecto_docente_rap     proyecto_docente_rap[]
+  rac                      rac[]
+  revision_proyecto        revision_proyecto[]
+  sesion_clase             sesion_clase[]
+
+  @@unique([id_asignatura, id_periodo, grupo], map: "proyecto_docente_index_11")
+  @@index([id_creado_por], map: "id_creado_por")
+  @@index([id_estado], map: "id_estado")
+  @@index([id_periodo], map: "id_periodo")
+  @@index([id_proyecto_origen], map: "id_proyecto_origen")
+}
+
+model proyecto_docente_docente {
+  id_proyecto_docente Int
+  id_usuario          Int
+  responsable         Boolean?         @default(false)
+  orden               Int?
+  proyecto_docente    proyecto_docente @relation(fields: [id_proyecto_docente], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "proyecto_docente_docente_ibfk_1")
+  usuario             usuario          @relation(fields: [id_usuario], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "proyecto_docente_docente_ibfk_2")
+
+  @@id([id_proyecto_docente, id_usuario])
+  @@index([id_usuario], map: "id_usuario")
+}
+
+model proyecto_docente_rap {
+  id_proyecto_docente Int
+  id_rap              Int
+  id_rubrica          Int?
+  proyecto_docente    proyecto_docente @relation(fields: [id_proyecto_docente], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "proyecto_docente_rap_ibfk_1")
+  rap                 rap              @relation(fields: [id_rap], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "proyecto_docente_rap_ibfk_2")
+  rubrica             rubrica?         @relation(fields: [id_rubrica], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "proyecto_docente_rap_ibfk_3")
+
+  @@id([id_proyecto_docente, id_rap])
+  @@index([id_rap], map: "id_rap")
+  @@index([id_rubrica], map: "id_rubrica")
+}
+
+model rac {
+  id                  Int               @id @default(autoincrement())
+  id_proyecto_docente Int?
+  codigo              String?           @db.VarChar(255)
+  descripcion         String?           @db.Text
+  orden               Int?
+  created_at          DateTime?         @default(dbgenerated("(now())")) @db.DateTime(0)
+  updated_at          DateTime?         @updatedAt @db.DateTime(0)
+  evaluacion_rac      evaluacion_rac[]
+  proyecto_docente    proyecto_docente? @relation(fields: [id_proyecto_docente], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "rac_ibfk_1")
+  rac_rap             rac_rap[]
+
+  @@index([id_proyecto_docente], map: "id_proyecto_docente")
+}
+
+model rac_rap {
+  id_rac                   Int
+  id_rap                   Int
+  descripcion_contribucion String? @db.Text
+  rac                      rac     @relation(fields: [id_rac], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "rac_rap_ibfk_1")
+  rap                      rap     @relation(fields: [id_rap], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "rac_rap_ibfk_2")
+
+  @@id([id_rac, id_rap])
+  @@index([id_rap], map: "id_rap")
+}
+
+model rap {
+  id                   Int                    @id @default(autoincrement())
+  id_programa          Int?
+  codigo               String?                @db.VarChar(255)
+  numero               Int?
+  descripcion          String?                @db.Text
+  competencia_asociada String?                @db.VarChar(255)
+  perfil_egreso        String?                @db.Text
+  activo               Boolean?               @default(true)
+  created_at           DateTime?              @default(dbgenerated("(now())")) @db.DateTime(0)
+  updated_at           DateTime?              @updatedAt @db.DateTime(0)
+  asignatura_rap       asignatura_rap[]
+  evidencia_rap        evidencia_rap[]
+  indicador_rap        indicador_rap[]
+  lider_rap            lider_rap[]
+  medicion_rap         medicion_rap[]
+  proyecto_docente_rap proyecto_docente_rap[]
+  rac_rap              rac_rap[]
+  programa             programa?              @relation(fields: [id_programa], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "rap_ibfk_1")
+  rubrica              rubrica[]
+
+  @@unique([id_programa, codigo], map: "rap_index_5")
+}
+
+model reporte_academico {
+  id                Int                @id @default(autoincrement())
+  id_programa       Int?
+  id_periodo        Int?
+  id_generado_por   Int?
+  nombre            String?            @db.VarChar(255)
+  tipo              String?            @db.VarChar(255)
+  parametros        Json?
+  url               String?            @db.VarChar(255)
+  fecha_generacion  DateTime?          @db.DateTime(0)
+  programa          programa?          @relation(fields: [id_programa], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "reporte_academico_ibfk_1")
+  periodo_academico periodo_academico? @relation(fields: [id_periodo], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "reporte_academico_ibfk_2")
+  usuario           usuario?           @relation(fields: [id_generado_por], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "reporte_academico_ibfk_3")
+
+  @@index([id_generado_por], map: "id_generado_por")
+  @@index([id_periodo], map: "id_periodo")
+  @@index([id_programa], map: "id_programa")
+}
+
+model revision_proyecto {
+  id                                                                    Int                    @id @default(autoincrement())
+  id_proyecto_docente                                                   Int?
+  id_usuario                                                            Int?
+  tipo                                                                  String?                @db.VarChar(255)
+  resultado                                                             String?                @db.VarChar(255)
+  id_estado_anterior                                                    Int?
+  id_estado_nuevo                                                       Int?
+  observacion_general                                                   String?                @db.Text
+  fecha                                                                 DateTime?              @db.DateTime(0)
+  observacion_revision                                                  observacion_revision[]
+  proyecto_docente                                                      proyecto_docente?      @relation(fields: [id_proyecto_docente], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "revision_proyecto_ibfk_1")
+  usuario                                                               usuario?               @relation(fields: [id_usuario], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "revision_proyecto_ibfk_2")
+  estado_proyecto_revision_proyecto_id_estado_anteriorToestado_proyecto estado_proyecto?       @relation("revision_proyecto_id_estado_anteriorToestado_proyecto", fields: [id_estado_anterior], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "revision_proyecto_ibfk_3")
+  estado_proyecto_revision_proyecto_id_estado_nuevoToestado_proyecto    estado_proyecto?       @relation("revision_proyecto_id_estado_nuevoToestado_proyecto", fields: [id_estado_nuevo], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "revision_proyecto_ibfk_4")
+
+  @@index([id_estado_anterior], map: "id_estado_anterior")
+  @@index([id_estado_nuevo], map: "id_estado_nuevo")
+  @@index([id_proyecto_docente], map: "id_proyecto_docente")
+  @@index([id_usuario], map: "id_usuario")
+}
+
+model rol {
+  id          Int           @id @default(autoincrement())
+  nombre      String?       @unique(map: "nombre") @db.VarChar(255)
+  descripcion String?       @db.VarChar(255)
+  activo      Boolean?      @default(true)
+  created_at  DateTime?     @default(dbgenerated("(now())")) @db.DateTime(0)
+  updated_at  DateTime?     @updatedAt @db.DateTime(0)
+  rol_permiso rol_permiso[]
+  usuario_rol usuario_rol[]
+}
+
+model rol_permiso {
+  id_rol     Int
+  id_modulo  Int
+  id_permiso Int
+  rol        rol     @relation(fields: [id_rol], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "rol_permiso_ibfk_1")
+  modulo     modulo  @relation(fields: [id_modulo], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "rol_permiso_ibfk_2")
+  permiso    permiso @relation(fields: [id_permiso], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "rol_permiso_ibfk_3")
+
+  @@id([id_rol, id_modulo, id_permiso])
+  @@index([id_modulo], map: "id_modulo")
+  @@index([id_permiso], map: "id_permiso")
+}
+
+model rubrica {
+  id                    Int                    @id @default(autoincrement())
+  id_rap                Int?
+  id_escala             Int?
+  version               Int?
+  estado                String?                @db.VarChar(255)
+  id_creado_por         Int?
+  fecha_vigencia_inicio DateTime?              @db.Date
+  fecha_vigencia_fin    DateTime?              @db.Date
+  created_at            DateTime?              @default(dbgenerated("(now())")) @db.DateTime(0)
+  updated_at            DateTime?              @updatedAt @db.DateTime(0)
+  medicion_rap          medicion_rap[]
+  proyecto_docente_rap  proyecto_docente_rap[]
+  rap                   rap?                   @relation(fields: [id_rap], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "rubrica_ibfk_1")
+  escala_valoracion     escala_valoracion?     @relation(fields: [id_escala], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "rubrica_ibfk_2")
+  usuario               usuario?               @relation(fields: [id_creado_por], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "rubrica_ibfk_3")
+  rubrica_descriptor    rubrica_descriptor[]
+
+  @@unique([id_rap, version], map: "rubrica_index_8")
+  @@index([id_creado_por], map: "id_creado_por")
+  @@index([id_escala], map: "id_escala")
+}
+
+model rubrica_descriptor {
+  id            Int            @id @default(autoincrement())
+  id_rubrica    Int?
+  id_indicador  Int?
+  id_nivel      Int?
+  descripcion   String?        @db.Text
+  rubrica       rubrica?       @relation(fields: [id_rubrica], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "rubrica_descriptor_ibfk_1")
+  indicador_rap indicador_rap? @relation(fields: [id_indicador], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "rubrica_descriptor_ibfk_2")
+  nivel_escala  nivel_escala?  @relation(fields: [id_nivel], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "rubrica_descriptor_ibfk_3")
+
+  @@unique([id_rubrica, id_indicador, id_nivel], map: "rubrica_descriptor_index_9")
+  @@index([id_indicador], map: "id_indicador")
+  @@index([id_nivel], map: "id_nivel")
+}
+
+model sesion {
+  id                Int       @id @default(autoincrement())
+  id_usuario        Int?
+  jti               String?   @unique(map: "jti") @db.VarChar(255)
+  emitida_en        DateTime? @db.DateTime(0)
+  expira_en         DateTime? @db.DateTime(0)
+  revocada_en       DateTime? @db.DateTime(0)
+  motivo_revocacion String?   @db.VarChar(255)
+  ip                String?   @db.VarChar(255)
+  user_agent        String?   @db.VarChar(255)
+  usuario           usuario?  @relation(fields: [id_usuario], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sesion_ibfk_1")
+
+  @@index([id_usuario, revocada_en], map: "sesion_index_1")
+}
+
+model sesion_clase {
+  id                  Int               @id @default(autoincrement())
+  id_proyecto_docente Int?
+  id_tipo_sesion      Int?
+  semana              Int?
+  fecha               DateTime?         @db.Date
+  dia_semana          Int?
+  estado              String?           @db.VarChar(255)
+  descripcion         String?           @db.VarChar(255)
+  observaciones       String?           @db.Text
+  id_dia_festivo      Int?
+  id_registrado_por   Int?
+  fecha_registro      DateTime?         @db.DateTime(0)
+  created_at          DateTime?         @default(dbgenerated("(now())")) @db.DateTime(0)
+  updated_at          DateTime?         @updatedAt @db.DateTime(0)
+  evidencia_rap       evidencia_rap[]
+  inasistencia        inasistencia[]
+  proyecto_docente    proyecto_docente? @relation(fields: [id_proyecto_docente], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sesion_clase_ibfk_1")
+  tipo_sesion         tipo_sesion?      @relation(fields: [id_tipo_sesion], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sesion_clase_ibfk_2")
+  dia_festivo         dia_festivo?      @relation(fields: [id_dia_festivo], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sesion_clase_ibfk_3")
+  usuario             usuario?          @relation(fields: [id_registrado_por], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sesion_clase_ibfk_4")
+  sesion_tema         sesion_tema[]
+
+  @@unique([id_proyecto_docente, fecha], map: "sesion_clase_index_13")
+  @@index([id_dia_festivo], map: "id_dia_festivo")
+  @@index([id_registrado_por], map: "id_registrado_por")
+  @@index([id_tipo_sesion], map: "id_tipo_sesion")
+}
+
+model sesion_tema {
+  id                     Int                     @id @default(autoincrement())
+  id_sesion              Int?
+  id_contenido           Int?
+  tema_adicional         String?                 @db.VarChar(255)
+  sesion_clase           sesion_clase?           @relation(fields: [id_sesion], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sesion_tema_ibfk_1")
+  contenido_programatico contenido_programatico? @relation(fields: [id_contenido], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sesion_tema_ibfk_2")
+
+  @@index([id_contenido], map: "id_contenido")
+  @@index([id_sesion], map: "id_sesion")
+}
+
+model tipo_notificacion {
+  id           Int            @id @default(autoincrement())
+  codigo       String?        @unique(map: "codigo") @db.VarChar(255)
+  nombre       String?        @db.VarChar(255)
+  plantilla    String?        @db.Text
+  envia_email  Boolean?       @default(true)
+  activo       Boolean?       @default(true)
+  notificacion notificacion[]
+}
+
+model tipo_sesion {
+  id                  Int            @id @default(autoincrement())
+  codigo              String?        @unique(map: "codigo") @db.VarChar(255)
+  nombre              String?        @db.VarChar(255)
+  exige_tema          Boolean?
+  cuenta_como_dictada Boolean?
+  activo              Boolean?       @default(true)
+  sesion_clase        sesion_clase[]
+}
+
+model usuario {
+  id                                                   Int                        @id @default(autoincrement())
+  nombres                                              String?                    @db.VarChar(255)
+  apellidos                                            String?                    @db.VarChar(255)
+  email                                                String?                    @unique(map: "email") @db.VarChar(255)
+  password_hash                                        String?                    @db.VarChar(255)
+  identificacion                                       String?                    @unique(map: "identificacion") @db.VarChar(255)
+  id_programa                                          Int?
+  activo                                               Boolean?                   @default(true)
+  ultimo_acceso                                        DateTime?                  @db.DateTime(0)
+  intentos_fallidos                                    Int?                       @default(0)
+  bloqueado_hasta                                      DateTime?                  @db.DateTime(0)
+  created_at                                           DateTime?                  @default(dbgenerated("(now())")) @db.DateTime(0)
+  updated_at                                           DateTime?                  @updatedAt @db.DateTime(0)
+  auditoria                                            auditoria[]
+  documento_soporte                                    documento_soporte[]
+  estudiante                                           estudiante[]
+  evidencia_rap                                        evidencia_rap[]
+  facultad                                             facultad[]
+  lider_rap                                            lider_rap[]
+  matricula                                            matricula[]
+  medicion_rap_medicion_rap_id_registrado_porTousuario medicion_rap[]             @relation("medicion_rap_id_registrado_porTousuario")
+  medicion_rap_medicion_rap_id_cerrado_porTousuario    medicion_rap[]             @relation("medicion_rap_id_cerrado_porTousuario")
+  notificacion                                         notificacion[]
+  parametro_sistema                                    parametro_sistema[]
+  programa_programa_id_directorTousuario               programa[]                 @relation("programa_id_directorTousuario")
+  proyecto_docente                                     proyecto_docente[]
+  proyecto_docente_docente                             proyecto_docente_docente[]
+  reporte_academico                                    reporte_academico[]
+  revision_proyecto                                    revision_proyecto[]
+  rubrica                                              rubrica[]
+  sesion                                               sesion[]
+  sesion_clase                                         sesion_clase[]
+  programa_usuario_id_programaToprograma               programa?                  @relation("usuario_id_programaToprograma", fields: [id_programa], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "usuario_ibfk_1")
+  usuario_rol_usuario_rol_id_usuarioTousuario          usuario_rol[]              @relation("usuario_rol_id_usuarioTousuario")
+  usuario_rol_usuario_rol_id_asignado_porTousuario     usuario_rol[]              @relation("usuario_rol_id_asignado_porTousuario")
+
+  @@index([id_programa], map: "id_programa")
+}
+
+model usuario_rol {
+  id                                           Int       @id @default(autoincrement())
+  id_usuario                                   Int?
+  id_rol                                       Int?
+  id_programa                                  Int?
+  activo                                       Boolean?  @default(true)
+  id_asignado_por                              Int?
+  fecha_asignacion                             DateTime? @db.DateTime(0)
+  fecha_revocacion                             DateTime? @db.DateTime(0)
+  usuario_usuario_rol_id_usuarioTousuario      usuario?  @relation("usuario_rol_id_usuarioTousuario", fields: [id_usuario], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "usuario_rol_ibfk_1")
+  rol                                          rol?      @relation(fields: [id_rol], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "usuario_rol_ibfk_2")
+  programa                                     programa? @relation(fields: [id_programa], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "usuario_rol_ibfk_3")
+  usuario_usuario_rol_id_asignado_porTousuario usuario?  @relation("usuario_rol_id_asignado_porTousuario", fields: [id_asignado_por], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "usuario_rol_ibfk_4")
+
+  @@unique([id_usuario, id_rol, id_programa], map: "usuario_rol_index_0")
+  @@index([id_asignado_por], map: "id_asignado_por")
+  @@index([id_programa], map: "id_programa")
+  @@index([id_rol], map: "id_rol")
+}
+
+model valoracion_estudiante {
+  id                    Int                 @id @default(autoincrement())
+  id_medicion_indicador Int?
+  id_matricula          Int?
+  id_nivel              Int?
+  medicion_indicador    medicion_indicador? @relation(fields: [id_medicion_indicador], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "valoracion_estudiante_ibfk_1")
+  matricula             matricula?          @relation(fields: [id_matricula], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "valoracion_estudiante_ibfk_2")
+  nivel_escala          nivel_escala?       @relation(fields: [id_nivel], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "valoracion_estudiante_ibfk_3")
+
+  @@unique([id_medicion_indicador, id_matricula], map: "valoracion_estudiante_index_17")
+  @@index([id_matricula], map: "id_matricula")
+  @@index([id_nivel], map: "id_nivel")
+}

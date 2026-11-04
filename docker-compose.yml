@@ -1,0 +1,33 @@
+# MySQL para desarrollo local. En producción la base es Amazon RDS: mantener aquí la
+# misma versión mayor de MySQL que use RDS.
+# Las credenciales salen del .env (ver .env.example); nunca se escriben en este archivo.
+name: urap
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: urap-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?Defina MYSQL_DATABASE en el .env}
+      MYSQL_USER: ${MYSQL_USER:?Defina MYSQL_USER en el .env}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Defina MYSQL_PASSWORD en el .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Defina MYSQL_ROOT_PASSWORD en el .env}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    ports:
+      # 3307 por defecto para no chocar con un MySQL o MariaDB instalado en el equipo.
+      - '${MYSQL_PUERTO_LOCAL:-3307}:3306'
+    volumes:
+      - urap-mysql-datos:/var/lib/mysql
+      # Crea la base sombra de Prisma Migrate la primera vez que arranca el contenedor.
+      - ./docker/mysql/01-base-sombra.sh:/docker-entrypoint-initdb.d/01-base-sombra.sh:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'mysqladmin ping -h 127.0.0.1 -u root -p"$$MYSQL_ROOT_PASSWORD" --silent']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  urap-mysql-datos:
