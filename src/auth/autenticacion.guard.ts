@@ -5,20 +5,32 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import type { Request } from 'express';
+import { AuthService } from './auth.service.js';
 import { ES_PUBLICO } from './decoradores/publico.decorator.js';
+import type { UsuarioSesion } from './tipos.js';
+
+export const MENSAJE_SIN_TOKEN =
+  'Debe iniciar sesión para acceder a este recurso.';
+
+/** Petición después de pasar el guard: lleva el usuario de la sesión. */
+export interface PeticionAutenticada extends Request {
+  usuario: UsuarioSesion;
+}
 
 /**
- * Guard global que cierra por defecto: solo deja pasar lo marcado con @Publico().
- *
- * Todavía no existe inicio de sesión, así que ninguna petición puede autenticarse y todo
- * endpoint no público responde 401. HU-01-01 agrega aquí la validación del JWT, y
- * HU-01-02 la comprobación de que su sesión siga vigente en la tabla `sesion`.
+ * Guard global que cierra por defecto: solo deja pasar lo marcado con @Publico() o una
+ * petición con un JWT válido cuya sesión siga vigente en la tabla `sesion` (NFR-003).
+ * La autorización por rol y permiso (HU-01-03) se apoya en `peticion.usuario.roles`.
  */
 @Injectable()
 export class AutenticacionGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
+  constructor(
+    private readonly reflector: Reflector,
+    private readonly auth: AuthService,
+  ) {}
 
-  canActivate(contexto: ExecutionContext): boolean {
+  async canActivate(contexto: ExecutionContext): Promise<boolean> {
     const esPublico = this.reflector.getAllAndOverride<boolean | undefined>(
       ES_PUBLICO,
       [contexto.getHandler(), contexto.getClass()],
@@ -26,8 +38,18 @@ export class AutenticacionGuard implements CanActivate {
     if (esPublico) {
       return true;
     }
-    throw new UnauthorizedException(
-      'Debe iniciar sesión para acceder a este recurso.',
-    );
+
+    const peticion = contexto.switchToHttp().getRequest<PeticionAutenticada>();
+    const token = extraerToken(peticion);
+    if (!token) {
+      throw new UnauthorizedException(MENSAJE_SIN_TOKEN);
+    }
+    peticion.usuario = await this.auth.validarToken(token);
+    return true;
   }
+}
+
+function extraerToken(peticion: Request): string | undefined {
+  const [esquema, token] = peticion.headers.authorization?.split(' ') ?? [];
+  return esquema?.toLowerCase() === 'bearer' && token ? token : undefined;
 }
