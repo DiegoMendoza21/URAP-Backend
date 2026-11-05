@@ -189,7 +189,9 @@ No implementes una historia sin leer antes su RF completo.
 
 **Administrador.** Como administrador, quiero configurar los parámetros del sistema para ajustar su comportamiento sin depender de un cambio de código.
 
-*Criterios de aceptación:* Permite editar al menos: días de anticipación de la alerta preventiva, tamaño máximo de archivo, tipos de archivo permitidos y expiración del token; los cambios aplican sin redesplegar.
+*Criterios de aceptación:* Permite editar al menos: días de anticipación de la alerta preventiva, intentos máximos de inicio de sesión, duración del bloqueo por intentos fallidos, tamaño máximo de archivo y tipos de archivo permitidos; los cambios aplican sin redesplegar. El secreto JWT y la vigencia del token NO son parámetros editables desde la aplicación: van en variables de entorno, conforme a NFR-003, porque un administrador no debería poder ampliar la vigencia de un token desde una pantalla.
+
+*Depende de:* HU-01-04
 
 
 ### EP-04 — Resultados de aprendizaje del programa
