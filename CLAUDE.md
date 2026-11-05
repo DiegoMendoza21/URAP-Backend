@@ -165,6 +165,9 @@ español comprensible.
 
 ## Cómo trabajar
 
+- **Trabajo en equipo:** somos dos personas que se relevan. Sigue `CONTRIBUTING.md`: el estado
+  vive en Jira (espacio `URAP`) y en GitHub. `/tomar-historia` empieza una historia y `/relevo`
+  la deja lista para que la otra persona continúe.
 - Antes de una tarea de varios archivos, propón un plan y espera aprobación.
 - Una rama y un PR por requisito o por grupo pequeño de requisitos relacionados.
 - Al terminar un RF, verifica contra su secuencia normal **y sus excepciones**; las
