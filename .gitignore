@@ -1,0 +1,28 @@
+# Dependencias y compilación
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Cliente de Prisma generado: se regenera con `npm install` o `npm run db:generar`
+/src/generated/
+
+# Variables de entorno: nunca al repositorio
+.env
+.env.*
+!.env.example
+
+# Registros
+logs/
+*.log
+
+# Sistema operativo y editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Configuración personal de Claude Code
+.claude/settings.local.json

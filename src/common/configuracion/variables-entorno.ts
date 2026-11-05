@@ -1,0 +1,90 @@
+// La conversión implícita de tipos lee los metadatos de diseño de cada propiedad.
+import 'reflect-metadata';
+import { plainToInstance, Transform } from 'class-transformer';
+import {
+  ArrayNotEmpty,
+  IsEnum,
+  IsInt,
+  IsString,
+  IsUrl,
+  Matches,
+  Max,
+  Min,
+  MinLength,
+  validateSync,
+} from 'class-validator';
+
+export enum Entorno {
+  Desarrollo = 'development',
+  Pruebas = 'test',
+  Produccion = 'production',
+}
+
+/**
+ * Variables de entorno de la API (plantilla en .env.example). Se validan al arrancar:
+ * si falta una o es inválida, la API no inicia. Las credenciales y secretos viven aquí,
+ * nunca en el código ni en tablas editables (NFR-003, NFR-015).
+ */
+export class VariablesEntorno {
+  @IsEnum(Entorno, {
+    message: `NODE_ENV debe ser uno de: ${Object.values(Entorno).join(', ')}`,
+  })
+  NODE_ENV: Entorno = Entorno.Desarrollo;
+
+  @IsInt({ message: 'PUERTO debe ser un número entero' })
+  @Min(1, { message: 'PUERTO debe estar entre 1 y 65535' })
+  @Max(65535, { message: 'PUERTO debe estar entre 1 y 65535' })
+  PUERTO: number = 3001;
+
+  @Matches(/^mysql:\/\/.+/, {
+    message:
+      'DATABASE_URL debe tener la forma mysql://usuario:clave@host:puerto/base',
+  })
+  DATABASE_URL: string;
+
+  @IsString({ message: 'JWT_SECRETO es obligatorio' })
+  @MinLength(32, { message: 'JWT_SECRETO debe tener al menos 32 caracteres' })
+  JWT_SECRETO: string;
+
+  @IsInt({
+    message: 'JWT_EXPIRACION_MINUTOS debe ser un número entero de minutos',
+  })
+  @Min(1, { message: 'JWT_EXPIRACION_MINUTOS debe ser mayor que cero' })
+  JWT_EXPIRACION_MINUTOS: number;
+
+  /** Orígenes autorizados por CORS (NFR-006). En el .env van separados por coma. */
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string'
+      ? value
+          .split(',')
+          .map((origen) => origen.trim())
+          .filter(Boolean)
+      : value,
+  )
+  @ArrayNotEmpty({ message: 'CORS_ORIGENES debe declarar al menos un origen' })
+  @IsUrl(
+    { require_tld: false, require_protocol: true },
+    {
+      each: true,
+      message: 'CORS_ORIGENES debe contener URLs como http://localhost:3000',
+    },
+  )
+  CORS_ORIGENES: string[];
+}
+
+export function validarVariablesEntorno(
+  entrada: Record<string, unknown>,
+): VariablesEntorno {
+  const variables = plainToInstance(VariablesEntorno, entrada, {
+    enableImplicitConversion: true,
+  });
+  const errores = validateSync(variables, { skipMissingProperties: false });
+
+  if (errores.length > 0) {
+    const detalle = errores
+      .flatMap((error) => Object.values(error.constraints ?? {}))
+      .join('; ');
+    throw new Error(`Variables de entorno inválidas: ${detalle}`);
+  }
+  return variables;
+}
