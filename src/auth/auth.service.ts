@@ -23,6 +23,9 @@ export const MENSAJE_SIN_ROLES =
 export const MENSAJE_SESION_INVALIDA =
   'Su sesión no es válida o ha expirado. Inicie sesión de nuevo.';
 
+/** Motivo con que se revoca una sesión cerrada por el propio usuario (HU-01-02). */
+export const MOTIVO_LOGOUT = 'logout';
+
 /** Las columnas varchar(255) de `sesion` no admiten más. */
 const LONGITUD_MAXIMA_TEXTO = 255;
 
@@ -48,9 +51,8 @@ const SELECCION_USUARIO = {
 /**
  * Inicio de sesión y validación de sesiones (RF-01, NFR-003, NFR-005).
  *
- * Fuera de alcance de HU-01-01, con historia propia: el conteo de intentos fallidos y el
- * bloqueo temporal (HU-01-04), su registro en auditoría (HU-14-01) y el cierre de sesión
- * (HU-01-02), que solo tiene que marcar `sesion.revocada_en`: el guard ya lo respeta.
+ * Fuera de alcance, con historia propia: el conteo de intentos fallidos y el bloqueo
+ * temporal (HU-01-04) y el registro en auditoría (HU-14-01).
  */
 @Injectable()
 export class AuthService {
@@ -157,6 +159,18 @@ export class AuthService {
       roles: nombresDeRoles(sesion.usuario),
       jti: carga.jti,
     };
+  }
+
+  /**
+   * Cierra la sesión (HU-01-02): marca su fila en `sesion` como revocada con motivo
+   * «logout». Desde ese momento el guard rechaza el token aunque no haya vencido. Solo
+   * revoca la sesión del token con que se hace la petición, no las demás del usuario.
+   */
+  async cerrarSesion(usuario: UsuarioSesion): Promise<void> {
+    await this.prisma.sesion.updateMany({
+      where: { jti: usuario.jti, id_usuario: usuario.id, revocada_en: null },
+      data: { revocada_en: new Date(), motivo_revocacion: MOTIVO_LOGOUT },
+    });
   }
 
   async obtenerUsuario(id: number): Promise<UsuarioAutenticadoDto> {

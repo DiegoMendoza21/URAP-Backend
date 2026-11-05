@@ -112,4 +112,37 @@ describe('Autenticación (e2e) · HU-01-01', () => {
   it('un endpoint protegido sin token responde 401', async () => {
     await request(app.getHttpServer()).get('/api/auth/sesion').expect(401);
   });
+
+  it('al cerrar sesión revoca el token: las peticiones siguientes responden 401 · HU-01-02', async () => {
+    const { body } = await request(app.getHttpServer())
+      .post('/api/auth/iniciar-sesion')
+      .send({ correo: correoActivo, contrasena })
+      .expect(200);
+    const autorizacion = `Bearer ${body.token}`;
+
+    await request(app.getHttpServer())
+      .post('/api/auth/cerrar-sesion')
+      .set('Authorization', autorizacion)
+      .expect(204);
+
+    const sesion = await prisma.sesion.findFirst({
+      where: { id_usuario: idsUsuarios[0], revocada_en: { not: null } },
+    });
+    expect(sesion?.motivo_revocacion).toBe('logout');
+
+    await request(app.getHttpServer())
+      .get('/api/auth/sesion')
+      .set('Authorization', autorizacion)
+      .expect(401);
+    await request(app.getHttpServer())
+      .post('/api/auth/cerrar-sesion')
+      .set('Authorization', autorizacion)
+      .expect(401);
+  });
+
+  it('cerrar sesión sin token responde 401', async () => {
+    await request(app.getHttpServer())
+      .post('/api/auth/cerrar-sesion')
+      .expect(401);
+  });
 });

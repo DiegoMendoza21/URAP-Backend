@@ -9,6 +9,7 @@ import {
   MENSAJE_SESION_INVALIDA,
   MENSAJE_SIN_ROLES,
   MENSAJE_USUARIO_INACTIVO,
+  MOTIVO_LOGOUT,
 } from './auth.service.js';
 import type { ContrasenasService } from './contrasenas.service.js';
 import type { CargaToken } from './tipos.js';
@@ -37,7 +38,7 @@ function usuarioFicticio(cambios: Record<string, unknown> = {}) {
 describe('AuthService', () => {
   const prisma = {
     usuario: { findUnique: vi.fn(), update: vi.fn() },
-    sesion: { create: vi.fn(), findUnique: vi.fn() },
+    sesion: { create: vi.fn(), findUnique: vi.fn(), updateMany: vi.fn() },
     $transaction: vi.fn(),
   };
   const contrasenas = { verificar: vi.fn() };
@@ -280,6 +281,31 @@ describe('AuthService', () => {
       await expect(servicio.validarToken('no-es-un-token')).rejects.toThrow(
         UnauthorizedException,
       );
+    });
+  });
+
+  describe('cerrarSesion', () => {
+    it('revoca solo la sesión del token actual con motivo «logout»', async () => {
+      prisma.sesion.updateMany.mockResolvedValue({ count: 1 });
+
+      await servicio.cerrarSesion({ id: 7, roles: ['Docente'], jti: 'jti-1' });
+
+      expect(prisma.sesion.updateMany).toHaveBeenCalledWith({
+        where: { jti: 'jti-1', id_usuario: 7, revocada_en: null },
+        data: {
+          revocada_en: expect.any(Date),
+          motivo_revocacion: MOTIVO_LOGOUT,
+        },
+      });
+      expect(MOTIVO_LOGOUT).toBe('logout');
+    });
+
+    it('no falla si la sesión ya estaba revocada', async () => {
+      prisma.sesion.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        servicio.cerrarSesion({ id: 7, roles: [], jti: 'jti-1' }),
+      ).resolves.toBeUndefined();
     });
   });
 });

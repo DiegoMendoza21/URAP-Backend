@@ -12,6 +12,7 @@ import {
   ApiBadRequestResponse,
   ApiBearerAuth,
   ApiForbiddenResponse,
+  ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
@@ -79,5 +80,24 @@ export class AuthController {
     @UsuarioActual() usuario: UsuarioSesion,
   ): Promise<UsuarioAutenticadoDto> {
     return this.authService.obtenerUsuario(usuario.id);
+  }
+
+  @Post('cerrar-sesion')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Cierra la sesión actual',
+    description:
+      'Revoca en el servidor la sesión del token enviado (RF-01, HU-01-02). Desde ese ' +
+      'momento el token deja de servir aunque no haya vencido. El cliente debe borrarlo y ' +
+      'volver a la pantalla de inicio de sesión.',
+  })
+  @ApiNoContentResponse({ description: 'Sesión cerrada' })
+  @ApiUnauthorizedResponse({
+    type: RespuestaErrorDto,
+    description: 'Sin token, o token vencido, revocado o inválido',
+  })
+  cerrarSesion(@UsuarioActual() usuario: UsuarioSesion): Promise<void> {
+    return this.authService.cerrarSesion(usuario);
   }
 }
