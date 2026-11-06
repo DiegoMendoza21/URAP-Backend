@@ -10,6 +10,7 @@ import {
   TIPOS_NOTIFICACION,
   TIPOS_SESION,
 } from './catalogos.js';
+import { permisosInicialesDe } from './matriz-permisos.js';
 import {
   ASIGNATURAS,
   DESCRIPCION_RAP_PENDIENTE,
@@ -123,6 +124,38 @@ async function sembrarCatalogos(tx: Transaccion): Promise<void> {
         origen: 'ley',
       },
       update: {},
+    });
+  }
+  await sembrarMatrizPermisos(tx);
+}
+
+/**
+ * Matriz inicial de permisos (Producto 1, Tabla 17; ver matriz-permisos.ts). Solo para los
+ * roles que todavía no tienen ningún permiso: si el administrador ya la ajustó (HU-02-06), no
+ * se pisa.
+ */
+async function sembrarMatrizPermisos(tx: Transaccion): Promise<void> {
+  const [modulos, permisos] = await Promise.all([
+    tx.modulo.findMany({ select: { id: true, codigo: true } }),
+    tx.permiso.findMany({ select: { id: true, codigo: true } }),
+  ]);
+  const idModulo = new Map(modulos.map(({ id, codigo }) => [codigo, id]));
+  const idPermiso = new Map(permisos.map(({ id, codigo }) => [codigo, id]));
+
+  for (const { nombre } of ROLES) {
+    const rol = await tx.rol.findUnique({
+      where: { nombre },
+      select: { id: true, _count: { select: { rol_permiso: true } } },
+    });
+    if (!rol || rol._count.rol_permiso > 0) {
+      continue;
+    }
+    await tx.rol_permiso.createMany({
+      data: permisosInicialesDe(nombre).map(({ modulo, permiso }) => ({
+        id_rol: rol.id,
+        id_modulo: obtener(idModulo, modulo, `el módulo ${modulo}`),
+        id_permiso: obtener(idPermiso, permiso, `el permiso ${permiso}`),
+      })),
     });
   }
 }
@@ -343,6 +376,7 @@ async function contarRegistros(tx: Transaccion): Promise<ResumenSembrado> {
     raps: await tx.rap.count(),
     asignaturas: await tx.asignatura.count(),
     usuarios: await tx.usuario.count(),
+    permisos_por_rol: await tx.rol_permiso.count(),
   };
 }
 
