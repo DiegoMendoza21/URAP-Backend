@@ -5,6 +5,9 @@ import type { NombreRol } from './catalogos.js';
  * los documentos del proyecto; lo que todavía no está (los textos de los RAP, el porcentaje
  * esperado, el plan de estudios y el calendario oficial) queda marcado como pendiente o como
  * dato de demostración, para reemplazarlo cuando el programa lo entregue.
+ *
+ * La facultad, el programa, la escala y los RAP son datos base (`npm run db:sembrar`). El
+ * período, las asignaturas y los usuarios solo se cargan con `npm run db:sembrar:demo`.
  */
 
 export const FACULTAD = { nombre: 'Facultad de Ciencias Económicas' };

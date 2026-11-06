@@ -26,30 +26,36 @@ type Transaccion = Prisma.TransactionClient;
 /** Registros que quedaron en cada tabla sembrada. */
 export type ResumenSembrado = Record<string, number>;
 
+export interface DatosDemostracion {
+  /** Hash de la contraseña de cada usuario de demostración, por correo. */
+  hashesUsuarios: ReadonlyMap<string, string>;
+}
+
 /**
- * Carga los catálogos, el programa y los datos de demostración. Es repetible: solo crea lo que
- * falta y nunca modifica lo que ya existe, para no pisar lo que se cambie desde la aplicación.
- * Todo va en una transacción: si algo falla, la base queda como estaba.
- *
- * @param hashesUsuarios hash de la contraseña de cada usuario de demostración, por correo.
+ * Carga los datos base (catálogos, programa y RAP), que sirven en cualquier ambiente, y, si se
+ * piden, los de demostración (período, asignaturas y usuarios ficticios). Es repetible: solo
+ * crea lo que falta y nunca modifica lo que ya existe, para no pisar lo que se cambie desde la
+ * aplicación. Todo va en una transacción: si algo falla, la base queda como estaba.
  */
 export function sembrarDatosIniciales(
   prisma: PrismaService,
-  hashesUsuarios: ReadonlyMap<string, string>,
+  demostracion?: DatosDemostracion,
 ): Promise<ResumenSembrado> {
   return prisma.$transaction(
     async (tx) => {
       await sembrarCatalogos(tx);
       const idPrograma = await sembrarPrograma(tx);
-      const idPeriodo = await sembrarPeriodo(tx);
       const idsRap = await sembrarRaps(tx, idPrograma);
-      await sembrarAsignaturas(tx, idPrograma, idsRap);
-      await sembrarUsuariosDemo(tx, {
-        idPrograma,
-        idPeriodo,
-        idsRap,
-        hashesUsuarios,
-      });
+      if (demostracion) {
+        const idPeriodo = await sembrarPeriodo(tx);
+        await sembrarAsignaturas(tx, idPrograma, idsRap);
+        await sembrarUsuariosDemo(tx, {
+          idPrograma,
+          idPeriodo,
+          idsRap,
+          hashesUsuarios: demostracion.hashesUsuarios,
+        });
+      }
       return contarRegistros(tx);
     },
     { timeout: 60_000 },

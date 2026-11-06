@@ -30,7 +30,8 @@
     "db:desplegar": "prisma migrate deploy",
     "db:estado": "prisma migrate status",
     "db:generar": "prisma generate",
-    "db:sembrar": "nest build && node dist/datos-iniciales/sembrar.js"
+    "db:sembrar": "nest build && node dist/datos-iniciales/sembrar.js",
+    "db:sembrar:demo": "nest build && node dist/datos-iniciales/sembrar.js --demo"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
