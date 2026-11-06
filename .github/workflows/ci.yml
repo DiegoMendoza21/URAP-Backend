@@ -1,0 +1,76 @@
+# Verifica cada PR y cada cambio en main: CONTRIBUTING.md, «main siempre en verde».
+# Las acciones van fijadas por SHA, en versiones con más de dos semanas, igual que las
+# dependencias del proyecto.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    name: Formato, lint, compilación y pruebas
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # La misma versión de MySQL que docker-compose.yml, para las pruebas e2e.
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: urap
+          MYSQL_USER: urap
+          MYSQL_PASSWORD: urap_ci
+          MYSQL_ROOT_PASSWORD: urap_root_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -u root -purap_root_ci --silent"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: mysql://urap:urap_ci@127.0.0.1:3306/urap
+      # Solo sirve para la base efímera de este flujo: no es el secreto de ningún ambiente.
+      JWT_SECRETO: secreto-de-ci-solo-para-las-pruebas-e2e-0123456789
+      JWT_EXPIRACION_MINUTOS: '480'
+      CORS_ORIGENES: http://localhost:3000
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Formato (Prettier)
+        run: npm run format:revisar
+
+      - name: Lint (oxlint)
+        run: npm run lint
+
+      - name: Compilación
+        run: npm run build
+
+      - name: Pruebas unitarias
+        run: npm run test
+
+      - name: Aplicar las migraciones
+        run: npm run db:desplegar
+
+      - name: Pruebas e2e
+        run: npm run test:e2e

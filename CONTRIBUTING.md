@@ -53,7 +53,9 @@ lee el último comentario de relevo. Si la retoma la otra persona, se la reasign
 ## Reglas para no pisarse
 
 - **`main` siempre en verde**: no se integra nada con pruebas, lint o build fallando, y nadie hace
-  push directo a `main`.
+  push directo a `main`. GitHub Actions lo verifica en cada PR (`.github/workflows/ci.yml`):
+  formato, lint, compilación, pruebas unitarias y e2e contra MySQL. Un PR con el check en rojo
+  no se integra.
 - **Un módulo a la vez por persona**: los dos no trabajan en el mismo módulo al mismo tiempo.
   Repártanse por épica o siguiendo las dependencias de Jira.
 - **Migraciones de Prisma**: una sola rama a la vez crea migraciones. Antes de crear una, se
