@@ -142,7 +142,7 @@ export class AuthService {
     const carga: CargaToken = { sub: usuario.id, roles, jti };
     const token = await this.jwt.signAsync(carga);
 
-    await this.prisma.$transaction([
+    const [sesion] = await this.prisma.$transaction([
       this.prisma.sesion.create({
         data: {
           id_usuario: usuario.id,
@@ -163,6 +163,22 @@ export class AuthService {
         },
       }),
     ]);
+
+    // Auditoría (HU-14-01): el endpoint es público, así que el usuario se indica aquí. El jti
+    // no se guarda: identifica el token.
+    await this.auditoria.registrar({
+      idUsuario: usuario.id,
+      accion: 'crear',
+      tablaAfectada: 'sesion',
+      idRegistro: sesion.id,
+      valorNuevo: {
+        id_usuario: usuario.id,
+        emitida_en: emitidaEn.toISOString(),
+        expira_en: expiraEn.toISOString(),
+        user_agent: recortar(origen.userAgent),
+      },
+      ip: origen.ip,
+    });
 
     return {
       token,
@@ -308,10 +324,28 @@ export class AuthService {
    * revoca la sesión del token con que se hace la petición, no las demás del usuario.
    */
   async cerrarSesion(usuario: UsuarioSesion): Promise<void> {
-    await this.prisma.sesion.updateMany({
-      where: { jti: usuario.jti, id_usuario: usuario.id, revocada_en: null },
-      data: { revocada_en: new Date(), motivo_revocacion: MOTIVO_LOGOUT },
+    const sesion = await this.prisma.sesion.findUnique({
+      where: { jti: usuario.jti },
+      select: { id: true },
     });
+    const revocadaEn = new Date();
+    const { count } = await this.prisma.sesion.updateMany({
+      where: { jti: usuario.jti, id_usuario: usuario.id, revocada_en: null },
+      data: { revocada_en: revocadaEn, motivo_revocacion: MOTIVO_LOGOUT },
+    });
+    if (count === 1) {
+      // Auditoría (HU-14-01): el usuario y la IP salen del contexto de la petición.
+      await this.auditoria.registrar({
+        accion: 'actualizar',
+        tablaAfectada: 'sesion',
+        idRegistro: sesion?.id ?? null,
+        valorAnterior: { revocada_en: null, motivo_revocacion: null },
+        valorNuevo: {
+          revocada_en: revocadaEn.toISOString(),
+          motivo_revocacion: MOTIVO_LOGOUT,
+        },
+      });
+    }
   }
 
   /**

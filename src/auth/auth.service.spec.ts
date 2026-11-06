@@ -90,7 +90,8 @@ describe('AuthService', () => {
     vi.clearAllMocks();
     // Descarta los valores pendientes de mockResolvedValueOnce que una prueba no consumió.
     prisma.usuario.findUnique.mockReset();
-    prisma.$transaction.mockResolvedValue([]);
+    // [sesión creada, usuario actualizado]
+    prisma.$transaction.mockResolvedValue([{ id: 99 }, {}]);
     prisma.$executeRaw.mockResolvedValue(1);
     // Los valores iniciales del seed: 5 intentos y 15 minutos.
     parametros.leerEntero.mockImplementation(async (clave: string) =>
@@ -143,6 +144,20 @@ describe('AuthService', () => {
         },
       });
       expect(prisma.$transaction).toHaveBeenCalledOnce();
+      // HU-14-01: el inicio de sesión queda en auditoría, sin el jti del token.
+      expect(auditoria.registrar).toHaveBeenCalledWith({
+        idUsuario: 7,
+        accion: 'crear',
+        tablaAfectada: 'sesion',
+        idRegistro: 99,
+        valorNuevo: {
+          id_usuario: 7,
+          emitida_en: expect.any(String),
+          expira_en: resultado.expiraEn,
+          user_agent: 'navegador de pruebas',
+        },
+        ip: '10.0.0.1',
+      });
     });
 
     it('lista una sola vez un rol asignado en varios programas', async () => {
@@ -537,12 +552,32 @@ describe('AuthService', () => {
       expect(MOTIVO_LOGOUT).toBe('logout');
     });
 
-    it('no falla si la sesión ya estaba revocada', async () => {
+    it('registra el cierre en auditoría, con el usuario y la IP del contexto', async () => {
+      prisma.sesion.findUnique.mockResolvedValue({ id: 99 });
+      prisma.sesion.updateMany.mockResolvedValue({ count: 1 });
+
+      await servicio.cerrarSesion(usuarioDeSesion());
+
+      expect(auditoria.registrar).toHaveBeenCalledWith({
+        accion: 'actualizar',
+        tablaAfectada: 'sesion',
+        idRegistro: 99,
+        valorAnterior: { revocada_en: null, motivo_revocacion: null },
+        valorNuevo: {
+          revocada_en: expect.any(String),
+          motivo_revocacion: MOTIVO_LOGOUT,
+        },
+      });
+    });
+
+    it('no falla ni audita si la sesión ya estaba revocada', async () => {
+      prisma.sesion.findUnique.mockResolvedValue({ id: 99 });
       prisma.sesion.updateMany.mockResolvedValue({ count: 0 });
 
       await expect(
         servicio.cerrarSesion(usuarioDeSesion()),
       ).resolves.toBeUndefined();
+      expect(auditoria.registrar).not.toHaveBeenCalled();
     });
   });
 });

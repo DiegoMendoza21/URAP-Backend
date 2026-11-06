@@ -15,6 +15,7 @@ import { ContrasenasService } from '../src/auth/contrasenas.service.js';
 import type { VariablesEntorno } from '../src/common/configuracion/variables-entorno.js';
 import { PrismaService } from '../src/common/prisma/prisma.service.js';
 import { configurarAplicacion } from '../src/configurar-aplicacion.js';
+import { borrarUsuariosDePrueba } from './utilidades/limpieza.js';
 
 async function crearAplicacion(
   conLimitePorIp: boolean,
@@ -92,12 +93,7 @@ describe('Bloqueo por intentos fallidos (e2e) · HU-01-04', () => {
 
   afterAll(async () => {
     if (prisma) {
-      await prisma.auditoria.deleteMany({
-        where: { tabla_afectada: 'usuario', id_registro: idUsuario },
-      });
-      await prisma.sesion.deleteMany({ where: { id_usuario: idUsuario } });
-      await prisma.usuario_rol.deleteMany({ where: { id_usuario: idUsuario } });
-      await prisma.usuario.deleteMany({ where: { id: idUsuario } });
+      await borrarUsuariosDePrueba(prisma, [idUsuario]);
       await prisma.rol.deleteMany({ where: { id: idRol } });
       await prisma.parametro_sistema.deleteMany({
         where: { clave: { in: parametrosCreados } },
