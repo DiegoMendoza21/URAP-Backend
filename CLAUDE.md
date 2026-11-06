@@ -89,6 +89,7 @@ npm run db:migrar      # prisma migrate dev: crear y aplicar una migración en d
 npm run db:desplegar   # prisma migrate deploy: aplicar migraciones pendientes en un ambiente desplegado
 npm run db:generar     # prisma generate: regenerar el cliente tras cambiar el esquema
 npm run db:estado      # prisma migrate status: migraciones que faltan por aplicar
+npm run db:sembrar     # catálogos, programa y usuarios de demostración (src/datos-iniciales/)
 ```
 
 - **Línea base:** ya existe (`prisma/migrations/0_init`). Salió una sola vez del DDL
