@@ -23,6 +23,7 @@ import {
   mensajeAccesoBloqueado,
 } from './auth.service.js';
 import type { ContrasenasService } from './contrasenas.service.js';
+import { IntentosAnonimosService } from './intentos-anonimos.service.js';
 import type { CargaToken, UsuarioSesion } from './tipos.js';
 
 // Datos ficticios: nunca datos reales de personas en las pruebas.
@@ -54,6 +55,7 @@ function usuarioDeSesion(): UsuarioSesion {
     correo: 'usuaria.prueba@unicartagena.edu.co',
     roles: ['Docente'],
     jti: 'jti-1',
+    idSesion: 99,
   };
 }
 
@@ -62,10 +64,11 @@ describe('AuthService', () => {
     usuario: { findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     sesion: { create: vi.fn(), findUnique: vi.fn(), updateMany: vi.fn() },
     $transaction: vi.fn(),
-    $executeRaw: vi.fn(),
+    $queryRaw: vi.fn(),
   };
   const contrasenas = { verificar: vi.fn() };
   const parametros = { leerEntero: vi.fn() };
+  let intentosAnonimos = new IntentosAnonimosService();
   const auditoria = { registrar: vi.fn() };
   const jwt = new JwtService({
     secret: SECRETO,
@@ -80,6 +83,15 @@ describe('AuthService', () => {
     config as unknown as ConfigService<VariablesEntorno, true>,
     parametros as unknown as ParametrosService,
     auditoria as unknown as AuditoriaService,
+    {
+      // Una instancia nueva por prueba (ver beforeEach), sin conteos de otras pruebas.
+      bloqueadoHasta: (
+        ...args: Parameters<IntentosAnonimosService['bloqueadoHasta']>
+      ) => intentosAnonimos.bloqueadoHasta(...args),
+      registrarFallo: (
+        ...args: Parameters<IntentosAnonimosService['registrarFallo']>
+      ) => intentosAnonimos.registrarFallo(...args),
+    } as IntentosAnonimosService,
   );
   const credenciales = {
     correo: 'usuaria.prueba@unicartagena.edu.co',
@@ -90,9 +102,14 @@ describe('AuthService', () => {
     vi.clearAllMocks();
     // Descarta los valores pendientes de mockResolvedValueOnce que una prueba no consumió.
     prisma.usuario.findUnique.mockReset();
-    // [sesión creada, usuario actualizado]
-    prisma.$transaction.mockResolvedValue([{ id: 99 }, {}]);
-    prisma.$executeRaw.mockResolvedValue(1);
+    intentosAnonimos = new IntentosAnonimosService();
+    // Transacción interactiva: el callback recibe el mismo cliente simulado.
+    prisma.$transaction.mockImplementation(
+      async (fn: (tx: typeof prisma) => unknown) => fn(prisma),
+    );
+    prisma.sesion.create.mockResolvedValue({ id: 99 });
+    prisma.usuario.updateMany.mockReset().mockResolvedValue({ count: 1 });
+    prisma.$queryRaw.mockResolvedValue([{ id: 7 }]);
     // Los valores iniciales del seed: 5 intentos y 15 minutos.
     parametros.leerEntero.mockImplementation(async (clave: string) =>
       clave === PARAMETRO_INTENTOS_MAXIMOS ? 5 : 15,
@@ -134,9 +151,16 @@ describe('AuthService', () => {
           ip: '10.0.0.1',
           user_agent: 'navegador de pruebas',
         }),
+        select: { id: true },
       });
-      expect(prisma.usuario.update).toHaveBeenCalledWith({
-        where: { id: 7 },
+      expect(prisma.usuario.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 7,
+          OR: [
+            { bloqueado_hasta: null },
+            { bloqueado_hasta: { lte: expect.any(Date) } },
+          ],
+        },
         data: {
           ultimo_acceso: expect.any(Date),
           intentos_fallidos: 0,
@@ -150,11 +174,11 @@ describe('AuthService', () => {
         accion: 'crear',
         tablaAfectada: 'sesion',
         idRegistro: 99,
+        // Sin el navegador: ya está en `sesion` (Ley 1581).
         valorNuevo: {
           id_usuario: 7,
-          emitida_en: expect.any(String),
-          expira_en: resultado.expiraEn,
-          user_agent: 'navegador de pruebas',
+          emitida_en: expect.any(Date),
+          expira_en: new Date(resultado.expiraEn),
         },
         ip: '10.0.0.1',
       });
@@ -183,7 +207,7 @@ describe('AuthService', () => {
       await expect(servicio.iniciarSesion(credenciales)).rejects.toThrow(
         new UnauthorizedException(MENSAJE_CREDENCIALES_INVALIDAS),
       );
-      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.sesion.create).not.toHaveBeenCalled();
     });
 
     it('con un correo no registrado responde igual y aun así verifica una contraseña', async () => {
@@ -258,36 +282,60 @@ describe('AuthService', () => {
   });
 
   describe('bloqueo por intentos fallidos (HU-01-04)', () => {
-    /** findUnique: primero la búsqueda por correo; después, el conteo tras el incremento. */
-    function conIntentos(
-      intentos: number,
-      cambios: Record<string, unknown> = {},
+    /**
+     * findUnique: primero la búsqueda por correo; después, dentro de la transacción y con la
+     * fila bloqueada, el conteo y el bloqueo vigentes de la cuenta.
+     */
+    function conCuenta(
+      intentosPrevios: number,
+      bloqueadoHasta: Date | null = null,
     ) {
       prisma.usuario.findUnique
-        .mockResolvedValueOnce(usuarioFicticio(cambios))
-        .mockResolvedValueOnce({ intentos_fallidos: intentos });
+        .mockResolvedValueOnce(usuarioFicticio())
+        .mockResolvedValueOnce({
+          intentos_fallidos: intentosPrevios,
+          bloqueado_hasta: bloqueadoHasta,
+        });
+      contrasenas.verificar.mockResolvedValue(false);
     }
 
-    it('suma un intento fallido de forma atómica y responde el mensaje genérico', async () => {
-      conIntentos(2);
-      contrasenas.verificar.mockResolvedValue(false);
+    const estadoDe = (error: unknown) => (error as HttpException).getStatus();
+
+    it('suma un intento con la fila de la cuenta bloqueada y responde el mensaje genérico', async () => {
+      conCuenta(2);
 
       await expect(servicio.iniciarSesion(credenciales)).rejects.toThrow(
         new UnauthorizedException(MENSAJE_CREDENCIALES_INVALIDAS),
       );
-      expect(prisma.$executeRaw).toHaveBeenCalledOnce();
-      const [sql, idUsuario] = prisma.$executeRaw.mock.calls[0] as [
+      const [sql, idUsuario] = prisma.$queryRaw.mock.calls[0] as [
         TemplateStringsArray,
         number,
       ];
-      expect(sql.join('?')).toMatch(/COALESCE\(intentos_fallidos, 0\) \+ 1/);
+      expect(sql.join('?')).toMatch(
+        /SELECT id FROM usuario WHERE id = \? FOR UPDATE/,
+      );
       expect(idUsuario).toBe(7);
-      expect(prisma.usuario.updateMany).not.toHaveBeenCalled();
+      expect(prisma.usuario.update).toHaveBeenCalledWith({
+        where: { id: 7 },
+        data: { intentos_fallidos: 3 },
+      });
+      expect(auditoria.registrar).not.toHaveBeenCalled();
+    });
+
+    it('trata un conteo nulo como cero', async () => {
+      conCuenta(null as unknown as number);
+
+      await expect(servicio.iniciarSesion(credenciales)).rejects.toThrow(
+        UnauthorizedException,
+      );
+      expect(prisma.usuario.update).toHaveBeenCalledWith({
+        where: { id: 7 },
+        data: { intentos_fallidos: 1 },
+      });
     });
 
     it('lee el límite y la duración de parametro_sistema, no del código', async () => {
-      conIntentos(1);
-      contrasenas.verificar.mockResolvedValue(false);
+      conCuenta(1);
 
       await expect(servicio.iniciarSesion(credenciales)).rejects.toThrow();
       expect(parametros.leerEntero).toHaveBeenCalledWith(
@@ -301,26 +349,20 @@ describe('AuthService', () => {
     });
 
     it('al llegar al límite bloquea la cuenta, reinicia el conteo y lo audita', async () => {
-      conIntentos(5);
-      contrasenas.verificar.mockResolvedValue(false);
-      prisma.usuario.updateMany.mockResolvedValue({ count: 1 });
+      conCuenta(4);
 
       const antes = Date.now();
       const error = await servicio
         .iniciarSesion(credenciales, { ip: '10.0.0.9' })
         .catch((e: unknown) => e);
 
-      expect(error).toBeInstanceOf(HttpException);
-      expect((error as HttpException).getStatus()).toBe(
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
+      expect(estadoDe(error)).toBe(HttpStatus.TOO_MANY_REQUESTS);
       expect((error as HttpException).message).toBe(mensajeAccesoBloqueado(15));
-      const { where, data } = prisma.usuario.updateMany.mock.calls[0][0] as {
-        where: Record<string, unknown>;
+      const { data } = prisma.usuario.update.mock.calls[0][0] as {
         data: { bloqueado_hasta: Date; intentos_fallidos: number };
       };
-      expect(where.id).toBe(7);
       expect(data.intentos_fallidos).toBe(0);
+      expect(data.bloqueado_hasta.getMilliseconds()).toBe(0);
       expect(data.bloqueado_hasta.getTime() - antes).toBeGreaterThanOrEqual(
         15 * 60_000 - 1000,
       );
@@ -332,22 +374,22 @@ describe('AuthService', () => {
         valorAnterior: { intentos_fallidos: 5, bloqueado_hasta: null },
         valorNuevo: {
           intentos_fallidos: 0,
-          bloqueado_hasta: data.bloqueado_hasta.toISOString(),
+          bloqueado_hasta: data.bloqueado_hasta,
           motivo: MOTIVO_BLOQUEO,
         },
         ip: '10.0.0.9',
       });
     });
 
-    it('con intentos simultáneos audita un solo bloqueo', async () => {
-      conIntentos(6);
-      contrasenas.verificar.mockResolvedValue(false);
-      // Otro intento ya bloqueó la cuenta un instante antes.
-      prisma.usuario.updateMany.mockResolvedValue({ count: 0 });
+    it('un intento en vuelo cuando otro bloqueó la cuenta responde 429 sin contar ni auditar', async () => {
+      conCuenta(0, new Date(Date.now() + 15 * 60_000));
 
-      await expect(servicio.iniciarSesion(credenciales)).rejects.toThrow(
-        HttpException,
-      );
+      const error = await servicio
+        .iniciarSesion(credenciales)
+        .catch((e: unknown) => e);
+
+      expect(estadoDe(error)).toBe(HttpStatus.TOO_MANY_REQUESTS);
+      expect(prisma.usuario.update).not.toHaveBeenCalled();
       expect(auditoria.registrar).not.toHaveBeenCalled();
     });
 
@@ -361,13 +403,29 @@ describe('AuthService', () => {
         .iniciarSesion(credenciales)
         .catch((e: unknown) => e);
 
-      expect((error as HttpException).getStatus()).toBe(
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
+      expect(estadoDe(error)).toBe(HttpStatus.TOO_MANY_REQUESTS);
       expect((error as HttpException).message).toBe(mensajeAccesoBloqueado(10));
       expect(contrasenas.verificar).not.toHaveBeenCalled();
-      expect(prisma.$executeRaw).not.toHaveBeenCalled();
       expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('la contraseña correcta en vuelo cuando otro intento bloqueó la cuenta no inicia sesión', async () => {
+      const bloqueo = new Date(Date.now() + 15 * 60_000);
+      prisma.usuario.findUnique
+        .mockResolvedValueOnce(usuarioFicticio())
+        .mockResolvedValueOnce({ bloqueado_hasta: bloqueo });
+      contrasenas.verificar.mockResolvedValue(true);
+      // El reinicio condicionado no encuentra la cuenta sin bloqueo.
+      prisma.usuario.updateMany.mockResolvedValue({ count: 0 });
+
+      const error = await servicio
+        .iniciarSesion(credenciales)
+        .catch((e: unknown) => e);
+
+      expect(estadoDe(error)).toBe(HttpStatus.TOO_MANY_REQUESTS);
+      expect((error as HttpException).message).toBe(mensajeAccesoBloqueado(15));
+      expect(prisma.sesion.create).not.toHaveBeenCalled();
+      expect(auditoria.registrar).not.toHaveBeenCalled();
     });
 
     it('cuando el bloqueo venció, el usuario puede volver a iniciar sesión', async () => {
@@ -379,13 +437,14 @@ describe('AuthService', () => {
       await expect(servicio.iniciarSesion(credenciales)).resolves.toMatchObject(
         { token: expect.any(String) },
       );
-      expect(prisma.usuario.update).toHaveBeenCalledWith({
-        where: { id: 7 },
-        data: expect.objectContaining({
-          intentos_fallidos: 0,
-          bloqueado_hasta: null,
+      expect(prisma.usuario.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            intentos_fallidos: 0,
+            bloqueado_hasta: null,
+          }),
         }),
-      });
+      );
     });
 
     it('dice «1 minuto» en singular cuando falta menos de un minuto', () => {
@@ -395,26 +454,36 @@ describe('AuthService', () => {
       expect(mensajeAccesoBloqueado(15)).toContain('en 15 minutos.');
     });
 
-    it('sin parámetros válidos cuenta el intento pero no bloquea', async () => {
-      conIntentos(50);
+    it('sin parámetros válidos no bloquea ni cuenta el intento', async () => {
+      prisma.usuario.findUnique.mockResolvedValue(usuarioFicticio());
       contrasenas.verificar.mockResolvedValue(false);
       parametros.leerEntero.mockResolvedValue(null);
 
       await expect(servicio.iniciarSesion(credenciales)).rejects.toThrow(
         new UnauthorizedException(MENSAJE_CREDENCIALES_INVALIDAS),
       );
-      expect(prisma.$executeRaw).toHaveBeenCalledOnce();
-      expect(prisma.usuario.updateMany).not.toHaveBeenCalled();
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.usuario.update).not.toHaveBeenCalled();
     });
 
-    it('con un correo inexistente no cuenta intentos', async () => {
+    it('un correo inexistente recibe la misma secuencia que uno registrado, sin tocar la base (RF-01, p2)', async () => {
       prisma.usuario.findUnique.mockResolvedValue(null);
       contrasenas.verificar.mockResolvedValue(false);
 
-      await expect(servicio.iniciarSesion(credenciales)).rejects.toThrow(
-        UnauthorizedException,
-      );
-      expect(prisma.$executeRaw).not.toHaveBeenCalled();
+      const estados: number[] = [];
+      for (let i = 0; i < 7; i++) {
+        estados.push(
+          await servicio.iniciarSesion(credenciales).then(
+            () => 200,
+            (e: HttpException) => e.getStatus(),
+          ),
+        );
+      }
+
+      expect(estados).toEqual([401, 401, 401, 401, 429, 429, 429]);
+      // Durante el bloqueo tampoco se verifica la contraseña, como en una cuenta real.
+      expect(contrasenas.verificar).toHaveBeenCalledTimes(5);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
   });
 
@@ -425,6 +494,7 @@ describe('AuthService', () => {
 
     function sesionVigente(cambios: Record<string, unknown> = {}) {
       return {
+        id: 99,
         id_usuario: 7,
         expira_en: new Date(Date.now() + 60_000),
         revocada_en: null,
@@ -447,6 +517,7 @@ describe('AuthService', () => {
         correo: 'usuaria.prueba@unicartagena.edu.co',
         roles: ['Docente', 'Líder RAP'],
         jti: 'jti-1',
+        idSesion: 99,
       });
     });
 
@@ -543,7 +614,12 @@ describe('AuthService', () => {
       await servicio.cerrarSesion(usuarioDeSesion());
 
       expect(prisma.sesion.updateMany).toHaveBeenCalledWith({
-        where: { jti: 'jti-1', id_usuario: 7, revocada_en: null },
+        where: {
+          id: 99,
+          jti: 'jti-1',
+          id_usuario: 7,
+          revocada_en: null,
+        },
         data: {
           revocada_en: expect.any(Date),
           motivo_revocacion: MOTIVO_LOGOUT,
@@ -553,25 +629,25 @@ describe('AuthService', () => {
     });
 
     it('registra el cierre en auditoría, con el usuario y la IP del contexto', async () => {
-      prisma.sesion.findUnique.mockResolvedValue({ id: 99 });
       prisma.sesion.updateMany.mockResolvedValue({ count: 1 });
 
       await servicio.cerrarSesion(usuarioDeSesion());
 
+      // El id de la sesión viene del guard: no se vuelve a buscar.
+      expect(prisma.sesion.findUnique).not.toHaveBeenCalled();
       expect(auditoria.registrar).toHaveBeenCalledWith({
         accion: 'actualizar',
         tablaAfectada: 'sesion',
         idRegistro: 99,
         valorAnterior: { revocada_en: null, motivo_revocacion: null },
         valorNuevo: {
-          revocada_en: expect.any(String),
+          revocada_en: expect.any(Date),
           motivo_revocacion: MOTIVO_LOGOUT,
         },
       });
     });
 
     it('no falla ni audita si la sesión ya estaba revocada', async () => {
-      prisma.sesion.findUnique.mockResolvedValue({ id: 99 });
       prisma.sesion.updateMany.mockResolvedValue({ count: 0 });
 
       await expect(

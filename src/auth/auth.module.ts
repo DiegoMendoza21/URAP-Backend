@@ -8,6 +8,7 @@ import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
 import { AutenticacionGuard } from './autenticacion.guard.js';
 import { ContrasenasService } from './contrasenas.service.js';
+import { IntentosAnonimosService } from './intentos-anonimos.service.js';
 
 export const MENSAJE_DEMASIADOS_INTENTOS =
   'Se hicieron demasiados intentos de inicio de sesión desde esta conexión. ' +
@@ -49,6 +50,7 @@ export const MENSAJE_DEMASIADOS_INTENTOS =
   providers: [
     AuthService,
     ContrasenasService,
+    IntentosAnonimosService,
     { provide: APP_GUARD, useClass: AutenticacionGuard },
   ],
   // HU-02-01 (crear usuarios) usa el mismo hash de contraseñas.

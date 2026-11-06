@@ -158,6 +158,83 @@ describe('Bloqueo por intentos fallidos (e2e) · HU-01-04', () => {
     ).resolves.toMatchObject({ intentos_fallidos: 0, bloqueado_hasta: null });
   });
 
+  describe('casos de la revisión del PR #6', () => {
+    const extras: number[] = [];
+
+    async function crearUsuarioExtra(nombre: string): Promise<string> {
+      const correoExtra = `e2e.${nombre}.${sufijo}@prueba.urap.local`;
+      const usuario = await prisma.usuario.create({
+        data: {
+          nombres: 'Usuario',
+          apellidos: `${nombre} E2E`,
+          email: correoExtra,
+          password_hash: await app.get(ContrasenasService).hashear(contrasena),
+          activo: true,
+        },
+      });
+      await prisma.usuario_rol.create({
+        data: { id_usuario: usuario.id, id_rol: idRol, activo: true },
+      });
+      extras.push(usuario.id);
+      return correoExtra;
+    }
+
+    const intentar = (correoIntento: string, clave: string) =>
+      request(app.getHttpServer())
+        .post('/api/auth/iniciar-sesion')
+        .send({ correo: correoIntento, contrasena: clave });
+
+    afterAll(async () => {
+      await borrarUsuariosDePrueba(prisma, extras);
+    });
+
+    it('un correo inexistente recibe la misma secuencia de respuestas que uno registrado (RF-01, p2)', async () => {
+      const registrado = await crearUsuarioExtra('registrado');
+      const inexistente = `e2e.nadie.${sufijo}@prueba.urap.local`;
+      const secuencia = async (correoIntento: string) => {
+        const respuestas = [];
+        for (let i = 0; i < intentosMaximos + 2; i++) {
+          const { status, body } = await intentar(
+            correoIntento,
+            'clave-equivocada',
+          );
+          respuestas.push(`${status} ${body.mensaje}`);
+        }
+        return respuestas;
+      };
+
+      const deRegistrado = await secuencia(registrado);
+      const deInexistente = await secuencia(inexistente);
+
+      expect(deRegistrado.filter((r) => r.startsWith('429')).length).toBe(3);
+      expect(deInexistente).toEqual(deRegistrado);
+    });
+
+    it('una ráfaga simultánea cuenta exactamente los intentos permitidos y deja la cuenta bloqueada', async () => {
+      const correoRafaga = await crearUsuarioExtra('rafaga');
+
+      const respuestas = await Promise.all(
+        Array.from({ length: 20 }, () =>
+          intentar(correoRafaga, 'clave-equivocada'),
+        ),
+      );
+      const estados = respuestas.map(({ status }) => status);
+
+      // Solo los intentos anteriores al bloqueo llegan a 401; todos los demás, 429.
+      expect(estados.filter((estado) => estado === 401)).toHaveLength(
+        intentosMaximos - 1,
+      );
+      expect(estados.filter((estado) => estado === 429)).toHaveLength(
+        20 - (intentosMaximos - 1),
+      );
+      // La contraseña correcta, justo después de la ráfaga, tampoco entra.
+      await intentar(correoRafaga, contrasena).expect(429);
+      await expect(
+        prisma.sesion.count({ where: { id_usuario: extras.at(-1) } }),
+      ).resolves.toBe(0);
+    });
+  });
+
   describe('límite de intentos por IP', () => {
     let appConLimite: INestApplication;
 
@@ -173,18 +250,20 @@ describe('Bloqueo por intentos fallidos (e2e) · HU-01-04', () => {
       const limite = appConLimite
         .get(ConfigService<VariablesEntorno, true>)
         .get('INICIO_SESION_LIMITE_POR_IP', { infer: true });
-      const intentar = () =>
+      // Un correo distinto en cada intento: así ninguno llega al bloqueo por cuenta y el
+      // único freno es el límite por IP.
+      const intentar = (numero: number) =>
         request(appConLimite.getHttpServer())
           .post('/api/auth/iniciar-sesion')
           .send({
-            correo: `nadie.${sufijo}@prueba.urap.local`,
+            correo: `nadie.${numero}.${sufijo}@prueba.urap.local`,
             contrasena: 'cualquiera',
           });
 
       for (let i = 0; i < limite; i++) {
-        await intentar().expect(401);
+        await intentar(i).expect(401);
       }
-      const respuesta = await intentar().expect(429);
+      const respuesta = await intentar(limite).expect(429);
       expect(respuesta.body).toMatchObject({
         estado: 429,
         mensaje: MENSAJE_DEMASIADOS_INTENTOS,

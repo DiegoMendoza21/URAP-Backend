@@ -85,11 +85,10 @@ describe('Auditoría automática (e2e) · HU-14-01', () => {
     expect(inicio).toMatchObject({
       accion: 'crear',
       id_usuario: idUsuario,
-      valor_nuevo: expect.objectContaining({
-        id_usuario: idUsuario,
-        user_agent: 'navegador e2e',
-      }),
+      valor_nuevo: expect.objectContaining({ id_usuario: idUsuario }),
     });
+    // El navegador ya está en `sesion`: la auditoría no lo duplica (Ley 1581).
+    expect(inicio.valor_nuevo).not.toHaveProperty('user_agent');
     // El jti identifica el token: no se guarda en auditoría.
     expect(JSON.stringify(inicio.valor_nuevo)).not.toContain(sesion.jti!);
     // El cierre toma el usuario del contexto de la petición, que llenó el guard.

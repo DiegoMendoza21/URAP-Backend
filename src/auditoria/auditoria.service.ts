@@ -111,10 +111,23 @@ export class AuditoriaService {
   }
 }
 
+function tieneToJSON(valor: unknown): valor is { toJSON(): unknown } {
+  return (
+    valor !== null &&
+    typeof valor === 'object' &&
+    typeof (valor as { toJSON?: unknown }).toJSON === 'function'
+  );
+}
+
 /** Copia del valor sin campos sensibles (contraseñas, tokens), a cualquier profundidad. */
 function limpiar(
-  valor: Prisma.InputJsonValue | undefined,
+  entrada: Prisma.InputJsonValue | undefined,
 ): Prisma.InputJsonValue | undefined {
+  // Un Date o un Prisma.Decimal es un objeto sin propiedades propias: recorrido tal cual
+  // quedaría como `{}`. Se guarda lo que dan al serializarse a JSON (fecha ISO, número).
+  const valor = tieneToJSON(entrada)
+    ? (entrada.toJSON() as Prisma.InputJsonValue)
+    : entrada;
   if (Array.isArray(valor)) {
     return valor.map((elemento) =>
       limpiar(elemento as Prisma.InputJsonValue),

@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { ejecutarEnContexto } from '../common/contexto/contexto-peticion.js';
 import type { PrismaService } from '../common/prisma/prisma.service.js';
+import { Prisma } from '../generated/prisma/client.js';
 import {
   AuditoriaService,
   TIEMPO_MAXIMO_AUDITORIA_MS,
@@ -101,6 +102,25 @@ describe('AuditoriaService', () => {
           jti: VALOR_OMITIDO,
         },
         lista: [{ JWT_SECRETO: VALOR_OMITIDO, rol: 'Docente' }],
+      },
+    });
+  });
+
+  it('guarda las fechas y los decimales con su valor JSON, no como objetos vacíos', async () => {
+    await servicio.registrar({
+      ...evento,
+      valorAnterior: { porcentaje: new Prisma.Decimal('87.50') },
+      valorNuevo: {
+        fecha: new Date('2026-11-06T10:00:00.000Z'),
+        historial: [{ en: new Date('2026-01-01T00:00:00.000Z') }],
+      },
+    });
+
+    expect(datosGuardados()).toMatchObject({
+      valor_anterior: { porcentaje: '87.5' },
+      valor_nuevo: {
+        fecha: '2026-11-06T10:00:00.000Z',
+        historial: [{ en: '2026-01-01T00:00:00.000Z' }],
       },
     });
   });

@@ -13,6 +13,10 @@ import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { ParametrosService } from '../common/parametros/parametros.service.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { ContrasenasService } from './contrasenas.service.js';
+import {
+  finDelBloqueo,
+  IntentosAnonimosService,
+} from './intentos-anonimos.service.js';
 import type { IniciarSesionDto } from './dto/iniciar-sesion.dto.js';
 import type { SesionIniciadaDto } from './dto/sesion-iniciada.dto.js';
 import type { UsuarioAutenticadoDto } from './dto/usuario-autenticado.dto.js';
@@ -92,6 +96,7 @@ export class AuthService {
     private readonly config: ConfigService<VariablesEntorno, true>,
     private readonly parametros: ParametrosService,
     private readonly auditoria: AuditoriaService,
+    private readonly intentosAnonimos: IntentosAnonimosService,
   ) {}
 
   async iniciarSesion(
@@ -108,10 +113,15 @@ export class AuthService {
     });
 
     // Durante el bloqueo (HU-01-04) no se verifica la contraseña: así no se puede seguir
-    // probando contraseñas mientras dura, ni saber si alguna era la correcta.
+    // probando contraseñas mientras dura, ni saber si alguna era la correcta. Un correo
+    // inexistente lleva el mismo bloqueo, en memoria: si no, el 429 delataría qué correos
+    // están registrados (RF-01, excepción p2).
     const ahora = new Date();
-    if (usuario?.bloqueado_hasta && usuario.bloqueado_hasta > ahora) {
-      throw accesoBloqueado(usuario.bloqueado_hasta, ahora);
+    const bloqueoVigente = usuario
+      ? usuario.bloqueado_hasta
+      : this.intentosAnonimos.bloqueadoHasta(datos.correo, ahora);
+    if (bloqueoVigente && bloqueoVigente > ahora) {
+      throw accesoBloqueado(bloqueoVigente, ahora);
     }
 
     // Se verifica aunque el usuario no exista: así la respuesta tarda lo mismo y no revela
@@ -123,6 +133,8 @@ export class AuthService {
     if (!usuario || !coincide) {
       if (usuario) {
         await this.registrarIntentoFallido(usuario.id, origen.ip);
+      } else {
+        await this.registrarIntentoAnonimo(datos.correo);
       }
       throw new UnauthorizedException(MENSAJE_CREDENCIALES_INVALIDAS);
     }
@@ -142,8 +154,32 @@ export class AuthService {
     const carga: CargaToken = { sub: usuario.id, roles, jti };
     const token = await this.jwt.signAsync(carga);
 
-    const [sesion] = await this.prisma.$transaction([
-      this.prisma.sesion.create({
+    const sesion = await this.prisma.$transaction(async (tx) => {
+      // Un inicio de sesión exitoso reinicia el conteo de intentos fallidos (HU-01-04), pero
+      // solo si la cuenta sigue sin bloqueo: un intento simultáneo pudo bloquearla mientras
+      // se verificaba esta contraseña. En ese caso no se crea la sesión.
+      const { count } = await tx.usuario.updateMany({
+        where: {
+          id: usuario.id,
+          OR: [
+            { bloqueado_hasta: null },
+            { bloqueado_hasta: { lte: emitidaEn } },
+          ],
+        },
+        data: {
+          ultimo_acceso: emitidaEn,
+          intentos_fallidos: 0,
+          bloqueado_hasta: null,
+        },
+      });
+      if (count === 0) {
+        const actual = await tx.usuario.findUnique({
+          where: { id: usuario.id },
+          select: { bloqueado_hasta: true },
+        });
+        throw accesoBloqueado(actual?.bloqueado_hasta ?? emitidaEn, emitidaEn);
+      }
+      return tx.sesion.create({
         data: {
           id_usuario: usuario.id,
           jti,
@@ -152,20 +188,13 @@ export class AuthService {
           ip: recortar(origen.ip),
           user_agent: recortar(origen.userAgent),
         },
-      }),
-      // Un inicio de sesión exitoso reinicia el conteo de intentos fallidos (HU-01-04).
-      this.prisma.usuario.update({
-        where: { id: usuario.id },
-        data: {
-          ultimo_acceso: emitidaEn,
-          intentos_fallidos: 0,
-          bloqueado_hasta: null,
-        },
-      }),
-    ]);
+        select: { id: true },
+      });
+    });
 
-    // Auditoría (HU-14-01): el endpoint es público, así que el usuario se indica aquí. El jti
-    // no se guarda: identifica el token.
+    // Auditoría (HU-14-01): el endpoint es público, así que el usuario se indica aquí. No se
+    // guarda el jti, que identifica el token, ni el navegador, que ya está en `sesion`
+    // (Ley 1581: no duplicar datos personales).
     await this.auditoria.registrar({
       idUsuario: usuario.id,
       accion: 'crear',
@@ -173,9 +202,8 @@ export class AuthService {
       idRegistro: sesion.id,
       valorNuevo: {
         id_usuario: usuario.id,
-        emitida_en: emitidaEn.toISOString(),
-        expira_en: expiraEn.toISOString(),
-        user_agent: recortar(origen.userAgent),
+        emitida_en: emitidaEn,
+        expira_en: expiraEn,
       },
       ip: origen.ip,
     });
@@ -190,64 +218,96 @@ export class AuthService {
   /**
    * HU-01-04 y RF-01, excepción p3: suma un intento fallido y, al llegar al límite de
    * `parametro_sistema`, bloquea la cuenta temporalmente y lo registra en auditoría.
-   * Al bloquear, el conteo vuelve a cero: cuando el bloqueo vence, el usuario tiene de
-   * nuevo todos sus intentos.
    */
   private async registrarIntentoFallido(
     idUsuario: number,
     ip: string | undefined,
   ): Promise<void> {
-    // Incremento atómico en la base: dos intentos simultáneos no se pisan. COALESCE porque
-    // la columna admite nulos y NULL + 1 seguiría siendo NULL.
-    await this.prisma.$executeRaw`
-      UPDATE usuario
-      SET intentos_fallidos = COALESCE(intentos_fallidos, 0) + 1
-      WHERE id = ${idUsuario}`;
-
+    // Sin límites válidos no hay bloqueo, y tampoco se cuenta: si no, al sembrar o cambiar
+    // los parámetros, el siguiente fallo bloquearía de inmediato.
     const limites = await this.leerLimitesBloqueo();
     if (!limites) {
       return;
     }
-    const actual = await this.prisma.usuario.findUnique({
-      where: { id: idUsuario },
-      select: { intentos_fallidos: true },
-    });
-    const intentos = actual?.intentos_fallidos ?? 0;
-    if (intentos < limites.intentosMaximos) {
-      return;
-    }
 
     const ahora = new Date();
-    const bloqueadoHasta = new Date(
-      ahora.getTime() + limites.minutosBloqueo * 60_000,
-    );
-    // Solo bloquea quien encuentra la cuenta sin un bloqueo vigente: con intentos
-    // simultáneos se audita un único bloqueo.
-    const { count } = await this.prisma.usuario.updateMany({
-      where: {
-        id: idUsuario,
-        OR: [{ bloqueado_hasta: null }, { bloqueado_hasta: { lte: ahora } }],
-      },
-      data: { bloqueado_hasta: bloqueadoHasta, intentos_fallidos: 0 },
+    const resultado = await this.prisma.$transaction(async (tx) => {
+      // Bloquea la fila de la cuenta: los intentos simultáneos sobre ella se atienden de a
+      // uno, y cada uno lee el conteo que dejó el anterior. Sin esto, en una ráfaga un intento
+      // podía leer el conteo ya reiniciado por el bloqueo y responder 401 en vez de 429.
+      await tx.$queryRaw`SELECT id FROM usuario WHERE id = ${idUsuario} FOR UPDATE`;
+      const actual = await tx.usuario.findUnique({
+        where: { id: idUsuario },
+        select: { intentos_fallidos: true, bloqueado_hasta: true },
+      });
+      if (!actual) {
+        return { tipo: 'sin-cuenta' } as const;
+      }
+      // Un intento en vuelo cuando otro bloqueó la cuenta responde con el bloqueo y no gasta
+      // intentos del período siguiente.
+      if (actual.bloqueado_hasta && actual.bloqueado_hasta > ahora) {
+        return { tipo: 'ya-bloqueada', hasta: actual.bloqueado_hasta } as const;
+      }
+      const intentos = (actual.intentos_fallidos ?? 0) + 1;
+      if (intentos < limites.intentosMaximos) {
+        await tx.usuario.update({
+          where: { id: idUsuario },
+          data: { intentos_fallidos: intentos },
+        });
+        return { tipo: 'contado' } as const;
+      }
+      // Al bloquear, el conteo vuelve a cero: cuando el bloqueo vence, el usuario tiene de
+      // nuevo todos sus intentos.
+      const hasta = finDelBloqueo(ahora, limites.minutosBloqueo);
+      await tx.usuario.update({
+        where: { id: idUsuario },
+        data: { intentos_fallidos: 0, bloqueado_hasta: hasta },
+      });
+      return { tipo: 'bloqueada', hasta, intentos } as const;
     });
-    if (count === 1) {
-      // Lo decide el sistema, no un usuario autenticado: por eso id_usuario es nulo y la
-      // cuenta afectada queda en id_registro.
+
+    if (resultado.tipo === 'ya-bloqueada') {
+      throw accesoBloqueado(resultado.hasta, ahora);
+    }
+    if (resultado.tipo === 'bloqueada') {
+      // Fuera de la transacción, para que un fallo de la auditoría no deshaga el bloqueo. Lo
+      // decide el sistema, no un usuario autenticado: por eso id_usuario es nulo y la cuenta
+      // afectada queda en id_registro.
       await this.auditoria.registrar({
         idUsuario: null,
         accion: 'actualizar',
         tablaAfectada: 'usuario',
         idRegistro: idUsuario,
-        valorAnterior: { intentos_fallidos: intentos, bloqueado_hasta: null },
+        valorAnterior: {
+          intentos_fallidos: resultado.intentos,
+          bloqueado_hasta: null,
+        },
         valorNuevo: {
           intentos_fallidos: 0,
-          bloqueado_hasta: bloqueadoHasta.toISOString(),
+          bloqueado_hasta: resultado.hasta,
           motivo: MOTIVO_BLOQUEO,
         },
         ip,
       });
+      throw accesoBloqueado(resultado.hasta, ahora);
     }
-    throw accesoBloqueado(bloqueadoHasta, ahora);
+  }
+
+  /** El mismo conteo y bloqueo de una cuenta, para un correo que no está registrado. */
+  private async registrarIntentoAnonimo(correo: string): Promise<void> {
+    const limites = await this.leerLimitesBloqueo();
+    if (!limites) {
+      return;
+    }
+    const ahora = new Date();
+    const bloqueadoHasta = this.intentosAnonimos.registrarFallo(
+      correo,
+      limites,
+      ahora,
+    );
+    if (bloqueadoHasta) {
+      throw accesoBloqueado(bloqueadoHasta, ahora);
+    }
   }
 
   /**
@@ -295,6 +355,7 @@ export class AuthService {
     const sesion = await this.prisma.sesion.findUnique({
       where: { jti: carga.jti },
       select: {
+        id: true,
         id_usuario: true,
         expira_en: true,
         revocada_en: true,
@@ -315,6 +376,7 @@ export class AuthService {
     return {
       ...aDto(sesion.usuario, nombresDeRoles(sesion.usuario)),
       jti: carga.jti,
+      idSesion: sesion.id,
     };
   }
 
@@ -324,13 +386,15 @@ export class AuthService {
    * revoca la sesión del token con que se hace la petición, no las demás del usuario.
    */
   async cerrarSesion(usuario: UsuarioSesion): Promise<void> {
-    const sesion = await this.prisma.sesion.findUnique({
-      where: { jti: usuario.jti },
-      select: { id: true },
-    });
+    // El guard ya cargó la sesión al validar el token: no hace falta volver a buscarla.
     const revocadaEn = new Date();
     const { count } = await this.prisma.sesion.updateMany({
-      where: { jti: usuario.jti, id_usuario: usuario.id, revocada_en: null },
+      where: {
+        id: usuario.idSesion,
+        jti: usuario.jti,
+        id_usuario: usuario.id,
+        revocada_en: null,
+      },
       data: { revocada_en: revocadaEn, motivo_revocacion: MOTIVO_LOGOUT },
     });
     if (count === 1) {
@@ -338,10 +402,10 @@ export class AuthService {
       await this.auditoria.registrar({
         accion: 'actualizar',
         tablaAfectada: 'sesion',
-        idRegistro: sesion?.id ?? null,
+        idRegistro: usuario.idSesion,
         valorAnterior: { revocada_en: null, motivo_revocacion: null },
         valorNuevo: {
-          revocada_en: revocadaEn.toISOString(),
+          revocada_en: revocadaEn,
           motivo_revocacion: MOTIVO_LOGOUT,
         },
       });
