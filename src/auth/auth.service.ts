@@ -1,5 +1,7 @@
 import {
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -7,6 +9,8 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { randomUUID } from 'node:crypto';
 import type { VariablesEntorno } from '../common/configuracion/variables-entorno.js';
+import { AuditoriaService } from '../auditoria/auditoria.service.js';
+import { ParametrosService } from '../common/parametros/parametros.service.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { ContrasenasService } from './contrasenas.service.js';
 import type { IniciarSesionDto } from './dto/iniciar-sesion.dto.js';
@@ -48,11 +52,36 @@ const SELECCION_USUARIO = {
   },
 } as const;
 
+/** Claves de `parametro_sistema` del bloqueo (HU-01-04). Los valores los siembra el seed. */
+export const PARAMETRO_INTENTOS_MAXIMOS = 'inicio_sesion_intentos_maximos';
+export const PARAMETRO_MINUTOS_BLOQUEO = 'inicio_sesion_minutos_bloqueo';
+
+/** Motivo del bloqueo en el registro de auditoría. */
+export const MOTIVO_BLOQUEO = 'intentos_fallidos_consecutivos';
+
+/** Mensaje del bloqueo: dice cuánto falta para que el usuario pueda reintentar. */
+export function mensajeAccesoBloqueado(minutos: number): string {
+  const tiempo = minutos === 1 ? '1 minuto' : `${minutos} minutos`;
+  return (
+    'Por seguridad, el acceso está bloqueado temporalmente por varios intentos fallidos. ' +
+    `Intente de nuevo en ${tiempo}.`
+  );
+}
+
+function accesoBloqueado(hasta: Date, ahora: Date): HttpException {
+  const minutos = Math.max(
+    1,
+    Math.ceil((hasta.getTime() - ahora.getTime()) / 60_000),
+  );
+  return new HttpException(
+    mensajeAccesoBloqueado(minutos),
+    HttpStatus.TOO_MANY_REQUESTS,
+  );
+}
+
 /**
- * Inicio de sesión y validación de sesiones (RF-01, NFR-003, NFR-005).
- *
- * Fuera de alcance, con historia propia: el conteo de intentos fallidos y el bloqueo
- * temporal (HU-01-04) y el registro en auditoría (HU-14-01).
+ * Inicio de sesión, bloqueo por intentos fallidos y validación de sesiones (RF-01,
+ * NFR-003, NFR-005).
  */
 @Injectable()
 export class AuthService {
@@ -61,6 +90,8 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly contrasenas: ContrasenasService,
     private readonly config: ConfigService<VariablesEntorno, true>,
+    private readonly parametros: ParametrosService,
+    private readonly auditoria: AuditoriaService,
   ) {}
 
   async iniciarSesion(
@@ -69,8 +100,19 @@ export class AuthService {
   ): Promise<SesionIniciadaDto> {
     const usuario = await this.prisma.usuario.findUnique({
       where: { email: datos.correo },
-      select: { ...SELECCION_USUARIO, password_hash: true },
+      select: {
+        ...SELECCION_USUARIO,
+        password_hash: true,
+        bloqueado_hasta: true,
+      },
     });
+
+    // Durante el bloqueo (HU-01-04) no se verifica la contraseña: así no se puede seguir
+    // probando contraseñas mientras dura, ni saber si alguna era la correcta.
+    const ahora = new Date();
+    if (usuario?.bloqueado_hasta && usuario.bloqueado_hasta > ahora) {
+      throw accesoBloqueado(usuario.bloqueado_hasta, ahora);
+    }
 
     // Se verifica aunque el usuario no exista: así la respuesta tarda lo mismo y no revela
     // qué correos están registrados (RF-01, excepción p2).
@@ -79,6 +121,9 @@ export class AuthService {
       usuario?.password_hash,
     );
     if (!usuario || !coincide) {
+      if (usuario) {
+        await this.registrarIntentoFallido(usuario.id, origen.ip);
+      }
       throw new UnauthorizedException(MENSAJE_CREDENCIALES_INVALIDAS);
     }
     // El estado de la cuenta se informa solo a quien demostró conocer la contraseña.
@@ -108,9 +153,14 @@ export class AuthService {
           user_agent: recortar(origen.userAgent),
         },
       }),
+      // Un inicio de sesión exitoso reinicia el conteo de intentos fallidos (HU-01-04).
       this.prisma.usuario.update({
         where: { id: usuario.id },
-        data: { ultimo_acceso: emitidaEn },
+        data: {
+          ultimo_acceso: emitidaEn,
+          intentos_fallidos: 0,
+          bloqueado_hasta: null,
+        },
       }),
     ]);
 
@@ -119,6 +169,93 @@ export class AuthService {
       expiraEn: expiraEn.toISOString(),
       usuario: aDto(usuario, roles),
     };
+  }
+
+  /**
+   * HU-01-04 y RF-01, excepción p3: suma un intento fallido y, al llegar al límite de
+   * `parametro_sistema`, bloquea la cuenta temporalmente y lo registra en auditoría.
+   * Al bloquear, el conteo vuelve a cero: cuando el bloqueo vence, el usuario tiene de
+   * nuevo todos sus intentos.
+   */
+  private async registrarIntentoFallido(
+    idUsuario: number,
+    ip: string | undefined,
+  ): Promise<void> {
+    // Incremento atómico en la base: dos intentos simultáneos no se pisan. COALESCE porque
+    // la columna admite nulos y NULL + 1 seguiría siendo NULL.
+    await this.prisma.$executeRaw`
+      UPDATE usuario
+      SET intentos_fallidos = COALESCE(intentos_fallidos, 0) + 1
+      WHERE id = ${idUsuario}`;
+
+    const limites = await this.leerLimitesBloqueo();
+    if (!limites) {
+      return;
+    }
+    const actual = await this.prisma.usuario.findUnique({
+      where: { id: idUsuario },
+      select: { intentos_fallidos: true },
+    });
+    const intentos = actual?.intentos_fallidos ?? 0;
+    if (intentos < limites.intentosMaximos) {
+      return;
+    }
+
+    const ahora = new Date();
+    const bloqueadoHasta = new Date(
+      ahora.getTime() + limites.minutosBloqueo * 60_000,
+    );
+    // Solo bloquea quien encuentra la cuenta sin un bloqueo vigente: con intentos
+    // simultáneos se audita un único bloqueo.
+    const { count } = await this.prisma.usuario.updateMany({
+      where: {
+        id: idUsuario,
+        OR: [{ bloqueado_hasta: null }, { bloqueado_hasta: { lte: ahora } }],
+      },
+      data: { bloqueado_hasta: bloqueadoHasta, intentos_fallidos: 0 },
+    });
+    if (count === 1) {
+      // Lo decide el sistema, no un usuario autenticado: por eso id_usuario es nulo y la
+      // cuenta afectada queda en id_registro.
+      await this.auditoria.registrar({
+        idUsuario: null,
+        accion: 'actualizar',
+        tablaAfectada: 'usuario',
+        idRegistro: idUsuario,
+        valorAnterior: { intentos_fallidos: intentos, bloqueado_hasta: null },
+        valorNuevo: {
+          intentos_fallidos: 0,
+          bloqueado_hasta: bloqueadoHasta.toISOString(),
+          motivo: MOTIVO_BLOQUEO,
+        },
+        ip,
+      });
+    }
+    throw accesoBloqueado(bloqueadoHasta, ahora);
+  }
+
+  /**
+   * Límites del bloqueo, de `parametro_sistema` (HU-01-04: no van fijos en el código). Si
+   * falta alguno o es inválido, el bloqueo no se aplica y queda el error en el registro
+   * técnico: el inicio de sesión sigue funcionando y lo protege el límite por IP.
+   */
+  private async leerLimitesBloqueo(): Promise<{
+    intentosMaximos: number;
+    minutosBloqueo: number;
+  } | null> {
+    const [intentosMaximos, minutosBloqueo] = await Promise.all([
+      this.parametros.leerEntero(PARAMETRO_INTENTOS_MAXIMOS, {
+        minimo: 1,
+        maximo: 100,
+      }),
+      this.parametros.leerEntero(PARAMETRO_MINUTOS_BLOQUEO, {
+        minimo: 1,
+        maximo: 1440,
+      }),
+    ]);
+    return intentosMaximos !== null && minutosBloqueo !== null
+      ? { intentosMaximos, minutosBloqueo }
+      : null;
   }
 
   /**

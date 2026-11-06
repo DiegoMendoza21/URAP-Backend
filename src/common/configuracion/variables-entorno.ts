@@ -63,6 +63,28 @@ export class VariablesEntorno {
   @Max(10, { message: 'PROXIES_CONFIABLES no puede ser mayor que 10' })
   PROXIES_CONFIABLES: number = 0;
 
+  /**
+   * Límite de peticiones de inicio de sesión por IP dentro de la ventana (HU-01-04). Frena las
+   * ráfagas con correos inventados, que el bloqueo por cuenta no alcanza. Es un ajuste del
+   * despliegue, no un parámetro de negocio: por eso va aquí y no en parametro_sistema.
+   */
+  @IsInt({ message: 'INICIO_SESION_LIMITE_POR_IP debe ser un número entero' })
+  @Min(1, { message: 'INICIO_SESION_LIMITE_POR_IP debe ser mayor que cero' })
+  @Max(1000, {
+    message: 'INICIO_SESION_LIMITE_POR_IP no puede ser mayor que 1000',
+  })
+  INICIO_SESION_LIMITE_POR_IP: number = 10;
+
+  /** Ventana, en segundos, del límite de peticiones de inicio de sesión por IP. */
+  @IsInt({
+    message: 'INICIO_SESION_VENTANA_SEGUNDOS debe ser un número entero',
+  })
+  @Min(1, { message: 'INICIO_SESION_VENTANA_SEGUNDOS debe ser mayor que cero' })
+  @Max(3600, {
+    message: 'INICIO_SESION_VENTANA_SEGUNDOS no puede ser mayor que 3600',
+  })
+  INICIO_SESION_VENTANA_SEGUNDOS: number = 60;
+
   /** Orígenes autorizados por CORS (NFR-006). En el .env van separados por coma. */
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string'
