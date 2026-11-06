@@ -165,6 +165,9 @@ español comprensible.
   `/api/openapi.json`.
 - Endpoints públicos solo con `@Publico()`. El guard global (`auth/autenticacion.guard.ts`)
   cierra todo lo demás.
+- Endpoints por rol con `@Roles(ROL.departamento, …)` (`auth/decoradores/roles.decorator.ts`).
+  El decorador solo mira el rol; el alcance (el programa del rol, los proyectos propios del
+  docente) lo comprueba el servicio. HU-01-03 lo amplía con la matriz de permisos.
 - Errores: se lanzan las excepciones de Nest con el mensaje en español
   (`new ConflictException('Ya existe un usuario con ese correo.')`). El filtro global les da
   la forma `RespuestaErrorDto`. En los DTO, cada regla de class-validator lleva su `message`
