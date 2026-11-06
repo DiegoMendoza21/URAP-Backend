@@ -52,6 +52,17 @@ export class VariablesEntorno {
   @Min(1, { message: 'JWT_EXPIRACION_MINUTOS debe ser mayor que cero' })
   JWT_EXPIRACION_MINUTOS: number;
 
+  /**
+   * Cuántos proxies hay delante de la API (por ejemplo, el balanceador de carga del
+   * despliegue). Con 0, Express toma la IP de la conexión directa. Con N, toma la IP del
+   * cliente del encabezado X-Forwarded-For después de saltar N proxies. Un valor mayor que
+   * los proxies reales permite falsificar la IP que queda en la sesión.
+   */
+  @IsInt({ message: 'PROXIES_CONFIABLES debe ser un número entero' })
+  @Min(0, { message: 'PROXIES_CONFIABLES no puede ser negativo' })
+  @Max(10, { message: 'PROXIES_CONFIABLES no puede ser mayor que 10' })
+  PROXIES_CONFIABLES: number = 0;
+
   /** Orígenes autorizados por CORS (NFR-006). En el .env van separados por coma. */
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string'

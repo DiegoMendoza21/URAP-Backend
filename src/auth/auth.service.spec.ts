@@ -12,7 +12,7 @@ import {
   MOTIVO_LOGOUT,
 } from './auth.service.js';
 import type { ContrasenasService } from './contrasenas.service.js';
-import type { CargaToken } from './tipos.js';
+import type { CargaToken, UsuarioSesion } from './tipos.js';
 
 // Datos ficticios: nunca datos reales de personas en las pruebas.
 const SECRETO = 'secreto-de-pruebas-con-al-menos-32-caracteres';
@@ -32,6 +32,17 @@ function usuarioFicticio(cambios: Record<string, unknown> = {}) {
     password_hash: 'scrypt$hash-ficticio',
     usuario_rol_usuario_rol_id_usuarioTousuario: roles('Docente', 'Líder RAP'),
     ...cambios,
+  };
+}
+
+function usuarioDeSesion(): UsuarioSesion {
+  return {
+    id: 7,
+    nombres: 'Usuaria',
+    apellidos: 'De Prueba',
+    correo: 'usuaria.prueba@unicartagena.edu.co',
+    roles: ['Docente'],
+    jti: 'jti-1',
   };
 }
 
@@ -228,6 +239,9 @@ describe('AuthService', () => {
         servicio.validarToken(await tokenDe(carga)),
       ).resolves.toEqual({
         id: 7,
+        nombres: 'Usuaria',
+        apellidos: 'De Prueba',
+        correo: 'usuaria.prueba@unicartagena.edu.co',
         roles: ['Docente', 'Líder RAP'],
         jti: 'jti-1',
       });
@@ -282,13 +296,48 @@ describe('AuthService', () => {
         UnauthorizedException,
       );
     });
+
+    it.each([
+      ['sin jti', { sub: 7, roles: [] }],
+      ['con jti vacío', { sub: 7, roles: [], jti: '' }],
+      ['con jti que no es texto', { sub: 7, roles: [], jti: 12 }],
+      ['sin sub', { roles: [], jti: 'jti-1' }],
+      ['con sub de texto', { sub: '7', roles: [], jti: 'jti-1' }],
+      ['con sub fraccionario', { sub: 7.5, roles: [], jti: 'jti-1' }],
+    ])(
+      'rechaza con 401 un token bien firmado %s, sin consultar la base',
+      async (_caso, cargaInvalida) => {
+        const token = await jwt.signAsync(cargaInvalida);
+
+        await expect(servicio.validarToken(token)).rejects.toThrow(
+          new UnauthorizedException(MENSAJE_SESION_INVALIDA),
+        );
+        expect(prisma.sesion.findUnique).not.toHaveBeenCalled();
+      },
+    );
+  });
+
+  describe('obtenerUsuario', () => {
+    it('responde con los datos que cargó el guard, sin volver a consultar la base', () => {
+      const usuario = usuarioDeSesion();
+
+      expect(servicio.obtenerUsuario(usuario)).toEqual({
+        id: 7,
+        nombres: 'Usuaria',
+        apellidos: 'De Prueba',
+        correo: 'usuaria.prueba@unicartagena.edu.co',
+        roles: ['Docente'],
+      });
+      expect(prisma.usuario.findUnique).not.toHaveBeenCalled();
+      expect(prisma.sesion.findUnique).not.toHaveBeenCalled();
+    });
   });
 
   describe('cerrarSesion', () => {
     it('revoca solo la sesión del token actual con motivo «logout»', async () => {
       prisma.sesion.updateMany.mockResolvedValue({ count: 1 });
 
-      await servicio.cerrarSesion({ id: 7, roles: ['Docente'], jti: 'jti-1' });
+      await servicio.cerrarSesion(usuarioDeSesion());
 
       expect(prisma.sesion.updateMany).toHaveBeenCalledWith({
         where: { jti: 'jti-1', id_usuario: 7, revocada_en: null },
@@ -304,7 +353,7 @@ describe('AuthService', () => {
       prisma.sesion.updateMany.mockResolvedValue({ count: 0 });
 
       await expect(
-        servicio.cerrarSesion({ id: 7, roles: [], jti: 'jti-1' }),
+        servicio.cerrarSesion(usuarioDeSesion()),
       ).resolves.toBeUndefined();
     });
   });

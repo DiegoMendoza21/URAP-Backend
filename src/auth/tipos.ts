@@ -7,9 +7,16 @@ export interface CargaToken {
   jti: string;
 }
 
-/** Usuario que el guard deja en la petición tras validar el token y su sesión. */
+/**
+ * Usuario que el guard deja en la petición tras validar el token y su sesión. Trae los
+ * datos que ya cargó al validar, para que los controladores no los vuelvan a consultar.
+ */
 export interface UsuarioSesion {
   id: number;
+  nombres: string | null;
+  apellidos: string | null;
+  correo: string;
+  /** Roles vigentes en la base al momento de la petición, no los del token. */
   roles: string[];
   jti: string;
 }

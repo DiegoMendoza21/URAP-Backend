@@ -127,10 +127,15 @@ export class AuthService {
    * para que una revocación de rol tenga efecto de inmediato.
    */
   async validarToken(token: string): Promise<UsuarioSesion> {
-    let carga: CargaToken;
+    let carga: unknown;
     try {
-      carga = await this.jwt.verifyAsync<CargaToken>(token);
+      carga = await this.jwt.verifyAsync<object>(token);
     } catch {
+      throw new UnauthorizedException(MENSAJE_SESION_INVALIDA);
+    }
+    // La firma prueba quién emitió el token, no su forma: uno firmado sin `jti` (un script,
+    // u otro tipo de token en el futuro) se rechaza como sesión inválida, no como error 500.
+    if (!esCargaToken(carga)) {
       throw new UnauthorizedException(MENSAJE_SESION_INVALIDA);
     }
 
@@ -155,8 +160,7 @@ export class AuthService {
     }
 
     return {
-      id: sesion.usuario.id,
-      roles: nombresDeRoles(sesion.usuario),
+      ...aDto(sesion.usuario, nombresDeRoles(sesion.usuario)),
       jti: carga.jti,
     };
   }
@@ -173,16 +177,27 @@ export class AuthService {
     });
   }
 
-  async obtenerUsuario(id: number): Promise<UsuarioAutenticadoDto> {
-    const usuario = await this.prisma.usuario.findUnique({
-      where: { id },
-      select: SELECCION_USUARIO,
-    });
-    if (!usuario || usuario.activo !== true) {
-      throw new UnauthorizedException(MENSAJE_SESION_INVALIDA);
-    }
-    return aDto(usuario, nombresDeRoles(usuario));
+  /**
+   * Datos del usuario de la sesión actual. Salen de lo que el guard ya cargó al validar el
+   * token: el frontend llama esto en cada recarga y no hace falta una segunda consulta.
+   */
+  obtenerUsuario(usuario: UsuarioSesion): UsuarioAutenticadoDto {
+    const { id, nombres, apellidos, correo, roles } = usuario;
+    return { id, nombres, apellidos, correo, roles };
   }
+}
+
+function esCargaToken(carga: unknown): carga is CargaToken {
+  if (typeof carga !== 'object' || carga === null) {
+    return false;
+  }
+  const { sub, jti } = carga as Record<string, unknown>;
+  return (
+    Number.isSafeInteger(sub) &&
+    (sub as number) > 0 &&
+    typeof jti === 'string' &&
+    jti.length > 0
+  );
 }
 
 interface UsuarioConRoles {

@@ -20,6 +20,7 @@ import {
 } from '@nestjs/swagger';
 import { RespuestaErrorDto } from '../common/dto/respuesta-error.dto.js';
 import { AuthService } from './auth.service.js';
+import { CualquierUsuarioAutenticado } from './decoradores/acceso.decorator.js';
 import { Publico } from './decoradores/publico.decorator.js';
 import { UsuarioActual } from './decoradores/usuario-actual.decorator.js';
 import { IniciarSesionDto } from './dto/iniciar-sesion.dto.js';
@@ -65,6 +66,7 @@ export class AuthController {
   }
 
   @Get('sesion')
+  @CualquierUsuarioAutenticado()
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Devuelve el usuario de la sesión actual',
@@ -78,11 +80,12 @@ export class AuthController {
   })
   obtenerSesion(
     @UsuarioActual() usuario: UsuarioSesion,
-  ): Promise<UsuarioAutenticadoDto> {
-    return this.authService.obtenerUsuario(usuario.id);
+  ): UsuarioAutenticadoDto {
+    return this.authService.obtenerUsuario(usuario);
   }
 
   @Post('cerrar-sesion')
+  @CualquierUsuarioAutenticado()
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiBearerAuth()
   @ApiOperation({
