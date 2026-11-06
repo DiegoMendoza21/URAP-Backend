@@ -14,6 +14,12 @@ export const PREFIJO_API = 'api';
 export function configurarAplicacion(app: INestApplication): void {
   const config = app.get(ConfigService<VariablesEntorno, true>);
 
+  // Detrás del balanceador, la IP del cliente llega en X-Forwarded-For. Sin esto, todas las
+  // sesiones quedarían con la IP del balanceador.
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .set('trust proxy', config.get('PROXIES_CONFIABLES', { infer: true }));
   app.setGlobalPrefix(PREFIJO_API);
   app.enableCors({ origin: config.get('CORS_ORIGENES', { infer: true }) });
   app.enableShutdownHooks();

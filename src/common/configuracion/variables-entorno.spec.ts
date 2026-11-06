@@ -26,6 +26,31 @@ describe('validarVariablesEntorno', () => {
     ]);
   });
 
+  it('por defecto no confía en ningún proxy', () => {
+    expect(validarVariablesEntorno(VARIABLES_VALIDAS).PROXIES_CONFIABLES).toBe(
+      0,
+    );
+  });
+
+  it('acepta el número de proxies delante de la API', () => {
+    expect(
+      validarVariablesEntorno({ ...VARIABLES_VALIDAS, PROXIES_CONFIABLES: '1' })
+        .PROXIES_CONFIABLES,
+    ).toBe(1);
+  });
+
+  it.each(['-1', 'si', '1.5', '11'])(
+    'rechaza PROXIES_CONFIABLES inválido (%s)',
+    (valor) => {
+      expect(() =>
+        validarVariablesEntorno({
+          ...VARIABLES_VALIDAS,
+          PROXIES_CONFIABLES: valor,
+        }),
+      ).toThrow(/PROXIES_CONFIABLES/);
+    },
+  );
+
   it('impide arrancar sin secreto JWT', () => {
     expect(() => validarVariablesEntorno(sin('JWT_SECRETO'))).toThrow(
       /JWT_SECRETO/,
