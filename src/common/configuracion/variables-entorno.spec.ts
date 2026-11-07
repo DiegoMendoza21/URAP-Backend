@@ -51,6 +51,38 @@ describe('validarVariablesEntorno', () => {
     },
   );
 
+  it('no exige la carpeta del almacenamiento documental fuera de producción', () => {
+    expect(
+      validarVariablesEntorno(VARIABLES_VALIDAS).ALMACENAMIENTO_DIRECTORIO,
+    ).toBeUndefined();
+  });
+
+  it('impide arrancar en producción sin la carpeta del almacenamiento documental', () => {
+    expect(() =>
+      validarVariablesEntorno({
+        ...VARIABLES_VALIDAS,
+        NODE_ENV: Entorno.Produccion,
+      }),
+    ).toThrow(/ALMACENAMIENTO_DIRECTORIO/);
+    expect(() =>
+      validarVariablesEntorno({
+        ...VARIABLES_VALIDAS,
+        NODE_ENV: Entorno.Produccion,
+        ALMACENAMIENTO_DIRECTORIO: '',
+      }),
+    ).toThrow(/ALMACENAMIENTO_DIRECTORIO/);
+  });
+
+  it('acepta la carpeta del almacenamiento documental en producción', () => {
+    expect(
+      validarVariablesEntorno({
+        ...VARIABLES_VALIDAS,
+        NODE_ENV: Entorno.Produccion,
+        ALMACENAMIENTO_DIRECTORIO: '/srv/urap/almacenamiento',
+      }).ALMACENAMIENTO_DIRECTORIO,
+    ).toBe('/srv/urap/almacenamiento');
+  });
+
   it('impide arrancar sin secreto JWT', () => {
     expect(() => validarVariablesEntorno(sin('JWT_SECRETO'))).toThrow(
       /JWT_SECRETO/,

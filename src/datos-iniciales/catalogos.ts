@@ -158,6 +158,10 @@ export const TIPOS_NOTIFICACION = [
   },
   { codigo: 'proyecto_aprobado', nombre: 'Proyecto aprobado' },
   { codigo: 'cierre_periodo', nombre: 'Cierre del período' },
+  {
+    codigo: 'festivos_no_parametrizados',
+    nombre: 'Año sin días festivos parametrizados (RF-19)',
+  },
 ];
 
 /**
@@ -199,6 +203,27 @@ export const PARAMETROS = [
     tipo_dato: 'lista',
     descripcion:
       'Extensiones de archivo permitidas, separadas por coma (NFR-019). Por validar.',
+  },
+  {
+    clave: 'descripcion_curso_longitud_maxima',
+    valor: '4000',
+    tipo_dato: 'entero',
+    descripcion:
+      'Caracteres máximos de la descripción del curso, punto 2 del proyecto docente (RF-11). Valor propuesto, por validar.',
+  },
+  {
+    clave: 'evidencia_tipos_permitidos',
+    valor: 'jpg,png,pdf',
+    tipo_dato: 'lista',
+    descripcion:
+      'Extensiones permitidas para las evidencias fotográficas de los RAP, separadas por coma (RF-24). Por validar.',
+  },
+  {
+    clave: 'reporte_exportacion_filas_maxima',
+    valor: '5000',
+    tipo_dato: 'entero',
+    descripcion:
+      'Filas máximas de una exportación del tablero o de los reportes; por encima se pide restringir los filtros (RF-25, excepción de p5). Valor propuesto, por validar.',
   },
 ];
 
