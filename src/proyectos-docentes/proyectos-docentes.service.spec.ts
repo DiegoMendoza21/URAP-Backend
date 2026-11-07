@@ -29,6 +29,8 @@ const usuarioDepartamento: UsuarioSesion = {
   apellidos: 'De Prueba',
   correo: 'departamento.prueba@urap.local',
   roles: [ROL.departamento],
+  asignaciones: [{ rol: ROL.departamento, idPrograma: 10 }],
+  permisos: ['proyectos.crear', 'proyectos.leer'],
   jti: 'jti-1',
   idSesion: 1,
 };

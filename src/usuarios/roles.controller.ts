@@ -22,8 +22,7 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { Roles } from '../auth/decoradores/roles.decorator.js';
-import { ROL } from '../auth/roles.js';
+import { Permiso } from '../auth/decoradores/permiso.decorator.js';
 import { RespuestaErrorDto } from '../common/dto/respuesta-error.dto.js';
 import {
   ConsultarRolesDto,
@@ -45,9 +44,10 @@ import { RolesService } from './roles.service.js';
 })
 @ApiForbiddenResponse({
   type: RespuestaErrorDto,
-  description: 'El usuario no tiene el rol Administrador',
+  description: 'El usuario no tiene el permiso de administrar usuarios y roles',
 })
-@Roles(ROL.administrador)
+// HU-01-03: por el permiso de la matriz, no por el nombre del rol (revisión del #9).
+@Permiso('usuarios', 'administrar')
 @Controller('roles')
 export class RolesController {
   constructor(private readonly roles: RolesService) {}

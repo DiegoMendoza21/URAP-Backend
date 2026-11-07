@@ -19,9 +19,8 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { Roles } from '../auth/decoradores/roles.decorator.js';
+import { Permiso } from '../auth/decoradores/permiso.decorator.js';
 import { UsuarioActual } from '../auth/decoradores/usuario-actual.decorator.js';
-import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import { RespuestaErrorDto } from '../common/dto/respuesta-error.dto.js';
 import { ConsultarProyectosDocentesDto } from './dto/consultas.dto.js';
@@ -43,7 +42,7 @@ export class ProyectosDocentesController {
   constructor(private readonly proyectos: ProyectosDocentesService) {}
 
   @Post()
-  @Roles(ROL.departamento)
+  @Permiso('proyectos', 'crear')
   @ApiOperation({
     summary: 'Crea el proyecto docente con el asistente (RF-08)',
     description:
@@ -61,7 +60,8 @@ export class ProyectosDocentesController {
   })
   @ApiForbiddenResponse({
     type: RespuestaErrorDto,
-    description: 'No es Departamento académico del programa de la asignatura',
+    description:
+      'Sin el permiso de crear proyectos docentes, o no es Departamento académico del programa de la asignatura',
   })
   @ApiNotFoundResponse({
     type: RespuestaErrorDto,
@@ -81,13 +81,7 @@ export class ProyectosDocentesController {
   }
 
   @Get()
-  @Roles(
-    ROL.administrador,
-    ROL.departamento,
-    ROL.direccion,
-    ROL.liderRap,
-    ROL.docente,
-  )
+  @Permiso('proyectos', 'leer')
   @ApiOperation({
     summary: 'Bandeja de proyectos docentes visibles para el usuario',
     description:
@@ -101,7 +95,8 @@ export class ProyectosDocentesController {
   })
   @ApiForbiddenResponse({
     type: RespuestaErrorDto,
-    description: 'El usuario no tiene un rol que consulte proyectos docentes',
+    description:
+      'El usuario no tiene el permiso de consultar proyectos docentes',
   })
   listar(
     @UsuarioActual() usuario: UsuarioSesion,
@@ -111,13 +106,7 @@ export class ProyectosDocentesController {
   }
 
   @Get(':id')
-  @Roles(
-    ROL.administrador,
-    ROL.departamento,
-    ROL.direccion,
-    ROL.liderRap,
-    ROL.docente,
-  )
+  @Permiso('proyectos', 'leer')
   @ApiOperation({
     summary: 'Ficha del proyecto docente',
     description:
@@ -127,7 +116,8 @@ export class ProyectosDocentesController {
   @ApiOkResponse({ type: ProyectoDocenteDetalleDto })
   @ApiForbiddenResponse({
     type: RespuestaErrorDto,
-    description: 'El usuario no tiene un rol que consulte proyectos docentes',
+    description:
+      'El usuario no tiene el permiso de consultar proyectos docentes',
   })
   @ApiNotFoundResponse({
     type: RespuestaErrorDto,

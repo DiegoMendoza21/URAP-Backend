@@ -5,8 +5,8 @@ import { SetMetadata } from '@nestjs/common';
  * niega cualquier endpoint protegido que no la tenga: un endpoint sin declaración es un bug
  * (CLAUDE.md, «Autorización en el backend, siempre»).
  *
- * Todo decorador de autorización la debe poner. Cuando HU-01-03 agregue el decorador de
- * rol y permiso, este también tiene que usar `declararAcceso()`.
+ * Todo decorador de autorización la debe poner: `@Permiso()` y `@Roles()` usan
+ * `declararAcceso()`.
  */
 export const ACCESO_DECLARADO = 'urap:acceso-declarado';
 

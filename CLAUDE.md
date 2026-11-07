@@ -169,9 +169,13 @@ español comprensible.
   `/api/openapi.json`.
 - Endpoints públicos solo con `@Publico()`. El guard global (`auth/autenticacion.guard.ts`)
   cierra todo lo demás.
-- Endpoints por rol con `@Roles(ROL.departamento, …)` (`auth/decoradores/roles.decorator.ts`).
-  El decorador solo mira el rol; el alcance (el programa del rol, los proyectos propios del
-  docente) lo comprueba el servicio. HU-01-03 lo amplía con la matriz de permisos.
+- Endpoints protegidos con `@Permiso('proyectos', 'crear')` (`auth/decoradores/permiso.decorator.ts`,
+  HU-01-03): el guard exige ese permiso de la matriz (`rol_permiso`) en la unión de los roles
+  vigentes del usuario, leída de la base en cada petición. Decide la matriz, no el nombre del
+  rol, así que también vale para los roles que cree el administrador. El alcance (el programa
+  del rol, los proyectos propios del docente) lo sigue comprobando el servicio, con
+  `usuario.asignaciones` o `AlcanceService`. `@Roles(ROL.departamento, …)` queda solo para
+  reglas que la matriz no expresa.
 - Errores: se lanzan las excepciones de Nest con el mensaje en español
   (`new ConflictException('Ya existe un usuario con ese correo.')`). El filtro global les da
   la forma `RespuestaErrorDto`. En los DTO, cada regla de class-validator lleva su `message`

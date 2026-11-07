@@ -20,4 +20,14 @@ export class UsuarioAutenticadoDto {
       'Roles activos del usuario. Un usuario puede tener varios a la vez.',
   })
   roles: string[];
+
+  @ApiProperty({
+    type: [String],
+    example: ['proyectos.actualizar', 'proyectos.leer', 'rap.leer'],
+    description:
+      'Permisos del usuario como `modulo.permiso`: la unión de los de todos sus roles en la ' +
+      'matriz de permisos (HU-01-03). El frontend arma el menú con ellos; la autorización ' +
+      'la vuelve a comprobar el backend en cada petición.',
+  })
+  permisos: string[];
 }

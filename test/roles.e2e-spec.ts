@@ -3,7 +3,7 @@ import { Test } from '@nestjs/testing';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
-import { ROL } from '../src/auth/roles.js';
+import { type NombreRol, ROL } from '../src/auth/roles.js';
 import { ContrasenasService } from '../src/auth/contrasenas.service.js';
 import { PrismaService } from '../src/common/prisma/prisma.service.js';
 import { configurarAplicacion } from '../src/configurar-aplicacion.js';
@@ -16,6 +16,11 @@ import {
   MENSAJE_SIN_LECTURA,
 } from '../src/usuarios/roles.service.js';
 import { borrarUsuariosDePrueba } from './utilidades/limpieza.js';
+import {
+  asegurarPermisosDeRol,
+  borrarMatrizDePrueba,
+  matrizDePrueba,
+} from './utilidades/permisos.js';
 
 // Requiere el .env configurado y la base local levantada (npm run db:levantar). No depende del
 // seed: crea los catálogos y roles que falten, sus usuarios ficticios, y lo borra todo al
@@ -31,6 +36,7 @@ describe('Roles y matriz de permisos (e2e) · HU-02-05 y HU-02-06', () => {
   let tokenDocente: string;
   const idsUsuarios: number[] = [];
   const idsRolesDePrueba: number[] = [];
+  const matriz = matrizDePrueba();
   const creados = {
     modulos: [] as number[],
     permisos: [] as number[],
@@ -41,14 +47,17 @@ describe('Roles y matriz de permisos (e2e) · HU-02-05 y HU-02-06', () => {
 
   const api = () => request(app.getHttpServer());
 
-  async function asegurarRol(nombre: string): Promise<number> {
+  /** El rol del sistema con sus permisos de la Tabla 17: `/roles` exige `usuarios.administrar`. */
+  async function asegurarRol(nombre: NombreRol): Promise<number> {
     const existente = await prisma.rol.findUnique({ where: { nombre } });
-    if (existente) {
-      return existente.id;
+    const id =
+      existente?.id ??
+      (await prisma.rol.create({ data: { nombre, activo: true } })).id;
+    if (!existente) {
+      creados.roles.push(id);
     }
-    const rol = await prisma.rol.create({ data: { nombre, activo: true } });
-    creados.roles.push(rol.id);
-    return rol.id;
+    await asegurarPermisosDeRol(prisma, matriz, id, nombre);
+    return id;
   }
 
   async function crearUsuario(nombre: string, idRol: number): Promise<string> {
@@ -124,6 +133,7 @@ describe('Roles y matriz de permisos (e2e) · HU-02-05 y HU-02-06', () => {
       });
       await borrarUsuariosDePrueba(prisma, idsUsuarios);
       await prisma.rol_permiso.deleteMany({ where: { id_rol: { in: roles } } });
+      await borrarMatrizDePrueba(prisma, matriz);
       await prisma.rol.deleteMany({ where: { id: { in: roles } } });
       await prisma.rol.updateMany({
         where: { id: idRolAdministrador },
