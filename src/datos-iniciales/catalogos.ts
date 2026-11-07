@@ -39,19 +39,24 @@ export type NombreRol = (typeof ROLES)[number]['nombre'];
 
 /**
  * Módulos y permisos de la matriz de RF-03, con los códigos del modelo de datos (DBML v2.4).
- * La asignación de permisos a cada rol (rol_permiso) no se siembra: está en la Tabla 17 del
- * Producto 1, que no está en el repositorio, y la configura HU-02-06.
+ * La asignación inicial de permisos a cada rol está en matriz-permisos.ts (Tabla 17 del
+ * Producto 1); el administrador la ajusta después con HU-02-06.
  */
 export const MODULOS = [
   { codigo: 'usuarios', nombre: 'Usuarios y roles', orden: 1 },
   { codigo: 'estructura', nombre: 'Estructura académica', orden: 2 },
   { codigo: 'proyectos', nombre: 'Proyectos docentes', orden: 3 },
-  { codigo: 'rap', nombre: 'Resultados de aprendizaje', orden: 4 },
-  { codigo: 'clases', nombre: 'Registro de clases', orden: 5 },
-  { codigo: 'documentos', nombre: 'Documentos y evidencias', orden: 6 },
-  { codigo: 'reportes', nombre: 'Reportes', orden: 7 },
-  { codigo: 'auditoria', nombre: 'Auditoría', orden: 8 },
-];
+  // Producto 1, Tabla 17: el plan de curso tiene su propia fila en la matriz de permisos
+  // (el Departamento registra el proyecto docente, pero solo aprueba el plan de curso).
+  { codigo: 'plan_curso', nombre: 'Plan de curso', orden: 4 },
+  { codigo: 'rap', nombre: 'Resultados de aprendizaje', orden: 5 },
+  { codigo: 'clases', nombre: 'Registro de clases', orden: 6 },
+  { codigo: 'documentos', nombre: 'Documentos y evidencias', orden: 7 },
+  { codigo: 'reportes', nombre: 'Reportes', orden: 8 },
+  { codigo: 'auditoria', nombre: 'Auditoría', orden: 9 },
+] as const;
+
+export type CodigoModulo = (typeof MODULOS)[number]['codigo'];
 
 export const PERMISOS = [
   { codigo: 'leer', nombre: 'Leer' },
@@ -61,7 +66,9 @@ export const PERMISOS = [
   { codigo: 'generar', nombre: 'Generar' },
   { codigo: 'administrar', nombre: 'Administrar' },
   { codigo: 'aprobar', nombre: 'Aprobar' },
-];
+] as const;
+
+export type CodigoPermiso = (typeof PERMISOS)[number]['codigo'];
 
 /**
  * RF-17: estados del proyecto docente, con los códigos del DBML. Solo se edita en
@@ -203,6 +210,20 @@ export const PARAMETROS = [
     tipo_dato: 'lista',
     descripcion:
       'Extensiones de archivo permitidas, separadas por coma (NFR-019). Por validar.',
+  },
+  {
+    clave: 'descripcion_curso_longitud_maxima',
+    valor: '4000',
+    tipo_dato: 'entero',
+    descripcion:
+      'Caracteres máximos de la descripción del curso, punto 2 del proyecto docente (RF-11). Valor propuesto, por validar.',
+  },
+  {
+    clave: 'evidencia_tipos_permitidos',
+    valor: 'jpg,png,pdf',
+    tipo_dato: 'lista',
+    descripcion:
+      'Extensiones permitidas para las evidencias fotográficas de los RAP, separadas por coma (RF-24). Por validar.',
   },
 ];
 

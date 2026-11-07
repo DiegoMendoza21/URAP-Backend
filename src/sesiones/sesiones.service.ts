@@ -9,13 +9,26 @@ import {
 } from '@nestjs/common';
 import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
+import { AuditoriaService } from '../auditoria/auditoria.service.js';
+import { ParametrosService } from '../common/parametros/parametros.service.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { AlcanceService } from '../proyectos-docentes/alcance.service.js';
+import type { ConsultarProyectosDocentesDto } from '../proyectos-docentes/dto/consultas.dto.js';
 import {
   MENSAJE_PROYECTO_NO_EXISTE,
   ProyectosDocentesService,
 } from '../proyectos-docentes/proyectos-docentes.service.js';
+import {
+  type AlertaSesion,
+  alertaDeSesion,
+  type ContextoAlerta,
+  fechaDeHoy,
+  PARAMETRO_UMBRAL_ALERTA,
+  RANGO_UMBRAL_ALERTA,
+  resumirAlertas,
+  sumarDias,
+} from './alertas.js';
 import {
   aFechaColumna,
   aHoraColumna,
@@ -35,6 +48,8 @@ import type {
   BloqueHorarioDto,
   CalendarioSesionesDto,
   HorarioCursoDto,
+  PendientesDocenteDto,
+  ProyectoConPendientesDto,
   ResultadoGeneracionDto,
   SesionCalendarioDto,
 } from './dto/respuestas.dto.js';
@@ -100,6 +115,15 @@ export const SESION_VIGENTE = {
   OR: [{ estado: null }, { estado: { not: ESTADO_RETIRADA } }],
 } as const satisfies Prisma.sesion_claseWhereInput;
 
+/** Lo que necesita la regla de alertas de RF-23 de cada sesión. */
+const CAMPOS_ALERTA = {
+  fecha: true,
+  estado: true,
+  fecha_registro: true,
+  id_registrado_por: true,
+  tipo_sesion: { select: { codigo: true } },
+} as const satisfies Prisma.sesion_claseSelect;
+
 const INCLUIR_PROYECTO = {
   asignatura: { select: { id_programa: true } },
   periodo_academico: true,
@@ -127,6 +151,8 @@ export class SesionesService {
     private readonly prisma: PrismaService,
     private readonly alcance: AlcanceService,
     private readonly proyectos: ProyectosDocentesService,
+    private readonly parametros: ParametrosService,
+    private readonly auditoria: AuditoriaService,
   ) {}
 
   async obtenerHorario(
@@ -159,35 +185,48 @@ export class SesionesService {
     }
     const ordenados = [...bloques].sort((a, b) => a.diaSemana - b.diaSemana);
 
-    const guardados = await this.prisma.$transaction(async (tx) => {
-      await this.bloquearProyecto(tx, proyecto.id);
-      await tx.horario_curso.deleteMany({
-        where: { id_proyecto_docente: proyecto.id },
-      });
-      await tx.horario_curso.createMany({
-        data: ordenados.map((bloque) => ({
-          id_proyecto_docente: proyecto.id,
-          dia_semana: bloque.diaSemana,
-          hora_inicio: aHoraColumna(bloque.horaInicio),
-          hora_fin: aHoraColumna(bloque.horaFin),
-        })),
-      });
-      return tx.horario_curso.findMany({
-        where: { id_proyecto_docente: proyecto.id },
-        orderBy: { dia_semana: 'asc' },
-      });
-    });
+    const { previos, guardados } = await this.prisma.$transaction(
+      async (tx) => {
+        await this.bloquearProyecto(tx, proyecto.id);
+        // El horario anterior se lee dentro del bloqueo: es el que de verdad se reemplaza.
+        const previos = await tx.horario_curso.findMany({
+          where: { id_proyecto_docente: proyecto.id },
+          orderBy: { dia_semana: 'asc' },
+        });
+        await tx.horario_curso.deleteMany({
+          where: { id_proyecto_docente: proyecto.id },
+        });
+        await tx.horario_curso.createMany({
+          data: ordenados.map((bloque) => ({
+            id_proyecto_docente: proyecto.id,
+            dia_semana: bloque.diaSemana,
+            hora_inicio: aHoraColumna(bloque.horaInicio),
+            hora_fin: aHoraColumna(bloque.horaFin),
+          })),
+        });
+        const guardados = await tx.horario_curso.findMany({
+          where: { id_proyecto_docente: proyecto.id },
+          orderBy: { dia_semana: 'asc' },
+        });
+        return { previos, guardados };
+      },
+    );
 
     const nuevos = guardados.map(aBloque);
-    await this.auditar(usuario.id, {
-      accion: 'actualizar',
-      tabla_afectada: 'horario_curso',
-      id_registro: proyecto.id,
-      valor_anterior: proyecto.horario_curso.map(
-        aBloque,
-      ) as unknown as Prisma.InputJsonValue,
-      valor_nuevo: nuevos as unknown as Prisma.InputJsonValue,
-    });
+    // RF-29: después de confirmar y solo si el horario cambió; el usuario y la IP salen del
+    // contexto de la petición.
+    const anteriores = previos.map(aBloque);
+    if (JSON.stringify(anteriores) !== JSON.stringify(nuevos)) {
+      await this.auditoria.registrar({
+        accion: 'actualizar',
+        tablaAfectada: 'proyecto_docente',
+        idRegistro: proyecto.id,
+        valorAnterior: {
+          horario: anteriores,
+        } as unknown as Prisma.InputJsonValue,
+        valorNuevo: { horario: nuevos } as unknown as Prisma.InputJsonValue,
+      });
+    }
     return {
       idProyectoDocente: proyecto.id,
       bloques: nuevos,
@@ -195,7 +234,10 @@ export class SesionesService {
     };
   }
 
-  /** RF-19, p5: el calendario del curso, en orden de fecha. */
+  /**
+   * RF-19, p5: el calendario del curso, en orden de fecha, con la alerta de cada sesión y el
+   * resumen de vencidas y por vencer de todo el calendario (RF-23).
+   */
   async consultarCalendario(
     usuario: UsuarioSesion,
     idProyecto: number,
@@ -204,20 +246,31 @@ export class SesionesService {
     const proyecto = await this.proyectoVisible(usuario, idProyecto);
     const donde = { id_proyecto_docente: proyecto.id, ...SESION_VIGENTE };
     const periodo = proyecto.periodo_academico;
-    const [total, sesiones, puedeEditar, diasSinClase] = await Promise.all([
-      this.prisma.sesion_clase.count({ where: donde }),
+    // Una sola consulta: un curso tiene a lo sumo unas cien sesiones, y el resumen de alertas
+    // necesita todas aunque se pida una página.
+    const [todas, puedeEditar, umbralDias, diasSinClase] = await Promise.all([
       this.prisma.sesion_clase.findMany({
         where: donde,
         include: { tipo_sesion: true, dia_festivo: true },
         orderBy: [{ fecha: 'asc' }, { id: 'asc' }],
-        skip: (pagina - 1) * tamano,
-        take: tamano,
       }),
       this.puedeEditar(usuario, proyecto),
+      this.parametros.leerEntero(PARAMETRO_UMBRAL_ALERTA, RANGO_UMBRAL_ALERTA),
       periodo?.fecha_inicio && periodo.fecha_fin
         ? this.diasSinClase(periodo.fecha_inicio, periodo.fecha_fin)
         : new Set<string>(),
     ]);
+    const total = todas.length;
+    const sesiones = todas.slice((pagina - 1) * tamano, pagina * tamano);
+    const hoy = fechaDeHoy();
+    const contexto: ContextoAlerta = {
+      hoy,
+      umbralDias,
+      periodoCerrado: periodo?.cerrado ?? false,
+      fechaFinPeriodo: periodo?.fecha_fin
+        ? aTextoFecha(periodo.fecha_fin)
+        : null,
+    };
     const recesos =
       periodo?.fecha_inicio && periodo.fecha_fin
         ? semanasDeReceso(periodo.fecha_inicio, periodo.fecha_fin, diasSinClase)
@@ -237,10 +290,15 @@ export class SesionesService {
       ]),
     );
     return {
-      elementos: sesiones.map((sesion) => aSesion(sesion, horas)),
+      elementos: sesiones.map((sesion) => aSesion(sesion, horas, contexto)),
       pagina,
       tamano,
       total,
+      hoy,
+      umbralDias,
+      resumen: resumirAlertas(
+        todas.map((sesion) => alertaDeFila(sesion, contexto)),
+      ),
       periodo: {
         codigo: periodo?.codigo ?? null,
         fechaInicio: periodo?.fecha_inicio
@@ -253,6 +311,107 @@ export class SesionesService {
       puedeEditar,
       advertencias,
       recesos,
+    };
+  }
+
+  /**
+   * RF-23, p5: las sesiones vencidas y por vencer de los proyectos del docente que consulta
+   * (`proyecto_docente_docente`), para su panel. Solo cuentan los períodos abiertos: las de un
+   * período cerrado ya son incumplimientos (excepción p4) y no hay nada que diligenciar.
+   * Devuelve los proyectos con pendientes, los más atrasados primero.
+   */
+  async pendientesDelDocente(
+    usuario: UsuarioSesion,
+    { pagina, tamano }: ConsultarProyectosDocentesDto,
+  ): Promise<PendientesDocenteDto> {
+    const hoy = fechaDeHoy();
+    const [umbralDias, proyectos] = await Promise.all([
+      this.parametros.leerEntero(PARAMETRO_UMBRAL_ALERTA, RANGO_UMBRAL_ALERTA),
+      this.prisma.proyecto_docente.findMany({
+        where: {
+          proyecto_docente_docente: { some: { id_usuario: usuario.id } },
+          periodo_academico: {
+            is: { OR: [{ cerrado: false }, { cerrado: null }] },
+          },
+        },
+        select: {
+          id: true,
+          grupo: true,
+          asignatura: { select: { nombre: true, codigo_interno: true } },
+          periodo_academico: { select: { codigo: true } },
+        },
+      }),
+    ]);
+    // Solo hacen falta las sesiones hasta el final del umbral: las demás no tienen alerta.
+    const sesiones =
+      proyectos.length === 0
+        ? []
+        : await this.prisma.sesion_clase.findMany({
+            where: {
+              AND: [
+                { id_proyecto_docente: { in: proyectos.map(({ id }) => id) } },
+                SESION_VIGENTE,
+                {
+                  fecha: {
+                    lte: aFechaColumna(sumarDias(hoy, umbralDias ?? 0)),
+                  },
+                },
+              ],
+            },
+            select: { id_proyecto_docente: true, ...CAMPOS_ALERTA },
+          });
+
+    // Todos los períodos de la consulta están abiertos: la fecha de fin no interviene.
+    const contexto: ContextoAlerta = {
+      hoy,
+      umbralDias,
+      periodoCerrado: false,
+      fechaFinPeriodo: null,
+    };
+    const alertasPorProyecto = new Map<number, AlertaSesion[]>();
+    for (const sesion of sesiones) {
+      if (sesion.id_proyecto_docente === null) {
+        continue;
+      }
+      const lista = alertasPorProyecto.get(sesion.id_proyecto_docente) ?? [];
+      lista.push(alertaDeFila(sesion, contexto));
+      alertasPorProyecto.set(sesion.id_proyecto_docente, lista);
+    }
+
+    const conPendientes: ProyectoConPendientesDto[] = proyectos
+      .map((proyecto) => {
+        const resumen = resumirAlertas(
+          alertasPorProyecto.get(proyecto.id) ?? [],
+        );
+        return {
+          idProyectoDocente: proyecto.id,
+          asignatura: proyecto.asignatura?.nombre ?? 'Asignatura sin nombre',
+          codigoAsignatura: proyecto.asignatura?.codigo_interno ?? null,
+          grupo: proyecto.grupo,
+          periodo: proyecto.periodo_academico?.codigo ?? null,
+          vencidas: resumen.vencidas,
+          porVencer: resumen.porVencer,
+          mayorAtraso: resumen.mayorAtraso,
+        };
+      })
+      .filter((proyecto) => proyecto.vencidas + proyecto.porVencer > 0)
+      .sort(
+        (a, b) =>
+          b.vencidas - a.vencidas ||
+          (b.mayorAtraso ?? 0) - (a.mayorAtraso ?? 0) ||
+          b.porVencer - a.porVencer ||
+          a.asignatura.localeCompare(b.asignatura, 'es'),
+      );
+
+    return {
+      hoy,
+      umbralDias,
+      vencidas: conPendientes.reduce((suma, p) => suma + p.vencidas, 0),
+      porVencer: conPendientes.reduce((suma, p) => suma + p.porVencer, 0),
+      elementos: conPendientes.slice((pagina - 1) * tamano, pagina * tamano),
+      pagina,
+      tamano,
+      total: conPendientes.length,
     };
   }
 
@@ -476,12 +635,16 @@ export class SesionesService {
         mensajeSemanasDeMas(semanasEntreFechas, periodo.numero_semanas),
       );
     }
-    await this.auditar(usuario.id, {
-      accion: 'generar',
-      tabla_afectada: 'sesion_clase',
-      id_registro: proyecto.id,
-      valor_nuevo: { ...resultado, aniosSinFestivos },
-    });
+    // RF-29: después de confirmar y solo si el calendario cambió, con lo que cambió.
+    const { creadas, actualizadas, retiradas } = resultado;
+    if (creadas + actualizadas + retiradas > 0) {
+      await this.auditoria.registrar({
+        accion: 'actualizar',
+        tablaAfectada: 'proyecto_docente',
+        idRegistro: proyecto.id,
+        valorNuevo: { calendario: { creadas, actualizadas, retiradas } },
+      });
+    }
     if (aniosSinFestivos.length > 0) {
       await this.avisarAdministradores(aniosSinFestivos, proyecto.id);
     }
@@ -679,23 +842,6 @@ export class SesionesService {
       );
     }
   }
-
-  /** RF-29. Un fallo al auditar no deshace la operación (CLAUDE.md, «Auditoría»). */
-  private async auditar(
-    idUsuario: number,
-    datos: Omit<Prisma.auditoriaUncheckedCreateInput, 'id_usuario' | 'fecha'>,
-  ): Promise<void> {
-    try {
-      await this.prisma.auditoria.create({
-        data: { ...datos, id_usuario: idUsuario, fecha: new Date() },
-      });
-    } catch (error) {
-      this.logger.error(
-        `No se pudo auditar «${datos.accion}» en ${datos.tabla_afectada} ${datos.id_registro}.`,
-        error instanceof Error ? error.stack : String(error),
-      );
-    }
-  }
 }
 
 function esDiligenciada(sesion: {
@@ -757,14 +903,38 @@ function aBloque(bloque: {
   };
 }
 
+/**
+ * RF-23: alerta de una sesión, con la misma regla en el calendario y en el panel. Lo
+ * diligenciado sale de `esDiligenciada`: cuando el registro de clase (HU-08-04) guarde
+ * `estado`, `fecha_registro` e `id_registrado_por`, la alerta desaparece sin tocar esto.
+ */
+function alertaDeFila(
+  sesion: Prisma.sesion_claseGetPayload<{ select: typeof CAMPOS_ALERTA }>,
+  contexto: ContextoAlerta,
+): AlertaSesion {
+  if (!sesion.fecha) {
+    return { alerta: null, diasAtraso: null, diasRestantes: null };
+  }
+  return alertaDeSesion(
+    {
+      fecha: aTextoFecha(sesion.fecha),
+      diligenciada: esDiligenciada(sesion),
+      esFestivo: sesion.tipo_sesion?.codigo === TIPO_FESTIVO,
+    },
+    contexto,
+  );
+}
+
 function aSesion(
   sesion: Prisma.sesion_claseGetPayload<{
     include: { tipo_sesion: true; dia_festivo: true };
   }>,
   horas: Map<number | null, BloqueHorarioDto>,
+  contexto: ContextoAlerta,
 ): SesionCalendarioDto {
   const bloque = horas.get(sesion.dia_semana);
   return {
+    ...alertaDeFila(sesion, contexto),
     id: sesion.id,
     semana: sesion.semana ?? 0,
     fecha: sesion.fecha ? aTextoFecha(sesion.fecha) : '',
