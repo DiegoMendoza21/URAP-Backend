@@ -1,10 +1,12 @@
 import writeXlsxFile from 'write-excel-file/node';
 import {
+  descomprimidoDentroDelLimite,
   ERRORES_MAXIMOS_DETALLADOS,
   leerListaMatriculados,
   MENSAJE_ARCHIVO_NO_LEGIBLE,
   MENSAJE_ARCHIVO_VACIO,
   MENSAJE_FORMATO_COLUMNAS,
+  TAMANO_MAXIMO_DESCOMPRIMIDO,
   validarFilas,
 } from './lista-matriculados.js';
 
@@ -196,6 +198,44 @@ describe('lista de matriculados (RF-22, HU-09-01)', () => {
       tipo: 'invalido',
       mensaje: MENSAJE_ARCHIVO_NO_LEGIBLE,
       errores: [],
+    });
+  });
+
+  describe('protección contra archivos que se expanden al descomprimirse', () => {
+    const libroPequeno = () =>
+      writeXlsxFile([[{ value: 'Documento' }]]).toBuffer();
+
+    /** Cambia el tamaño descomprimido declarado de la primera entrada del zip. */
+    function declararTamano(libro: Buffer, tamano: number): Buffer {
+      const copia = Buffer.from(libro);
+      const entrada = copia.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]));
+      copia.writeUInt32LE(tamano, entrada + 24);
+      return copia;
+    }
+
+    it('acepta un libro normal y deja pasar lo que no es zip', async () => {
+      expect(descomprimidoDentroDelLimite(await libroPequeno())).toBe(true);
+      expect(descomprimidoDentroDelLimite(Buffer.from('texto'))).toBe(true);
+    });
+
+    it('rechaza un libro que declara más contenido que el techo, o un zip64', async () => {
+      const libro = await libroPequeno();
+      expect(
+        descomprimidoDentroDelLimite(
+          declararTamano(libro, TAMANO_MAXIMO_DESCOMPRIMIDO + 1),
+        ),
+      ).toBe(false);
+      expect(
+        descomprimidoDentroDelLimite(declararTamano(libro, 0xffffffff)),
+      ).toBe(false);
+      expect(
+        await leerListaMatriculados(
+          declararTamano(libro, TAMANO_MAXIMO_DESCOMPRIMIDO + 1),
+        ),
+      ).toMatchObject({
+        tipo: 'invalido',
+        mensaje: MENSAJE_ARCHIVO_NO_LEGIBLE,
+      });
     });
   });
 });

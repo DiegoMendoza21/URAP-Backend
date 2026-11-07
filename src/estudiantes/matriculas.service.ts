@@ -47,8 +47,12 @@ interface ProyectoAccesible {
   idPrograma: number | null;
 }
 
-/** Tiempo máximo de la transacción de carga: una lista grande hace varias escrituras. */
-const TIEMPO_MAXIMO_CARGA_MS = 30_000;
+/**
+ * Tiempo máximo de la transacción de carga. Menor que la espera del servidor de Next (12 s):
+ * si se agota, la transacción se deshace y el usuario recibe el error, en lugar de ver «tardó
+ * demasiado» mientras la carga termina por detrás.
+ */
+const TIEMPO_MAXIMO_CARGA_MS = 10_000;
 
 /**
  * Lista de estudiantes matriculados por curso (RF-22, HU-09-01). Un curso es un proyecto
@@ -271,8 +275,12 @@ export class MatriculasService {
         email: true,
       },
     });
+    // MySQL compara el documento sin distinguir mayúsculas; el Map debe hacer lo mismo.
     const existentePorDocumento = new Map(
-      existentes.map((estudiante) => [estudiante.identificacion, estudiante]),
+      existentes.map((estudiante) => [
+        estudiante.identificacion?.toUpperCase(),
+        estudiante,
+      ]),
     );
 
     // El archivo es el origen oficial (SUP-03): corrige nombres y correo de quien ya existía.

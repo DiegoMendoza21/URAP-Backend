@@ -41,16 +41,31 @@ const PATRON_CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** Errores que se detallan uno a uno; del resto solo se dice cuántos son. */
 export const ERRORES_MAXIMOS_DETALLADOS = 50;
 
+/**
+ * Techo de seguridad del contenido descomprimido. Un .xlsx es un zip: uno de pocos MB puede
+ * expandirse a gigas (zip bomb) y agotar la memoria. Una lista de 2.000 estudiantes ocupa menos
+ * de 1 MB descomprimida; este techo no es un parámetro de negocio, sino una protección del
+ * servidor, como el límite de tamaño de una petición.
+ */
+export const TAMANO_MAXIMO_DESCOMPRIMIDO = 50 * 1024 * 1024;
+
 export const MENSAJE_ARCHIVO_NO_LEGIBLE =
   'No se pudo leer el archivo. Verifique que sea un libro de Excel (.xlsx) y que no esté protegido con contraseña.';
 export const MENSAJE_ARCHIVO_VACIO =
-  'El archivo no tiene estudiantes. Escriba un estudiante por fila debajo de la fila de títulos.';
-export const MENSAJE_FORMATO_COLUMNAS = `La primera fila debe tener los títulos ${TITULOS_COLUMNAS.documento}, ${TITULOS_COLUMNAS.nombres}, ${TITULOS_COLUMNAS.apellidos} y, si quiere, ${TITULOS_COLUMNAS.correo}.`;
+  'El archivo no tiene estudiantes. Se lee solo la primera hoja del libro: escriba allí un estudiante por fila, debajo de la fila de títulos.';
+export const MENSAJE_FORMATO_COLUMNAS = `Se lee solo la primera hoja del libro. Su primera fila debe tener los títulos ${TITULOS_COLUMNAS.documento}, ${TITULOS_COLUMNAS.nombres}, ${TITULOS_COLUMNAS.apellidos} y, si quiere, ${TITULOS_COLUMNAS.correo}.`;
 
 /** Lee la primera hoja del libro y valida cada fila. Una sola fila con error invalida el archivo. */
 export async function leerListaMatriculados(
   contenido: Buffer,
 ): Promise<ResultadoLectura> {
+  if (!descomprimidoDentroDelLimite(contenido)) {
+    return {
+      tipo: 'invalido',
+      mensaje: MENSAJE_ARCHIVO_NO_LEGIBLE,
+      errores: [],
+    };
+  }
   let filas: unknown[][];
   try {
     // parseNumber deja los números como el texto del archivo: un documento largo no pierde
@@ -160,6 +175,52 @@ export function validarFilas(filas: readonly unknown[][]): ResultadoLectura {
     return { tipo: 'invalido', mensaje: MENSAJE_ARCHIVO_VACIO, errores: [] };
   }
   return { tipo: 'valido', estudiantes };
+}
+
+/**
+ * Suma los tamaños descomprimidos que declara el directorio central del zip. Si no es un zip
+ * lo deja pasar: la lectura lo rechazará con su propio mensaje. Un zip64 (tamaños de 4 GB o
+ * más) o un directorio incoherente se rechazan.
+ */
+export function descomprimidoDentroDelLimite(contenido: Buffer): boolean {
+  const FIRMA_FIN = 0x06054b50;
+  const FIRMA_ENTRADA = 0x02014b50;
+  const inicioBusqueda = Math.max(0, contenido.length - 22 - 0xffff);
+  let fin = -1;
+  for (let i = contenido.length - 22; i >= inicioBusqueda; i -= 1) {
+    if (contenido.readUInt32LE(i) === FIRMA_FIN) {
+      fin = i;
+      break;
+    }
+  }
+  if (fin === -1) {
+    return true;
+  }
+  const entradas = contenido.readUInt16LE(fin + 10);
+  let posicion = contenido.readUInt32LE(fin + 16);
+  let total = 0;
+  for (let n = 0; n < entradas; n += 1) {
+    if (
+      posicion + 46 > contenido.length ||
+      contenido.readUInt32LE(posicion) !== FIRMA_ENTRADA
+    ) {
+      return false;
+    }
+    const tamano = contenido.readUInt32LE(posicion + 24);
+    if (tamano === 0xffffffff) {
+      return false;
+    }
+    total += tamano;
+    if (total > TAMANO_MAXIMO_DESCOMPRIMIDO) {
+      return false;
+    }
+    posicion +=
+      46 +
+      contenido.readUInt16LE(posicion + 28) +
+      contenido.readUInt16LE(posicion + 30) +
+      contenido.readUInt16LE(posicion + 32);
+  }
+  return true;
 }
 
 function ubicarColumnas(
