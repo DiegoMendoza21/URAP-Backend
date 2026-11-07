@@ -10,7 +10,8 @@ import { ProyectosDocentesService } from './proyectos-docentes.service.js';
   // El asistente va primero: sus rutas son más específicas que `proyectos-docentes/:id`.
   controllers: [AsistenteController, ProyectosDocentesController],
   providers: [AlcanceService, AsistenteService, ProyectosDocentesService],
-  // El calendario de sesiones (RF-19) reutiliza la visibilidad y el alcance del proyecto.
+  // El calendario de sesiones (RF-19) reutiliza la visibilidad y el alcance del proyecto; la
+  // lista de matriculados (EstudiantesModule), el mismo alcance por programa.
   exports: [AlcanceService, ProyectosDocentesService],
 })
 export class ProyectosDocentesModule {}

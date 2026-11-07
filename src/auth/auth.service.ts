@@ -10,7 +10,10 @@ import { JwtService } from '@nestjs/jwt';
 import { randomUUID } from 'node:crypto';
 import type { VariablesEntorno } from '../common/configuracion/variables-entorno.js';
 import { AuditoriaService } from '../auditoria/auditoria.service.js';
-import { ParametrosService } from '../common/parametros/parametros.service.js';
+import {
+  PARAMETRO,
+  ParametrosService,
+} from '../common/parametros/parametros.service.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { ContrasenasService } from './contrasenas.service.js';
 import {
@@ -57,8 +60,8 @@ const SELECCION_USUARIO = {
 } as const;
 
 /** Claves de `parametro_sistema` del bloqueo (HU-01-04). Los valores los siembra el seed. */
-export const PARAMETRO_INTENTOS_MAXIMOS = 'inicio_sesion_intentos_maximos';
-export const PARAMETRO_MINUTOS_BLOQUEO = 'inicio_sesion_minutos_bloqueo';
+export const PARAMETRO_INTENTOS_MAXIMOS = PARAMETRO.inicioSesionIntentosMaximos;
+export const PARAMETRO_MINUTOS_BLOQUEO = PARAMETRO.inicioSesionMinutosBloqueo;
 
 /** Motivo del bloqueo en el registro de auditoría. */
 export const MOTIVO_BLOQUEO = 'intentos_fallidos_consecutivos';
