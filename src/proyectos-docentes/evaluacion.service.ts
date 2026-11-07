@@ -9,6 +9,7 @@ import type {
   SeccionEvaluacionDto,
 } from './dto/planeacion.dto.js';
 import { EdicionProyectoService } from './edicion-proyecto.service.js';
+import { nombreRap } from './entities/secciones.js';
 import { MENSAJE_RAC_NO_EXISTE } from './rac.service.js';
 
 type Tx = Prisma.TransactionClient;
@@ -55,7 +56,7 @@ function aRacEvaluacion(rac: RacConEvaluacion): RacEvaluacionDto {
     enunciado: rac.descripcion ?? '',
     raps: [...rac.rac_rap]
       .sort((a, b) => (a.rap.numero ?? 0) - (b.rap.numero ?? 0))
-      .map(({ rap }) => rap.codigo ?? `RAP ${rap.numero ?? rap.id}`),
+      .map(({ rap }) => nombreRap(rap)),
     actividades,
     pesoTotal: pesoTotal(actividades),
   };

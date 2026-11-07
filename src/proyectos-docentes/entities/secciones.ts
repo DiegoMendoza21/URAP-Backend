@@ -40,7 +40,12 @@ export interface Seccion {
   pendientes(datos: DatosCompletitud): string[];
 }
 
-function nombreRap(rap: DatosCompletitud['raps'][number]): string {
+/** Nombre corto de un RAP: su código o, si no tiene, «RAP n». */
+export function nombreRap(rap: {
+  id: number;
+  codigo: string | null;
+  numero: number | null;
+}): string {
   return rap.codigo ?? `RAP ${rap.numero ?? rap.id}`;
 }
 

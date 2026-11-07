@@ -51,7 +51,7 @@ export class EstrategiasService {
     if (repetida !== null) {
       throw new BadRequestException(mensajeEstrategiaRepetida(repetida));
     }
-    return this.edicion.editar(usuario, id, async (tx) => {
+    await this.edicion.editar(usuario, id, async (tx) => {
       const anteriores = await this.filas(tx, id);
       await tx.estrategia_metodologica.deleteMany({
         where: { id_proyecto_docente: id },
@@ -66,7 +66,7 @@ export class EstrategiasService {
         });
       }
       return {
-        resultado: await this.leerSeccion(tx, id),
+        resultado: undefined,
         auditoria: {
           accion: 'actualizar',
           tabla: 'proyecto_docente',
@@ -78,6 +78,8 @@ export class EstrategiasService {
         },
       };
     });
+    // Fuera de la transacción: el catálogo recorre el programa y no debe alargar el bloqueo.
+    return this.leerSeccion(this.prisma, id);
   }
 
   private filas(cliente: Tx | PrismaService, id: number) {
