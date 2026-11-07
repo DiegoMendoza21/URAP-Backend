@@ -87,3 +87,13 @@ export const MENSAJE_NIVEL_INVALIDO =
   'Uno de los niveles no existe en la escala de valoración del programa.';
 export const MENSAJE_CELDA_REPETIDA =
   'Un estudiante aparece dos veces en el mismo indicador.';
+export const MENSAJE_SOLO_DOCENTE_O_LIDER =
+  'Solo el docente asignado al curso o el líder del RAP registran el análisis y cierran la medición.';
+export const MENSAJE_SIN_VALORACIONES =
+  'La medición no tiene valoraciones registradas: valore a los estudiantes antes de cerrarla.';
+export const MENSAJE_FALTAN_ACCIONES_PROPUESTAS =
+  'El resultado está por debajo del porcentaje esperado: registre las acciones propuestas antes de cerrar la medición.';
+export const MENSAJE_SOLO_DEPARTAMENTO_REABRE =
+  'Solo el departamento académico del programa puede reabrir una medición cerrada.';
+export const MENSAJE_MEDICION_NO_CERRADA =
+  'La medición no está cerrada: no hay nada que reabrir.';

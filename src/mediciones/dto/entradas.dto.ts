@@ -15,8 +15,11 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
+import { ConsultarProyectosDocentesDto } from '../../proyectos-docentes/dto/consultas.dto.js';
 import {
   ANIO_TOMA_MAXIMO,
+  ESTADO_MEDICION,
+  type EstadoMedicion,
   ANIO_TOMA_MINIMO,
   INSTRUMENTO_LONGITUD_MAXIMA,
   PERIODO_TOMA,
@@ -169,4 +172,51 @@ export class RegistrarValoracionesDto {
   @ValidateNested({ each: true })
   @Type(() => ValoracionDto)
   valoraciones: ValoracionDto[];
+}
+
+/** RF-31, p5 (HU-11-06): los tres campos de la hoja «Evaluación». Un campo omitido no cambia. */
+export class RegistrarAnalisisDto {
+  @ApiPropertyOptional({ nullable: true, type: String })
+  @IsOptional()
+  @Transform(textoOpcional)
+  @IsString({ message: 'Las acciones implementadas deben ser un texto.' })
+  @MaxLength(TEXTO_LARGO_MAXIMO, {
+    message: `Las acciones implementadas admiten hasta ${TEXTO_LARGO_MAXIMO} caracteres.`,
+  })
+  accionesImplementadas?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, type: String })
+  @IsOptional()
+  @Transform(textoOpcional)
+  @IsString({ message: 'Los resultados obtenidos deben ser un texto.' })
+  @MaxLength(TEXTO_LARGO_MAXIMO, {
+    message: `Los resultados obtenidos admiten hasta ${TEXTO_LARGO_MAXIMO} caracteres.`,
+  })
+  resultadosObtenidos?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, type: String })
+  @IsOptional()
+  @Transform(textoOpcional)
+  @IsString({ message: 'Las acciones propuestas deben ser un texto.' })
+  @MaxLength(TEXTO_LARGO_MAXIMO, {
+    message: `Las acciones propuestas admiten hasta ${TEXTO_LARGO_MAXIMO} caracteres.`,
+  })
+  accionesPropuestas?: string | null;
+}
+
+/** Lista del módulo de medición: paginación y filtros opcionales. */
+export class ConsultarMedicionesDto extends ConsultarProyectosDocentesDto {
+  @ApiPropertyOptional({ enum: Object.values(ESTADO_MEDICION) })
+  @IsOptional()
+  @IsIn(Object.values(ESTADO_MEDICION), {
+    message: 'El estado debe ser «borrador» o «cerrada».',
+  })
+  estado?: EstadoMedicion;
+
+  @ApiPropertyOptional({ example: 2 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'El RAP no es válido.' })
+  @Min(1, { message: 'El RAP no es válido.' })
+  idRap?: number;
 }
