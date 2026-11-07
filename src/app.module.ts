@@ -7,6 +7,7 @@ import { ParametrosModule } from './common/parametros/parametros.module.js';
 import { EstudiantesModule } from './estudiantes/estudiantes.module.js';
 import { validarVariablesEntorno } from './common/configuracion/variables-entorno.js';
 import { FiltroExcepciones } from './common/filtros/filtro-excepciones.js';
+import { MedicionesModule } from './mediciones/mediciones.module.js';
 import { PrismaModule } from './common/prisma/prisma.module.js';
 import { crearPipeValidacion } from './common/validacion/pipe-validacion.js';
 import { DocumentosModule } from './documentos/documentos.module.js';
@@ -30,6 +31,7 @@ import { SesionesModule } from './sesiones/sesiones.module.js';
     UsuariosModule,
     ProyectosDocentesModule,
     EstudiantesModule,
+    MedicionesModule,
     DocumentosModule,
     SesionesModule,
   ],
