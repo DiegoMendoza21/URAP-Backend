@@ -57,7 +57,10 @@ export class ParametrosService {
    * `null` y lo registra como error técnico: es un problema de configuración que debe
    * corregirse, pero no debe tumbar la operación que lo consulta.
    */
-  async leerEntero(clave: string, rango: RangoEntero): Promise<number | null> {
+  async leerEntero(
+    clave: ClaveParametro,
+    rango: RangoEntero,
+  ): Promise<number | null> {
     const parametro = await this.prisma.parametro_sistema.findUnique({
       where: { clave },
       select: { valor: true },
