@@ -171,6 +171,16 @@ describe('SesionesService', () => {
     ];
 
     it('reemplaza el horario, ordenado por día, y lo audita', async () => {
+      // Dentro del bloqueo: primero el horario anterior, luego el guardado.
+      tx.horario_curso.findMany
+        .mockResolvedValueOnce([
+          {
+            dia_semana: 1,
+            hora_inicio: aHoraColumna('07:00'),
+            hora_fin: aHoraColumna('09:00'),
+          },
+        ])
+        .mockResolvedValueOnce([{ dia_semana: 1 }, { dia_semana: 3 }]);
       await servicio.guardarHorario(docente, 99, { bloques });
 
       expect(tx.horario_curso.deleteMany).toHaveBeenCalledWith({

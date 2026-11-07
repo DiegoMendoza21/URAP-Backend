@@ -185,29 +185,37 @@ export class SesionesService {
     }
     const ordenados = [...bloques].sort((a, b) => a.diaSemana - b.diaSemana);
 
-    const guardados = await this.prisma.$transaction(async (tx) => {
-      await this.bloquearProyecto(tx, proyecto.id);
-      await tx.horario_curso.deleteMany({
-        where: { id_proyecto_docente: proyecto.id },
-      });
-      await tx.horario_curso.createMany({
-        data: ordenados.map((bloque) => ({
-          id_proyecto_docente: proyecto.id,
-          dia_semana: bloque.diaSemana,
-          hora_inicio: aHoraColumna(bloque.horaInicio),
-          hora_fin: aHoraColumna(bloque.horaFin),
-        })),
-      });
-      return tx.horario_curso.findMany({
-        where: { id_proyecto_docente: proyecto.id },
-        orderBy: { dia_semana: 'asc' },
-      });
-    });
+    const { previos, guardados } = await this.prisma.$transaction(
+      async (tx) => {
+        await this.bloquearProyecto(tx, proyecto.id);
+        // El horario anterior se lee dentro del bloqueo: es el que de verdad se reemplaza.
+        const previos = await tx.horario_curso.findMany({
+          where: { id_proyecto_docente: proyecto.id },
+          orderBy: { dia_semana: 'asc' },
+        });
+        await tx.horario_curso.deleteMany({
+          where: { id_proyecto_docente: proyecto.id },
+        });
+        await tx.horario_curso.createMany({
+          data: ordenados.map((bloque) => ({
+            id_proyecto_docente: proyecto.id,
+            dia_semana: bloque.diaSemana,
+            hora_inicio: aHoraColumna(bloque.horaInicio),
+            hora_fin: aHoraColumna(bloque.horaFin),
+          })),
+        });
+        const guardados = await tx.horario_curso.findMany({
+          where: { id_proyecto_docente: proyecto.id },
+          orderBy: { dia_semana: 'asc' },
+        });
+        return { previos, guardados };
+      },
+    );
 
     const nuevos = guardados.map(aBloque);
     // RF-29: después de confirmar y solo si el horario cambió; el usuario y la IP salen del
     // contexto de la petición.
-    const anteriores = proyecto.horario_curso.map(aBloque);
+    const anteriores = previos.map(aBloque);
     if (JSON.stringify(anteriores) !== JSON.stringify(nuevos)) {
       await this.auditoria.registrar({
         accion: 'actualizar',
