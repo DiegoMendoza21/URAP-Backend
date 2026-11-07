@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 import type { PrismaService } from '../prisma/prisma.service.js';
-import { ParametrosService } from './parametros.service.js';
+import { PARAMETRO, ParametrosService } from './parametros.service.js';
 
 describe('ParametrosService', () => {
   const prisma = { parametro_sistema: { findUnique: vi.fn() } };
@@ -17,7 +17,9 @@ describe('ParametrosService', () => {
   it('lee un entero', async () => {
     prisma.parametro_sistema.findUnique.mockResolvedValue({ valor: ' 2 ' });
 
-    await expect(servicio.entero('alerta_dias_anticipacion')).resolves.toBe(2);
+    await expect(
+      servicio.entero(PARAMETRO.alertaDiasAnticipacion),
+    ).resolves.toBe(2);
     expect(prisma.parametro_sistema.findUnique).toHaveBeenCalledWith({
       where: { clave: 'alerta_dias_anticipacion' },
       select: { valor: true },
@@ -27,7 +29,9 @@ describe('ParametrosService', () => {
   it('acepta el cero', async () => {
     prisma.parametro_sistema.findUnique.mockResolvedValue({ valor: '0' });
 
-    await expect(servicio.entero('x')).resolves.toBe(0);
+    await expect(
+      servicio.entero(PARAMETRO.alertaDiasAnticipacion),
+    ).resolves.toBe(0);
   });
 
   it.each([
@@ -42,7 +46,9 @@ describe('ParametrosService', () => {
       .mockImplementation(() => undefined);
     prisma.parametro_sistema.findUnique.mockResolvedValue(fila);
 
-    await expect(servicio.entero('x')).resolves.toBeNull();
+    await expect(
+      servicio.entero(PARAMETRO.alertaDiasAnticipacion),
+    ).resolves.toBeNull();
     expect(registrar).toHaveBeenCalledTimes(1);
   });
 });
