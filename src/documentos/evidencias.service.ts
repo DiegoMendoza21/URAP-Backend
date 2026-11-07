@@ -346,22 +346,25 @@ export class EvidenciasService {
       throw error;
     }
 
-    for (const evidencia of creadas) {
-      await this.auditoria.registrar({
-        accion: 'crear',
-        tablaAfectada: 'evidencia_rap',
-        idRegistro: evidencia.id,
-        valorNuevo: {
-          idProyectoDocente: idProyecto,
-          idRap: evidencia.id_rap,
-          idSesion: evidencia.id_sesion,
-          nombreOriginal: evidencia.nombre_original,
-          tipo: evidencia.tipo,
-          tamanoBytes: evidencia.tamano_bytes,
-          clave: evidencia.url,
-        },
-      });
-    }
+    // Después de confirmar y en paralelo: cada registro espera como máximo un segundo. Sin el
+    // nombre original del archivo, que puede traer nombres de estudiantes (Ley 1581).
+    await Promise.all(
+      creadas.map((evidencia) =>
+        this.auditoria.registrar({
+          accion: 'crear',
+          tablaAfectada: 'evidencia_rap',
+          idRegistro: evidencia.id,
+          valorNuevo: {
+            idProyectoDocente: idProyecto,
+            idRap: evidencia.id_rap,
+            idSesion: evidencia.id_sesion,
+            tipo: evidencia.tipo,
+            tamanoBytes: evidencia.tamano_bytes,
+            clave: evidencia.url,
+          },
+        }),
+      ),
+    );
     return { evidencias: creadas.map(aEvidencia) };
   }
 

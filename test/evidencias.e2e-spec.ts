@@ -450,15 +450,21 @@ describe('Evidencias (e2e) · RF-24, HU-10-01', () => {
         expect.arrayContaining(['tablero del taller.png', 'acta firmada.pdf']),
       );
 
-      const auditoria = await prisma.auditoria.count({
-        where: {
-          accion: 'crear',
-          tabla_afectada: 'evidencia_rap',
-          id_usuario: usuarios.docente,
-          ip: { not: null },
-        },
-      });
-      expect(auditoria).toBe(2);
+      // Si la auditoría tarda más de 1 s, la carga no la espera (RF-29, q1): se da margen.
+      await expect
+        .poll(
+          () =>
+            prisma.auditoria.count({
+              where: {
+                accion: 'crear',
+                tabla_afectada: 'evidencia_rap',
+                id_usuario: usuarios.docente,
+                ip: { not: null },
+              },
+            }),
+          { timeout: 5000 },
+        )
+        .toBe(2);
     });
 
     it('rechaza la carga si un archivo supera el tamaño máximo e informa el límite (p4)', async () => {
@@ -660,10 +666,13 @@ describe('Evidencias (e2e) · RF-24, HU-10-01', () => {
       };
       // Con @Res() la respuesta sale antes de que el interceptor termine de auditar: se espera.
       await expect
-        .poll(() =>
-          prisma.auditoria.count({
-            where: { ...consultas, ip: { not: null } },
-          }),
+        // La auditoría puede tardar hasta 1 s por diseño (RF-29, q1): se da margen.
+        .poll(
+          () =>
+            prisma.auditoria.count({
+              where: { ...consultas, ip: { not: null } },
+            }),
+          { timeout: 5000 },
         )
         .toBe(1);
 
@@ -675,7 +684,9 @@ describe('Evidencias (e2e) · RF-24, HU-10-01', () => {
         .set('If-None-Match', respuesta.headers.etag)
         .expect(304);
       await expect
-        .poll(() => prisma.auditoria.count({ where: consultas }))
+        .poll(() => prisma.auditoria.count({ where: consultas }), {
+          timeout: 5000,
+        })
         .toBe(2);
     });
 

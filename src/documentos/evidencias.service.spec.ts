@@ -202,6 +202,10 @@ describe('EvidenciasService', () => {
         tablaAfectada: 'evidencia_rap',
         idRegistro: resultado.evidencias[0].id,
       });
+      // Ley 1581: el nombre del archivo puede traer nombres de estudiantes.
+      expect(
+        auditoria.registrar.mock.calls[0][0].valorNuevo,
+      ).not.toHaveProperty('nombreOriginal');
     });
 
     it('solo deja cargar a los docentes del proyecto', async () => {
