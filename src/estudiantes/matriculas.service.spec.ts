@@ -28,6 +28,8 @@ function usuario(id: number, roles: string[]): UsuarioSesion {
     roles,
     jti: `jti-${id}`,
     idSesion: id,
+    asignaciones: [],
+    permisos: [],
   };
 }
 

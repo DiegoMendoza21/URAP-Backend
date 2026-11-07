@@ -43,6 +43,8 @@ const docente: UsuarioSesion = {
   roles: [ROL.docente],
   jti: 'jti-20',
   idSesion: 1,
+  asignaciones: [],
+  permisos: [],
 };
 
 type Cambio = (
