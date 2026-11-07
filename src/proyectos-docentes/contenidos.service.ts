@@ -192,25 +192,29 @@ export class ContenidosService {
       const resultado = await this.leerSeccion(tx, id);
       return {
         resultado,
-        auditoria: {
-          accion: 'actualizar',
-          tabla: 'proyecto_docente',
-          idRegistro: id,
-          anterior: { contenidos: anterior },
-          // La comparación con la asignatura es la constancia de la diferencia (p4).
-          nuevo: {
-            contenidos: nuevo,
-            horasCoinciden: resultado.horasCoinciden,
-            comparacion: resultado.comparacion.map(
-              ({ tipo, contenidos, asignatura, diferencia }) => ({
-                tipo,
-                contenidos,
-                asignatura,
-                diferencia,
-              }),
-            ),
-          },
-        },
+        // Sin semanas cambiadas no hay nada que auditar ni fecha que mover.
+        auditoria:
+          Object.keys(nuevo).length === 0 && Object.keys(anterior).length === 0
+            ? null
+            : {
+                accion: 'actualizar',
+                tabla: 'proyecto_docente',
+                idRegistro: id,
+                anterior: { contenidos: anterior },
+                // La comparación con la asignatura es la constancia de la diferencia (p4).
+                nuevo: {
+                  contenidos: nuevo,
+                  horasCoinciden: resultado.horasCoinciden,
+                  comparacion: resultado.comparacion.map(
+                    ({ tipo, contenidos, asignatura, diferencia }) => ({
+                      tipo,
+                      contenidos,
+                      asignatura,
+                      diferencia,
+                    }),
+                  ),
+                },
+              },
       };
     });
   }

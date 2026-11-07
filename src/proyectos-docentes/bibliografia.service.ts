@@ -7,6 +7,7 @@ import type {
   ProyectoConBibliografiaDto,
   SeccionBibliografiaDto,
 } from './dto/planeacion.dto.js';
+import { auditarCambios } from './auditar-seccion.js';
 import { EdicionProyectoService } from './edicion-proyecto.service.js';
 import { citar, primeraRepetida } from './entities/listas.js';
 import { ProyectosDocentesService } from './proyectos-docentes.service.js';
@@ -67,15 +68,13 @@ export class BibliografiaService {
       }
       return {
         resultado: await this.leerSeccion(tx, id),
-        auditoria: {
-          accion: 'actualizar',
-          tabla: 'proyecto_docente',
-          idRegistro: id,
-          anterior: {
-            bibliografia: anteriores.map((fila) => fila.referencia ?? ''),
-          },
-          nuevo: { bibliografia: referencias },
-        },
+        // Solo si la lista cambió: guardar lo mismo no audita ni mueve la fecha.
+        auditoria: auditarCambios(
+          'proyecto_docente',
+          id,
+          { bibliografia: anteriores.map((fila) => fila.referencia ?? '') },
+          { bibliografia: referencias },
+        ),
       };
     });
   }

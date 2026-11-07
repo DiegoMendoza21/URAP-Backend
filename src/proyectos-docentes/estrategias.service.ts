@@ -6,6 +6,7 @@ import type {
   GuardarEstrategiasDto,
   SeccionEstrategiasDto,
 } from './dto/planeacion.dto.js';
+import { auditarCambios } from './auditar-seccion.js';
 import { EdicionProyectoService } from './edicion-proyecto.service.js';
 import { citar, claveTexto, primeraRepetida } from './entities/listas.js';
 
@@ -67,15 +68,13 @@ export class EstrategiasService {
       }
       return {
         resultado: undefined,
-        auditoria: {
-          accion: 'actualizar',
-          tabla: 'proyecto_docente',
-          idRegistro: id,
-          anterior: {
-            estrategias: anteriores.map((fila) => fila.descripcion ?? ''),
-          },
-          nuevo: { estrategias },
-        },
+        // Solo si la lista cambió: guardar lo mismo no audita ni mueve la fecha.
+        auditoria: auditarCambios(
+          'proyecto_docente',
+          id,
+          { estrategias: anteriores.map((fila) => fila.descripcion ?? '') },
+          { estrategias },
+        ),
       };
     });
     // Fuera de la transacción: el catálogo recorre el programa y no debe alargar el bloqueo.
