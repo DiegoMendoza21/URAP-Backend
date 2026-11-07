@@ -337,10 +337,19 @@ describe('Calendario de sesiones (e2e) · RF-19, HU-08-02 y HU-08-03', () => {
 
       expect(respuesta.status).toBe(200);
       expect(respuesta.body.bloques).toEqual(lunesYMiercoles.bloques);
+      // RF-29 con AuditoriaService: el usuario y la IP salen del contexto de la petición.
       const auditoria = await prisma.auditoria.findFirst({
-        where: { tabla_afectada: 'horario_curso', id_registro: proyecto },
+        where: {
+          accion: 'actualizar',
+          tabla_afectada: 'proyecto_docente',
+          id_registro: proyecto,
+        },
       });
       expect(auditoria?.id_usuario).toBe(usuarios.docente);
+      expect(auditoria?.ip).toBeTruthy();
+      expect(auditoria?.valor_nuevo).toEqual({
+        horario: lunesYMiercoles.bloques,
+      });
     });
 
     it.each([

@@ -23,6 +23,8 @@ export const PARAMETRO = {
   archivoTiposPermitidos: 'archivo_tipos_permitidos',
   /** RF-24: extensiones permitidas para las evidencias fotográficas. */
   evidenciaTiposPermitidos: 'evidencia_tipos_permitidos',
+  /** RF-25, p5: filas máximas de una exportación del tablero o de los reportes. */
+  reporteExportacionFilasMaxima: 'reporte_exportacion_filas_maxima',
 } as const;
 
 export type ClaveParametro = (typeof PARAMETRO)[keyof typeof PARAMETRO];
