@@ -19,6 +19,7 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { AuditarConsulta } from '../auditoria/auditar-consulta.decorator.js';
 import { Roles } from '../auth/decoradores/roles.decorator.js';
 import { UsuarioActual } from '../auth/decoradores/usuario-actual.decorator.js';
 import { ROL } from '../auth/roles.js';
@@ -116,6 +117,8 @@ export class MedicionesController {
 
   @Get('mediciones/:id')
   @Roles(ROL.docente, ROL.liderRap, ROL.departamento)
+  // Valoraciones individuales (Ley 1581): cada consulta queda en auditoría con usuario e IP.
+  @AuditarConsulta('medicion_rap')
   @ApiOperation({
     summary: 'Hoja de valoración de la medición (RF-30, p3 a p6)',
     description:
