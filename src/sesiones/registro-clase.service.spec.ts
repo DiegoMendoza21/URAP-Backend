@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import type { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import type { ParametrosService } from '../common/parametros/parametros.service.js';
@@ -123,7 +124,6 @@ describe('RegistroClaseService', () => {
     sesion_clase: { findFirst: vi.fn() },
     contenido_programatico: { findMany: vi.fn() },
     matricula: { findMany: vi.fn(), count: vi.fn() },
-    auditoria: { create: vi.fn() },
     $transaction: vi.fn(
       (trabajo: (cliente: typeof tx) => unknown, _opciones?: unknown) =>
         trabajo(tx),
@@ -133,11 +133,13 @@ describe('RegistroClaseService', () => {
     proyectoVisible: vi.fn(),
     tienePermisoEdicion: vi.fn(),
   };
-  const parametros = { entero: vi.fn() };
+  const parametros = { leerEntero: vi.fn() };
+  const auditoria = { registrar: vi.fn() };
   const servicio = new RegistroClaseService(
     prisma as unknown as PrismaService,
     sesiones as unknown as SesionesService,
     parametros as unknown as ParametrosService,
+    auditoria as unknown as AuditoriaService,
   );
 
   const registrar = (datos: Record<string, unknown>) =>
@@ -154,7 +156,7 @@ describe('RegistroClaseService', () => {
     vi.setSystemTime(new Date('2026-11-07T15:00:00Z'));
     sesiones.proyectoVisible.mockResolvedValue(proyecto());
     sesiones.tienePermisoEdicion.mockResolvedValue(true);
-    parametros.entero.mockResolvedValue(2);
+    parametros.leerEntero.mockResolvedValue(2);
     tx.sesion_clase.findFirst.mockResolvedValue(sesionEnTransaccion());
     tx.contenido_programatico.findMany.mockImplementation(
       ({ where }: { where: { id: { in: number[] } } }) =>
@@ -180,7 +182,7 @@ describe('RegistroClaseService', () => {
       },
     ]);
     prisma.matricula.count.mockResolvedValue(3);
-    prisma.auditoria.create.mockResolvedValue({});
+    auditoria.registrar.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -214,12 +216,30 @@ describe('RegistroClaseService', () => {
           fecha_registro: expect.any(Date),
         }),
       });
-      expect(prisma.auditoria.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          accion: 'registrar',
-          tabla_afectada: 'sesion_clase',
-          id_registro: 500,
-        }),
+      // RF-29: solo lo que cambió. De las observaciones y los ausentes (Ley 1581), ni el
+      // texto ni quiénes: que cambiaron y cuántos.
+      expect(auditoria.registrar).toHaveBeenCalledTimes(2);
+      expect(auditoria.registrar).toHaveBeenCalledWith({
+        accion: 'actualizar',
+        tablaAfectada: 'sesion_clase',
+        idRegistro: 500,
+        valorAnterior: {
+          estado: 'programada',
+          temas: [],
+          observaciones: '[omitido]',
+        },
+        valorNuevo: {
+          estado: 'registrada',
+          temas: [10, 11],
+          observaciones: '[omitido]',
+        },
+      });
+      expect(auditoria.registrar).toHaveBeenCalledWith({
+        accion: 'actualizar',
+        tablaAfectada: 'inasistencia',
+        idRegistro: 500,
+        valorAnterior: { ausentes: 0 },
+        valorNuevo: { ausentes: 1, marcados: 1, desmarcados: 0 },
       });
     });
 
@@ -255,9 +275,38 @@ describe('RegistroClaseService', () => {
           id_registrado_por: 7,
         }),
       });
-      expect(prisma.auditoria.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({ accion: 'actualizar' }),
+      expect(auditoria.registrar).toHaveBeenCalledWith({
+        accion: 'actualizar',
+        tablaAfectada: 'sesion_clase',
+        idRegistro: 500,
+        valorAnterior: { temas: [10] },
+        valorNuevo: { temas: [11] },
       });
+      expect(auditoria.registrar).toHaveBeenCalledWith({
+        accion: 'actualizar',
+        tablaAfectada: 'inasistencia',
+        idRegistro: 500,
+        valorAnterior: { ausentes: 2 },
+        valorNuevo: { ausentes: 1, marcados: 0, desmarcados: 1 },
+      });
+    });
+
+    it('no audita si se guarda el mismo registro', async () => {
+      tx.sesion_clase.findFirst.mockResolvedValue(
+        sesionEnTransaccion({
+          estado: 'registrada',
+          fecha_registro: new Date('2026-11-04T21:00:00Z'),
+          id_registrado_por: 7,
+          sesion_tema: [{ id_contenido: 10 }],
+          inasistencia: [{ id_matricula: 101 }],
+          observaciones: 'Taller',
+        }),
+      );
+
+      await registrar({ idsContenido: [10], ausentes: [101] });
+
+      expect(tx.sesion_clase.update).toHaveBeenCalled();
+      expect(auditoria.registrar).not.toHaveBeenCalled();
     });
 
     it('sin el campo de observaciones conserva las anteriores; vacío las borra', async () => {
@@ -452,10 +501,12 @@ describe('RegistroClaseService', () => {
         horaInicio: '14:00',
         numeroAusentes: 1,
       });
-      // Ver la lista del curso es una consulta de datos personales.
-      expect(prisma.auditoria.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({ accion: 'consultar_asistencia' }),
-      });
+      // La consulta la audita @AuditarConsulta en el controlador, no el servicio.
+      expect(auditoria.registrar).not.toHaveBeenCalled();
+      expect(parametros.leerEntero).toHaveBeenCalledWith(
+        'alerta_dias_anticipacion',
+        { minimo: 0, maximo: 365 },
+      );
     });
 
     it('a quien solo consulta no le muestra ausentes ni observaciones (Ley 1581)', async () => {
@@ -478,7 +529,6 @@ describe('RegistroClaseService', () => {
         numeroAusentes: 1,
       });
       expect(prisma.matricula.findMany).not.toHaveBeenCalled();
-      expect(prisma.auditoria.create).not.toHaveBeenCalled();
     });
 
     it('explica por qué no se puede registrar: fecha futura o sin contenido programático', async () => {
@@ -509,7 +559,6 @@ describe('RegistroClaseService', () => {
         totalMatriculados: 0,
         estudiantes: [],
       });
-      expect(prisma.auditoria.create).not.toHaveBeenCalled();
     });
   });
 });

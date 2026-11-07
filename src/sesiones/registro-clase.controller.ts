@@ -17,13 +17,17 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { AuditarConsulta } from '../auditoria/auditar-consulta.decorator.js';
 import { Roles } from '../auth/decoradores/roles.decorator.js';
 import { UsuarioActual } from '../auth/decoradores/usuario-actual.decorator.js';
 import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import { RespuestaErrorDto } from '../common/dto/respuesta-error.dto.js';
 import { DetalleSesionDto, RegistrarSesionDto } from './dto/registro.dto.js';
-import { RegistroClaseService } from './registro-clase.service.js';
+import {
+  RegistroClaseService,
+  TABLA_AUDITORIA_INASISTENCIA,
+} from './registro-clase.service.js';
 
 const NO_VISIBLE = {
   type: RespuestaErrorDto,
@@ -42,6 +46,8 @@ export class RegistroClaseController {
   constructor(private readonly registro: RegistroClaseService) {}
 
   @Get()
+  // Trae la lista del curso con los ausentes (datos personales, Ley 1581): RF-29, NFR-020.
+  @AuditarConsulta(TABLA_AUDITORIA_INASISTENCIA, 'idSesion')
   @Roles(
     ROL.administrador,
     ROL.departamento,

@@ -3,15 +3,23 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
-  Logger,
   NotFoundException,
 } from '@nestjs/common';
+import {
+  AuditoriaService,
+  type EventoAuditoria,
+  VALOR_OMITIDO,
+} from '../auditoria/auditoria.service.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import { ParametrosService } from '../common/parametros/parametros.service.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { ESTADO_MATRICULA } from '../estudiantes/estados.js';
 import type { Prisma } from '../generated/prisma/client.js';
-import { fechaDeHoy, PARAMETRO_UMBRAL_ALERTA } from './alertas.js';
+import {
+  fechaDeHoy,
+  PARAMETRO_UMBRAL_ALERTA,
+  RANGO_UMBRAL_ALERTA,
+} from './alertas.js';
 import { aTextoFecha } from './calendario.js';
 import type {
   DetalleSesionDto,
@@ -22,7 +30,6 @@ import {
   aSesion,
   contextoDeAlerta,
   ESTADO_REGISTRADA,
-  esDiligenciada,
   horasDelHorario,
   INCLUIR_SESION,
   type ProyectoConHorario,
@@ -83,11 +90,20 @@ type SesionRegistrada = Prisma.sesion_claseGetPayload<{
   include: typeof INCLUIR_REGISTRO;
 }>;
 
-interface ContenidoDelRegistro {
+/** Lo que tiene registrado la sesión, antes o después de guardar. */
+export interface ContenidoDelRegistro {
+  estado: string | null;
   temas: number[];
   ausentes: number[];
   observaciones: string | null;
 }
+
+/**
+ * Tablas con que se audita el registro (RF-29). La consulta de la sesión se audita como
+ * `consulta_sensible` sobre `inasistencia` (en el controlador), porque trae la lista del curso.
+ */
+export const TABLA_AUDITORIA_CLASE = 'sesion_clase';
+export const TABLA_AUDITORIA_INASISTENCIA = 'inasistencia';
 
 /**
  * Registro de la clase desarrollada (RF-20, HU-08-04) con sus estudiantes ausentes (RF-22,
@@ -101,12 +117,11 @@ interface ContenidoDelRegistro {
  */
 @Injectable()
 export class RegistroClaseService {
-  private readonly logger = new Logger(RegistroClaseService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly sesiones: SesionesService,
     private readonly parametros: ParametrosService,
+    private readonly auditoria: AuditoriaService,
   ) {}
 
   /** RF-20, p2 y p3: la sesión con la lista de temas y, para quien registra, la del curso. */
@@ -119,21 +134,9 @@ export class RegistroClaseService {
     const [sesion, puedeVerDatos, umbralDias] = await Promise.all([
       this.buscarSesion(proyecto.id, idSesion),
       this.sesiones.tienePermisoEdicion(usuario, proyecto),
-      this.parametros.entero(PARAMETRO_UMBRAL_ALERTA),
+      this.parametros.leerEntero(PARAMETRO_UMBRAL_ALERTA, RANGO_UMBRAL_ALERTA),
     ]);
-    const detalle = await this.construirDetalle(
-      proyecto,
-      sesion,
-      puedeVerDatos,
-      umbralDias,
-    );
-    if (detalle.asistencia?.listaCargada) {
-      // Consulta de datos personales: queda en la auditoría (CLAUDE.md, «Auditoría»).
-      await this.auditar(usuario.id, 'consultar_asistencia', sesion.id, null, {
-        idProyecto: proyecto.id,
-      });
-    }
-    return detalle;
+    return this.construirDetalle(proyecto, sesion, puedeVerDatos, umbralDias);
   }
 
   /**
@@ -157,7 +160,7 @@ export class RegistroClaseService {
     const hoy = fechaDeHoy();
     const ausentes = datos.ausentes ?? [];
 
-    const { anterior, nuevo, primeraVez } = await this.prisma.$transaction(
+    const { anterior, nuevo } = await this.prisma.$transaction(
       async (tx) => {
         // Dos guardados a la vez de la misma sesión (dos pestañas, un doble toque) van de a uno.
         await tx.$queryRaw`SELECT id FROM sesion_clase WHERE id = ${idSesion} FOR UPDATE`;
@@ -302,13 +305,14 @@ export class RegistroClaseService {
           },
         });
         return {
-          primeraVez: !esDiligenciada(sesion),
           anterior: {
+            estado: sesion.estado,
             temas: [...temasActuales],
             ausentes: [...ausentesActuales],
             observaciones: sesion.observaciones,
           } satisfies ContenidoDelRegistro,
           nuevo: {
+            estado: ESTADO_REGISTRADA,
             temas,
             ausentes,
             observaciones,
@@ -318,16 +322,16 @@ export class RegistroClaseService {
       { timeout: 10_000 },
     );
 
-    await this.auditar(
-      usuario.id,
-      primeraVez ? 'registrar' : 'actualizar',
-      idSesion,
-      anterior,
-      nuevo,
+    // RF-29: después de confirmar y solo con lo que cambió; el usuario y la IP salen del
+    // contexto de la petición. Los dos eventos son independientes: van a la vez.
+    await Promise.all(
+      eventosDelRegistro(idSesion, anterior, nuevo).map((evento) =>
+        this.auditoria.registrar(evento),
+      ),
     );
     const [sesion, umbralDias] = await Promise.all([
       this.buscarSesion(proyecto.id, idSesion),
-      this.parametros.entero(PARAMETRO_UMBRAL_ALERTA),
+      this.parametros.leerEntero(PARAMETRO_UMBRAL_ALERTA, RANGO_UMBRAL_ALERTA),
     ]);
     return this.construirDetalle(proyecto, sesion, true, umbralDias);
   }
@@ -457,35 +461,6 @@ export class RegistroClaseService {
         : null,
     };
   }
-
-  /** RF-29. Un fallo al auditar no deshace la operación (CLAUDE.md, «Auditoría»). */
-  private async auditar(
-    idUsuario: number,
-    accion: string,
-    idSesion: number,
-    anterior: ContenidoDelRegistro | null,
-    nuevo: ContenidoDelRegistro | Prisma.InputJsonObject,
-  ): Promise<void> {
-    try {
-      await this.prisma.auditoria.create({
-        data: {
-          id_usuario: idUsuario,
-          accion,
-          tabla_afectada: 'sesion_clase',
-          id_registro: idSesion,
-          valor_anterior: (anterior ?? undefined) as
-            Prisma.InputJsonValue | undefined,
-          valor_nuevo: nuevo as unknown as Prisma.InputJsonValue,
-          fecha: new Date(),
-        },
-      });
-    } catch (error) {
-      this.logger.error(
-        `No se pudo auditar «${accion}» en la sesión ${idSesion}.`,
-        error instanceof Error ? error.stack : String(error),
-      );
-    }
-  }
 }
 
 /** Precondiciones del proyecto: período abierto y proyecto aprobado o en ejecución (RF-20). */
@@ -517,4 +492,72 @@ function motivoDeLaSesionNoRegistrable(
     return MENSAJE_FECHA_FUTURA;
   }
   return null;
+}
+
+/**
+ * RF-29: los eventos de auditoría de un registro, solo con lo que cambió. Ausentes y
+ * observaciones son datos personales (Ley 1581): de los ausentes van los conteos, nunca quiénes;
+ * de las observaciones, que cambiaron, no su texto.
+ */
+export function eventosDelRegistro(
+  idSesion: number,
+  anterior: ContenidoDelRegistro,
+  nuevo: ContenidoDelRegistro,
+): EventoAuditoria[] {
+  const eventos: EventoAuditoria[] = [];
+
+  const clase = cambios({
+    estado: [anterior.estado, nuevo.estado],
+    temas: [ordenados(anterior.temas), ordenados(nuevo.temas)],
+  });
+  if (anterior.observaciones !== nuevo.observaciones) {
+    clase.anterior.observaciones = VALOR_OMITIDO;
+    clase.nuevo.observaciones = VALOR_OMITIDO;
+  }
+  if (Object.keys(clase.nuevo).length > 0) {
+    eventos.push({
+      accion: 'actualizar',
+      tablaAfectada: TABLA_AUDITORIA_CLASE,
+      idRegistro: idSesion,
+      valorAnterior: clase.anterior,
+      valorNuevo: clase.nuevo,
+    });
+  }
+
+  const antes = new Set(anterior.ausentes);
+  const despues = new Set(nuevo.ausentes);
+  const marcados = [...despues].filter((id) => !antes.has(id)).length;
+  const desmarcados = [...antes].filter((id) => !despues.has(id)).length;
+  if (marcados + desmarcados > 0) {
+    eventos.push({
+      accion: 'actualizar',
+      tablaAfectada: TABLA_AUDITORIA_INASISTENCIA,
+      idRegistro: idSesion,
+      valorAnterior: { ausentes: antes.size },
+      valorNuevo: { ausentes: despues.size, marcados, desmarcados },
+    });
+  }
+  return eventos;
+}
+
+type ValorAuditado = Prisma.InputJsonValue | null;
+
+/** Los campos cuyo valor cambió, con el valor anterior y el nuevo. */
+function cambios(campos: Record<string, [ValorAuditado, ValorAuditado]>): {
+  anterior: Record<string, ValorAuditado>;
+  nuevo: Record<string, ValorAuditado>;
+} {
+  const anterior: Record<string, ValorAuditado> = {};
+  const nuevo: Record<string, ValorAuditado> = {};
+  for (const [campo, [antes, despues]] of Object.entries(campos)) {
+    if (JSON.stringify(antes) !== JSON.stringify(despues)) {
+      anterior[campo] = antes;
+      nuevo[campo] = despues;
+    }
+  }
+  return { anterior, nuevo };
+}
+
+function ordenados(ids: number[]): number[] {
+  return [...new Set(ids)].sort((a, b) => a - b);
 }

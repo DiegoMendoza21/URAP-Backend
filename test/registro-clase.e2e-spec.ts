@@ -451,6 +451,17 @@ describe('Registro de clase (e2e) · RF-20 y RF-22, HU-08-04 y HU-09-02', () => 
         respuesta.body.asistencia.estudiantes as Array<{ idMatricula: number }>
       ).map((estudiante) => estudiante.idMatricula),
     ).toEqual(matriculas);
+    // La lista del curso es de datos personales: la consulta queda en auditoría (RF-29).
+    expect(
+      await prisma.auditoria.findFirst({
+        where: {
+          accion: 'consulta_sensible',
+          tabla_afectada: 'inasistencia',
+          id_registro: sesion.id,
+          id_usuario: usuarios.docente,
+        },
+      }),
+    ).toMatchObject({ ip: expect.any(String) });
   });
 
   it('registra la clase con temas, ausentes y observaciones, y deja de salir vencida (RF-23)', async () => {
@@ -517,15 +528,38 @@ describe('Registro de clase (e2e) · RF-20 y RF-22, HU-08-04 y HU-09-02', () => 
     });
     expect(despues.fecha_registro).toEqual(antes.fecha_registro);
     expect(despues.id_registrado_por).toBe(usuarios.docente);
-    expect(
-      await prisma.auditoria.count({
-        where: {
-          tabla_afectada: 'sesion_clase',
-          id_registro: sesion.id,
-          accion: { in: ['registrar', 'actualizar'] },
-        },
-      }),
-    ).toBe(2);
+    // RF-29: el registro y la corrección, cada uno con lo que cambió. De las observaciones y
+    // los ausentes (Ley 1581), ni el texto ni quiénes.
+    const clase = await prisma.auditoria.findMany({
+      where: {
+        accion: 'actualizar',
+        tabla_afectada: 'sesion_clase',
+        id_registro: sesion.id,
+      },
+      orderBy: { id: 'asc' },
+    });
+    expect(clase).toHaveLength(2);
+    expect(clase[1]).toMatchObject({
+      id_usuario: usuarios.docente,
+      ip: expect.any(String),
+      valor_anterior: {
+        temas: [contenido[1], contenido[2]],
+        observaciones: '[omitido]',
+      },
+      valor_nuevo: { temas: [contenido[3]], observaciones: '[omitido]' },
+    });
+    const inasistencias = await prisma.auditoria.findMany({
+      where: {
+        accion: 'actualizar',
+        tabla_afectada: 'inasistencia',
+        id_registro: sesion.id,
+      },
+      orderBy: { id: 'asc' },
+    });
+    expect(inasistencias.map((fila) => fila.valor_nuevo)).toEqual([
+      { ausentes: 1, marcados: 1, desmarcados: 0 },
+      { ausentes: 0, marcados: 0, desmarcados: 1 },
+    ]);
   });
 
   it('no registra una sesión de fecha futura (RF-20, excepción p6)', async () => {
