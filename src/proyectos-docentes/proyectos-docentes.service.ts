@@ -134,6 +134,10 @@ export class ProyectosDocentesService {
     const creado = await this.prisma.$transaction(async (tx) => {
       // p6 y HU-05-06: un curso es asignatura + período + grupo, sin importar el docente. Se
       // comprueba aquí porque el índice único de MySQL no impide duplicados con grupo nulo.
+      // Antes se bloquea la fila de la asignatura: en REPEATABLE READ dos creaciones
+      // simultáneas (un doble clic) leerían las dos «no existe» y crearían dos proyectos. Con
+      // el bloqueo, las creaciones de una misma asignatura se atienden de a una.
+      await tx.$queryRaw`SELECT id FROM asignatura WHERE id = ${asignatura.id} FOR UPDATE`;
       const existente = await tx.proyecto_docente.findFirst({
         where: { id_asignatura: asignatura.id, id_periodo: periodo.id, grupo },
         select: { id: true },

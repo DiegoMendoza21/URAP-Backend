@@ -533,6 +533,32 @@ describe('Proyectos docentes (e2e) · RF-08, HU-05-01 a HU-05-03', () => {
         },
       });
     });
+    it('ante creaciones simultáneas del mismo curso sin grupo, crea solo una (p6)', async () => {
+      // Un doble clic en «Crear»: sin bloqueo, en REPEATABLE READ todas leían «no existe».
+      const asignatura = await crearAsignatura(programaA, 'SIM', {
+        creditos: 2,
+        horas_tde: 32,
+        horas_tdp: 0,
+        horas_ti: 64,
+      });
+      const datos = {
+        idAsignatura: asignatura,
+        idsRap: [rapA1],
+        docentes: [{ idUsuario: usuarios.docente1, responsable: true }],
+      };
+
+      const respuestas = await Promise.all(
+        Array.from({ length: 5 }, () =>
+          como('departamento').post('/proyectos-docentes', datos),
+        ),
+      );
+
+      const estados = respuestas.map((respuesta) => respuesta.status).sort();
+      expect(estados).toEqual([201, 409, 409, 409, 409]);
+      await expect(
+        prisma.proyecto_docente.count({ where: { id_asignatura: asignatura } }),
+      ).resolves.toBe(1);
+    });
   });
 
   describe('bandeja', () => {

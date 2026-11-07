@@ -113,6 +113,7 @@ function proyectoCreado(data: Record<string, any>) {
 
 describe('ProyectosDocentesService', () => {
   const tx = {
+    $queryRaw: vi.fn(),
     proyecto_docente: { findFirst: vi.fn(), create: vi.fn() },
   };
   const prisma = {
@@ -274,6 +275,28 @@ describe('ProyectosDocentesService', () => {
         }),
       );
       expect(tx.proyecto_docente.create).not.toHaveBeenCalled();
+    });
+
+    it('bloquea la asignatura antes de comprobar el duplicado, para atender de a una', async () => {
+      const orden: string[] = [];
+      tx.$queryRaw.mockImplementation(() => {
+        orden.push('bloqueo');
+        return Promise.resolve([]);
+      });
+      tx.proyecto_docente.findFirst.mockImplementation(() => {
+        orden.push('comprobación');
+        return Promise.resolve(null);
+      });
+
+      await servicio.crear(usuarioDepartamento, datosValidos());
+
+      expect(orden).toEqual(['bloqueo', 'comprobación']);
+      const [sql, idAsignatura] = tx.$queryRaw.mock.calls[0] as [
+        TemplateStringsArray,
+        number,
+      ];
+      expect(sql.join('?')).toMatch(/FROM asignatura WHERE id = \? FOR UPDATE/);
+      expect(idAsignatura).toBe(asignatura.id);
     });
 
     it('registra la creación en auditoría', async () => {
