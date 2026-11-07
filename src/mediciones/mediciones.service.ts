@@ -453,9 +453,22 @@ export class MedicionesService {
       vistos.add(idIndicador);
     }
 
-    await this.prisma.$transaction(
+    const anteriores = await this.prisma.$transaction(
       async (tx) => {
         await this.bloquearBorrador(tx, idMedicion);
+        // Con la fila bloqueada: los valores que se reemplazan, para la auditoría.
+        const previos = await tx.medicion_indicador.findMany({
+          where: {
+            id_medicion: idMedicion,
+            id_indicador: { in: indicadores.map((fila) => fila.idIndicador) },
+          },
+          select: {
+            id_indicador: true,
+            instrumento: true,
+            descripcion_instrumento: true,
+          },
+          orderBy: { id_indicador: 'asc' },
+        });
         for (const indicador of indicadores) {
           await tx.medicion_indicador.update({
             where: { id: porIndicador.get(indicador.idIndicador) },
@@ -469,6 +482,7 @@ export class MedicionesService {
           where: { id: idMedicion },
           data: { updated_at: new Date() },
         });
+        return previos;
       },
       { timeout: TIEMPO_MAXIMO_GUARDADO_MS },
     );
@@ -477,11 +491,21 @@ export class MedicionesService {
       accion: 'actualizar',
       tablaAfectada: 'medicion_rap',
       idRegistro: idMedicion,
-      valorNuevo: {
-        instrumentos: indicadores.map(({ idIndicador, instrumento }) => ({
-          idIndicador,
-          instrumento,
+      valorAnterior: {
+        instrumentos: anteriores.map((fila) => ({
+          idIndicador: fila.id_indicador,
+          instrumento: fila.instrumento,
+          descripcionInstrumento: fila.descripcion_instrumento,
         })),
+      },
+      valorNuevo: {
+        instrumentos: indicadores.map(
+          ({ idIndicador, instrumento, descripcionInstrumento }) => ({
+            idIndicador,
+            instrumento,
+            descripcionInstrumento: descripcionInstrumento ?? null,
+          }),
+        ),
       },
     });
     return this.detalle(usuario, idMedicion, contexto);

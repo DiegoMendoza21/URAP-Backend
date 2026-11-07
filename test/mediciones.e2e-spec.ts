@@ -711,7 +711,12 @@ describe('Medición de RAP (e2e) · RF-30, HU-11-01 a HU-11-03', () => {
           tabla_afectada: 'medicion_rap',
           id_registro: idMedicion,
         },
-        select: { accion: true, valor_nuevo: true, ip: true },
+        select: {
+          accion: true,
+          valor_anterior: true,
+          valor_nuevo: true,
+          ip: true,
+        },
         orderBy: { id: 'asc' },
       });
       expect(cambios.map((fila) => fila.accion)).toEqual(
@@ -723,6 +728,14 @@ describe('Medición de RAP (e2e) · RF-30, HU-11-01 a HU-11-03', () => {
         valoraciones: { registradas: 136, borradas: 0 },
       });
       expect(JSON.stringify(cambios)).not.toContain('idMatricula');
+      // Los instrumentos guardan el valor anterior y el nuevo, solo de lo que cambió.
+      expect(cambios.map((fila) => fila.valor_anterior)).toContainEqual({
+        instrumentos: idsIndicador.map((idIndicador) => ({
+          idIndicador,
+          instrumento: null,
+          descripcionInstrumento: null,
+        })),
+      });
     });
 
     it('una medición cerrada no se puede modificar (excepción de p7)', async () => {
