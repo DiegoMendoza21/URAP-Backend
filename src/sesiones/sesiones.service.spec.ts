@@ -18,6 +18,7 @@ import {
   MENSAJE_PERIODO_SIN_FECHAS,
   MENSAJE_SIN_HORARIO,
   MENSAJE_SOLO_DOCENTE_ASIGNADO,
+  mensajeSemanasDeMas,
   mensajeSinFestivos,
   SesionesService,
 } from './sesiones.service.js';
@@ -461,6 +462,23 @@ describe('SesionesService', () => {
           },
         },
       });
+    });
+
+    it('avisa si el número de semanas deja semanas por fuera', async () => {
+      // Tres semanas calendario, pero el período dice dos y no hay receso cargado.
+      prisma.proyecto_docente.findFirst.mockResolvedValue(
+        proyecto({
+          periodo_academico: {
+            ...proyecto().periodo_academico,
+            numero_semanas: 2,
+          },
+        }),
+      );
+
+      const resultado = await servicio.generarCalendario(docente, 99);
+
+      expect(resultado.creadas).toBe(2);
+      expect(resultado.advertencias).toEqual([mensajeSemanasDeMas(3, 2)]);
     });
 
     it('exige el horario del curso (precondición)', async () => {

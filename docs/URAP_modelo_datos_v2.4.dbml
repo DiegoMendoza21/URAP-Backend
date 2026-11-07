@@ -205,7 +205,8 @@ Table dia_festivo {
   fecha date
   nombre varchar
   anio integer
-  origen varchar // ley | institucional | ajuste_manual
+  origen varchar // ley | institucional | ajuste_manual. Una semana de receso se carga
+                 // de lunes a sabado: asi RF-19 no la numera ni le genera sesiones
   created_at datetime [default: `now()`]
 
   indexes {

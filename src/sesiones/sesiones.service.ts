@@ -37,6 +37,7 @@ import {
   NOMBRES_DIA_SEMANA,
   planificarSesiones,
   sabadoDe,
+  semanasDeClase,
   semanasDeReceso,
 } from './calendario.js';
 import type { ConsultarCalendarioDto } from './dto/consultas.dto.js';
@@ -87,6 +88,18 @@ export function mensajeSinFestivos(anio: number): string {
   return (
     `El año ${anio} no tiene días festivos parametrizados: el calendario se generó sin ` +
     'marcarlos y se avisó al administrador.'
+  );
+}
+
+export function mensajeSemanasDeMas(
+  semanasEntreFechas: number,
+  numeroSemanas: number,
+): string {
+  return (
+    `Entre las fechas del período hay ${semanasEntreFechas} semanas de clase, pero está ` +
+    `configurado con ${numeroSemanas}: no se generaron sesiones después de la semana ` +
+    `${numeroSemanas}. Revise con el administrador las fechas del período, su número de semanas ` +
+    'o la carga de la semana de receso.'
   );
 }
 
@@ -216,9 +229,10 @@ export class SesionesService {
   ): Promise<CalendarioSesionesDto> {
     const proyecto = await this.proyectoVisible(usuario, idProyecto);
     const donde = { id_proyecto_docente: proyecto.id, ...SESION_VIGENTE };
+    const periodo = proyecto.periodo_academico;
     // Una sola consulta: un curso tiene a lo sumo unas cien sesiones, y el resumen de alertas
     // necesita todas aunque se pida una página.
-    const [todas, puedeEditar, umbralDias] = await Promise.all([
+    const [todas, puedeEditar, umbralDias, diasSinClase] = await Promise.all([
       this.prisma.sesion_clase.findMany({
         where: donde,
         include: { tipo_sesion: true, dia_festivo: true },
@@ -226,10 +240,12 @@ export class SesionesService {
       }),
       this.puedeEditar(usuario, proyecto),
       this.parametros.entero(PARAMETRO_UMBRAL_ALERTA),
+      periodo?.fecha_inicio && periodo.fecha_fin
+        ? this.diasSinClase(periodo.fecha_inicio, periodo.fecha_fin)
+        : new Set<string>(),
     ]);
     const total = todas.length;
     const sesiones = todas.slice((pagina - 1) * tamano, pagina * tamano);
-    const periodo = proyecto.periodo_academico;
     const hoy = fechaDeHoy();
     const contexto: ContextoAlerta = {
       hoy,
@@ -241,11 +257,7 @@ export class SesionesService {
     };
     const recesos =
       periodo?.fecha_inicio && periodo.fecha_fin
-        ? semanasDeReceso(
-            periodo.fecha_inicio,
-            periodo.fecha_fin,
-            await this.diasSinClase(periodo.fecha_inicio, periodo.fecha_fin),
-          )
+        ? semanasDeReceso(periodo.fecha_inicio, periodo.fecha_fin, diasSinClase)
         : [];
     const advertencias =
       total > 0 && periodo?.fecha_inicio && periodo.fecha_fin
@@ -591,6 +603,21 @@ export class SesionesService {
     const advertencias = aniosSinFestivos.map(mensajeSinFestivos);
     if (plan.length === 0) {
       advertencias.push(mensajeSinSesiones(dias));
+    }
+    // Sin el receso cargado, o con un número de semanas desactualizado, el tope de semanas
+    // deja por fuera las últimas sin que nadie lo note: se avisa.
+    const semanasEntreFechas = semanasDeClase(
+      fechaInicio,
+      fechaFin,
+      diasSinClase,
+    );
+    if (
+      periodo.numero_semanas !== null &&
+      semanasEntreFechas > periodo.numero_semanas
+    ) {
+      advertencias.push(
+        mensajeSemanasDeMas(semanasEntreFechas, periodo.numero_semanas),
+      );
     }
     await this.auditar(usuario.id, {
       accion: 'generar',

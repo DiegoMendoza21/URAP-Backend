@@ -5,6 +5,7 @@ import {
   aTextoHora,
   diaSemanaDe,
   planificarSesiones,
+  semanasDeClase,
   semanasDeReceso,
 } from './calendario.js';
 
@@ -188,6 +189,23 @@ describe('calendario de sesiones (RF-19)', () => {
 
       expect(sesiones.find((s) => s.fecha === '2026-08-17')?.semana).toBe(3);
       expect(sesiones.find((s) => s.fecha === '2026-08-24')?.semana).toBe(4);
+    });
+
+    it('cuenta 16 semanas de clase con el receso y 17 sin él', () => {
+      expect(
+        semanasDeClase(
+          periodo2026_2.fechaInicio,
+          periodo2026_2.fechaFin,
+          diasSinClase,
+        ),
+      ).toBe(16);
+      expect(
+        semanasDeClase(
+          periodo2026_2.fechaInicio,
+          periodo2026_2.fechaFin,
+          new Set(festivosLey),
+        ),
+      ).toBe(17);
     });
 
     it('lista la semana de receso del período', () => {
