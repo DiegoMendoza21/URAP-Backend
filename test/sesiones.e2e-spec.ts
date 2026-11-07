@@ -25,6 +25,8 @@ import {
 // propios en 2031 y 2032, años que el seed no carga, y crea los catálogos que falten.
 describe('Calendario de sesiones (e2e) · RF-19, HU-08-02 y HU-08-03', () => {
   const sufijo = `${Date.now()}`;
+  /** Un margen de un minuto cubre la diferencia de reloj con MySQL y el redondeo a segundos. */
+  const inicioPrueba = new Date(Date.now() - 60_000);
   const contrasena = 'Clave-e2e-de-prueba-1';
   /** Año sin festivos parametrizados (excepción p3). */
   const ANIO_SIN_FESTIVOS = 2031;
@@ -260,8 +262,17 @@ describe('Calendario de sesiones (e2e) · RF-19, HU-08-02 y HU-08-03', () => {
       await prisma.auditoria.deleteMany({
         where: { id_usuario: { in: creados.usuarios } },
       });
+      // Avisos de años sin festivos (RF-19, p3) que generó esta prueba: los de sus usuarios y,
+      // para los administradores que ya existían, solo los creados durante la prueba. Sin
+      // festivos cargados (la CI no corre el seed), también hay avisos del año en curso.
       await prisma.notificacion.deleteMany({
-        where: { entidad: 'dia_festivo', id_entidad: ANIO_SIN_FESTIVOS },
+        where: {
+          entidad: 'dia_festivo',
+          OR: [
+            { id_usuario: { in: creados.usuarios } },
+            { created_at: { gte: inicioPrueba } },
+          ],
+        },
       });
       await prisma.sesion_clase.deleteMany({ where: deProyectos });
       await prisma.horario_curso.deleteMany({ where: deProyectos });
