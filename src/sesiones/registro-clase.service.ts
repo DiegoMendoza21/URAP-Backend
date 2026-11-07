@@ -15,6 +15,7 @@ import { ParametrosService } from '../common/parametros/parametros.service.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { ESTADO_MATRICULA } from '../estudiantes/estados.js';
 import type { Prisma } from '../generated/prisma/client.js';
+import { soloCambios } from '../proyectos-docentes/edicion-proyecto.service.js';
 import {
   fechaDeHoy,
   PARAMETRO_UMBRAL_ALERTA,
@@ -506,15 +507,23 @@ export function eventosDelRegistro(
 ): EventoAuditoria[] {
   const eventos: EventoAuditoria[] = [];
 
-  const clase = cambios({
-    estado: [anterior.estado, nuevo.estado],
-    temas: [ordenados(anterior.temas), ordenados(nuevo.temas)],
-  });
-  if (anterior.observaciones !== nuevo.observaciones) {
-    clase.anterior.observaciones = VALOR_OMITIDO;
-    clase.nuevo.observaciones = VALOR_OMITIDO;
-  }
-  if (Object.keys(clase.nuevo).length > 0) {
+  const clase = soloCambios(
+    {
+      estado: anterior.estado,
+      temas: ordenados(anterior.temas),
+      observaciones: anterior.observaciones,
+    },
+    {
+      estado: nuevo.estado,
+      temas: ordenados(nuevo.temas),
+      observaciones: nuevo.observaciones,
+    },
+  );
+  if (clase) {
+    if ('observaciones' in clase.nuevo) {
+      clase.anterior.observaciones = VALOR_OMITIDO;
+      clase.nuevo.observaciones = VALOR_OMITIDO;
+    }
     eventos.push({
       accion: 'actualizar',
       tablaAfectada: TABLA_AUDITORIA_CLASE,
@@ -540,24 +549,7 @@ export function eventosDelRegistro(
   return eventos;
 }
 
-type ValorAuditado = Prisma.InputJsonValue | null;
-
-/** Los campos cuyo valor cambió, con el valor anterior y el nuevo. */
-function cambios(campos: Record<string, [ValorAuditado, ValorAuditado]>): {
-  anterior: Record<string, ValorAuditado>;
-  nuevo: Record<string, ValorAuditado>;
-} {
-  const anterior: Record<string, ValorAuditado> = {};
-  const nuevo: Record<string, ValorAuditado> = {};
-  for (const [campo, [antes, despues]] of Object.entries(campos)) {
-    if (JSON.stringify(antes) !== JSON.stringify(despues)) {
-      anterior[campo] = antes;
-      nuevo[campo] = despues;
-    }
-  }
-  return { anterior, nuevo };
-}
-
+/** Sin repetidos y en orden: `soloCambios` compara por JSON. */
 function ordenados(ids: number[]): number[] {
   return [...new Set(ids)].sort((a, b) => a - b);
 }
