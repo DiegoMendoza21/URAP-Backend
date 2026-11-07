@@ -309,6 +309,32 @@ describe('RegistroClaseService', () => {
       expect(auditoria.registrar).not.toHaveBeenCalled();
     });
 
+    it('si solo cambian las observaciones, audita que cambiaron sin su texto', async () => {
+      tx.sesion_clase.findFirst.mockResolvedValue(
+        sesionEnTransaccion({
+          estado: 'registrada',
+          fecha_registro: new Date('2026-11-04T21:00:00Z'),
+          id_registrado_por: 7,
+          sesion_tema: [{ id_contenido: 10 }],
+          observaciones: 'Taller',
+        }),
+      );
+
+      await registrar({
+        idsContenido: [10],
+        observaciones: 'Faltó Ficticio Uno',
+      });
+
+      expect(auditoria.registrar).toHaveBeenCalledTimes(1);
+      expect(auditoria.registrar).toHaveBeenCalledWith({
+        accion: 'actualizar',
+        tablaAfectada: 'sesion_clase',
+        idRegistro: 500,
+        valorAnterior: { observaciones: '[omitido]' },
+        valorNuevo: { observaciones: '[omitido]' },
+      });
+    });
+
     it('sin el campo de observaciones conserva las anteriores; vacío las borra', async () => {
       tx.sesion_clase.findFirst.mockResolvedValue(
         sesionEnTransaccion({ observaciones: 'Faltaron dos.' }),
