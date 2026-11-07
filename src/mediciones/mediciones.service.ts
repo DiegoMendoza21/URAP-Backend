@@ -453,9 +453,22 @@ export class MedicionesService {
       vistos.add(idIndicador);
     }
 
-    await this.prisma.$transaction(
+    const anteriores = await this.prisma.$transaction(
       async (tx) => {
         await this.bloquearBorrador(tx, idMedicion);
+        // Con la fila bloqueada: los valores que se reemplazan, para la auditoría.
+        const previos = await tx.medicion_indicador.findMany({
+          where: {
+            id_medicion: idMedicion,
+            id_indicador: { in: indicadores.map((fila) => fila.idIndicador) },
+          },
+          select: {
+            id_indicador: true,
+            instrumento: true,
+            descripcion_instrumento: true,
+          },
+          orderBy: { id_indicador: 'asc' },
+        });
         for (const indicador of indicadores) {
           await tx.medicion_indicador.update({
             where: { id: porIndicador.get(indicador.idIndicador) },
@@ -469,6 +482,7 @@ export class MedicionesService {
           where: { id: idMedicion },
           data: { updated_at: new Date() },
         });
+        return previos;
       },
       { timeout: TIEMPO_MAXIMO_GUARDADO_MS },
     );
@@ -477,11 +491,21 @@ export class MedicionesService {
       accion: 'actualizar',
       tablaAfectada: 'medicion_rap',
       idRegistro: idMedicion,
-      valorNuevo: {
-        instrumentos: indicadores.map(({ idIndicador, instrumento }) => ({
-          idIndicador,
-          instrumento,
+      valorAnterior: {
+        instrumentos: anteriores.map((fila) => ({
+          idIndicador: fila.id_indicador,
+          instrumento: fila.instrumento,
+          descripcionInstrumento: fila.descripcion_instrumento,
         })),
+      },
+      valorNuevo: {
+        instrumentos: indicadores.map(
+          ({ idIndicador, instrumento, descripcionInstrumento }) => ({
+            idIndicador,
+            instrumento,
+            descripcionInstrumento: descripcionInstrumento ?? null,
+          }),
+        ),
       },
     });
     return this.detalle(usuario, idMedicion, contexto);
@@ -658,18 +682,31 @@ export class MedicionesService {
     if (datos.accionesPropuestas !== undefined) {
       cambios.acciones_propuestas = datos.accionesPropuestas;
     }
-    await this.prisma.$transaction(async (tx) => {
+    const anterior = await this.prisma.$transaction(async (tx) => {
       await this.bloquearBorrador(tx, idMedicion);
+      const actual = await tx.medicion_rap.findUniqueOrThrow({
+        where: { id: idMedicion },
+        select: {
+          acciones_implementadas: true,
+          resultados_obtenidos: true,
+          acciones_propuestas: true,
+        },
+      });
       await tx.medicion_rap.update({
         where: { id: idMedicion },
         data: { ...cambios, updated_at: new Date() },
       });
+      return actual;
     });
-    // Solo los campos del análisis que se enviaron, con su texto nuevo.
+    // Solo los campos del análisis que se enviaron, con su texto anterior y el nuevo.
+    const campos = Object.keys(cambios) as (keyof typeof anterior)[];
     await this.auditoria.registrar({
       accion: 'actualizar',
       tablaAfectada: 'medicion_rap',
       idRegistro: idMedicion,
+      valorAnterior: Object.fromEntries(
+        campos.map((campo) => [campo, anterior[campo]]),
+      ),
       valorNuevo: cambios as Prisma.InputJsonValue,
     });
     return this.detalle(usuario, idMedicion, { proyecto, acceso });
