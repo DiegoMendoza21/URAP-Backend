@@ -18,6 +18,8 @@ El dominio es institucional y no se deduce leyendo el repositorio. Lee primero:
   Confundir RAP con RAC es el error más fácil y más caro de este proyecto.
 - `docs/modelo-datos.md` y `docs/URAP_modelo_datos_v2.4.dbml` — antes de tocar migraciones,
   entidades o consultas. 51 tablas, 91 claves foráneas.
+- `docs/datos-institucionales.md` — los datos reales del programa (RAP, plan de estudios,
+  escala, matriz de permisos) y lo que todavía falta pedirle.
 - `docs/urap-backlog.md` — qué se construye y en qué orden: 15 épicas, 89 historias, 8 sprints.
 - `docs/indice-requisitos.md` — para ubicar el requisito que aplica.
 - `docs/requisitos-funcionales.md` — el RF completo del caso que vas a implementar,
@@ -89,8 +91,8 @@ npm run db:migrar      # prisma migrate dev: crear y aplicar una migración en d
 npm run db:desplegar   # prisma migrate deploy: aplicar migraciones pendientes en un ambiente desplegado
 npm run db:generar     # prisma generate: regenerar el cliente tras cambiar el esquema
 npm run db:estado      # prisma migrate status: migraciones que faltan por aplicar
-npm run db:sembrar     # datos base: catálogos, programa y RAP (src/datos-iniciales/)
-npm run db:sembrar:demo # además, período, asignaturas y usuarios de demostración (nunca en producción)
+npm run db:sembrar     # datos base: catálogos, programa, RAP y plan de estudios (src/datos-iniciales/)
+npm run db:sembrar:demo # además, período y usuarios de demostración (nunca en producción)
 ```
 
 - **Línea base:** ya existe (`prisma/migrations/0_init`). Salió una sola vez del DDL

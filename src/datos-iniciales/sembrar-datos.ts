@@ -10,17 +10,15 @@ import {
   TIPOS_NOTIFICACION,
   TIPOS_SESION,
 } from './catalogos.js';
+import { PERIODO, USUARIOS_DEMO } from './demostracion.js';
 import { permisosInicialesDe } from './matriz-permisos.js';
 import {
-  ASIGNATURAS,
-  DESCRIPCION_RAP_PENDIENTE,
   ESCALA,
   FACULTAD,
-  PERIODO,
+  PLAN_DE_ESTUDIOS,
   PROGRAMA,
   RAPS,
-  USUARIOS_DEMO,
-} from './demostracion.js';
+} from './programa.js';
 
 type Transaccion = Prisma.TransactionClient;
 
@@ -33,8 +31,8 @@ export interface DatosDemostracion {
 }
 
 /**
- * Carga los datos base (catálogos, programa y RAP), que sirven en cualquier ambiente, y, si se
- * piden, los de demostración (período, asignaturas y usuarios ficticios). Es repetible: solo
+ * Carga los datos base (catálogos, programa, RAP y plan de estudios), que sirven en cualquier
+ * ambiente, y, si se piden, los de demostración (período y usuarios ficticios). Es repetible: solo
  * crea lo que falta y nunca modifica lo que ya existe, para no pisar lo que se cambie desde la
  * aplicación. Todo va en una transacción: si algo falla, la base queda como estaba.
  */
@@ -47,9 +45,9 @@ export function sembrarDatosIniciales(
       await sembrarCatalogos(tx);
       const idPrograma = await sembrarPrograma(tx);
       const idsRap = await sembrarRaps(tx, idPrograma);
+      await sembrarPlanDeEstudios(tx, idPrograma, idsRap);
       if (demostracion) {
         const idPeriodo = await sembrarPeriodo(tx);
-        await sembrarAsignaturas(tx, idPrograma, idsRap);
         await sembrarUsuariosDemo(tx, {
           idPrograma,
           idPeriodo,
@@ -228,15 +226,10 @@ async function sembrarRaps(
   idPrograma: number,
 ): Promise<Map<number, number>> {
   const ids = new Map<number, number>();
-  for (const { numero, codigo } of RAPS) {
+  for (const { numero, codigo, descripcion } of RAPS) {
     const rap = await tx.rap.upsert({
       where: { id_programa_codigo: { id_programa: idPrograma, codigo } },
-      create: {
-        id_programa: idPrograma,
-        codigo,
-        numero,
-        descripcion: DESCRIPCION_RAP_PENDIENTE,
-      },
+      create: { id_programa: idPrograma, codigo, numero, descripcion },
       update: {},
     });
     ids.set(numero, rap.id);
@@ -244,27 +237,24 @@ async function sembrarRaps(
   return ids;
 }
 
-/** Asignaturas y su mapeo curricular con los RAP (RF-04, RF-05). */
-async function sembrarAsignaturas(
+/**
+ * Plan de estudios y su mapeo curricular con los RAP (RF-04, RF-05). Sin el código SMA, el
+ * código interno queda nulo y el índice único (id_programa, codigo_interno) no evita
+ * duplicados: cada asignatura se busca por su nombre dentro del programa antes de crearla.
+ */
+async function sembrarPlanDeEstudios(
   tx: Transaccion,
   idPrograma: number,
   idsRap: ReadonlyMap<number, number>,
 ): Promise<void> {
-  for (const { raps, ...datos } of ASIGNATURAS) {
-    const asignatura = await tx.asignatura.upsert({
-      where: {
-        id_programa_codigo_interno: {
-          id_programa: idPrograma,
-          codigo_interno: datos.codigo_interno,
-        },
-      },
-      create: {
-        ...datos,
-        id_programa: idPrograma,
-        horas_totales: datos.horas_tde + datos.horas_tdp + datos.horas_ti,
-      },
-      update: {},
-    });
+  for (const { nombre, semestre, raps } of PLAN_DE_ESTUDIOS) {
+    const asignatura =
+      (await tx.asignatura.findFirst({
+        where: { id_programa: idPrograma, nombre },
+      })) ??
+      (await tx.asignatura.create({
+        data: { id_programa: idPrograma, nombre, semestre },
+      }));
     for (const numero of raps) {
       const idRap = obtener(idsRap, numero, `RAP ${numero}`);
       await tx.asignatura_rap.upsert({
@@ -376,6 +366,7 @@ async function contarRegistros(tx: Transaccion): Promise<ResumenSembrado> {
     programas: await tx.programa.count(),
     raps: await tx.rap.count(),
     asignaturas: await tx.asignatura.count(),
+    asignaturas_rap: await tx.asignatura_rap.count(),
     usuarios: await tx.usuario.count(),
     permisos_por_rol: await tx.rol_permiso.count(),
   };

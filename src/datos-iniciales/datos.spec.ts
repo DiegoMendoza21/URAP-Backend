@@ -8,13 +8,8 @@ import {
   TIPOS_NOTIFICACION,
   TIPOS_SESION,
 } from './catalogos.js';
-import {
-  ASIGNATURAS,
-  ESCALA,
-  HORAS_POR_CREDITO,
-  RAPS,
-  USUARIOS_DEMO,
-} from './demostracion.js';
+import { USUARIOS_DEMO } from './demostracion.js';
+import { ESCALA, PLAN_DE_ESTUDIOS, RAPS } from './programa.js';
 
 const repetidos = (valores: unknown[]) =>
   valores.filter((valor, i) => valores.indexOf(valor) !== i);
@@ -38,7 +33,7 @@ describe('Datos iniciales', () => {
     ['tipos de sesión', TIPOS_SESION.map(({ codigo }) => codigo)],
     ['tipos de notificación', TIPOS_NOTIFICACION.map(({ codigo }) => codigo)],
     ['parámetros', PARAMETROS.map(({ clave }) => clave)],
-    ['asignaturas', ASIGNATURAS.map(({ codigo_interno }) => codigo_interno)],
+    ['asignaturas', PLAN_DE_ESTUDIOS.map(({ nombre }) => nombre)],
     ['usuarios de demostración', USUARIOS_DEMO.map(({ correo }) => correo)],
   ])('no repite códigos en %s', (_, codigos) => {
     expect(repetidos(codigos)).toEqual([]);
@@ -71,18 +66,41 @@ describe('Datos iniciales', () => {
     }
   });
 
-  it('cuadra las horas de cada asignatura con sus créditos', () => {
-    for (const asignatura of ASIGNATURAS) {
-      const { creditos, horas_tde, horas_tdp, horas_ti } = asignatura;
-      expect(horas_tde + horas_tdp + horas_ti).toBe(
-        creditos * HORAS_POR_CREDITO,
-      );
+  it('trae los siete RAP del programa con su texto oficial (RF-05)', () => {
+    expect(RAPS.map(({ numero }) => numero)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    for (const { descripcion } of RAPS) {
+      expect(descripcion.length).toBeGreaterThan(50);
+      expect(descripcion).not.toMatch(/pendiente/i);
+    }
+  });
+
+  it('trae las 69 asignaturas del plan de estudios en los semestres I a X', () => {
+    expect(PLAN_DE_ESTUDIOS).toHaveLength(69);
+    const semestres = new Set(PLAN_DE_ESTUDIOS.map(({ semestre }) => semestre));
+    expect([...semestres].sort((a, b) => a - b)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+    ]);
+  });
+
+  it('trae los 73 vínculos asignatura–RAP del informe 2023-II', () => {
+    const vinculos = PLAN_DE_ESTUDIOS.flatMap(({ raps }) => raps);
+    expect(vinculos).toHaveLength(73);
+    const porRap = RAPS.map(
+      ({ numero }) => vinculos.filter((rap) => rap === numero).length,
+    );
+    expect(porRap).toEqual([7, 8, 16, 18, 3, 5, 16]);
+  });
+
+  it('vincula cada asignatura con al menos un RAP, sin repetirlo', () => {
+    for (const { raps } of PLAN_DE_ESTUDIOS) {
+      expect(raps.length).toBeGreaterThan(0);
+      expect(repetidos(raps)).toEqual([]);
     }
   });
 
   it('relaciona las asignaturas solo con RAP que existen', () => {
     const numeros = RAPS.map(({ numero }) => numero);
-    for (const { raps } of ASIGNATURAS) {
+    for (const { raps } of PLAN_DE_ESTUDIOS) {
       expect(numeros).toEqual(expect.arrayContaining(raps));
     }
   });
