@@ -21,6 +21,7 @@ const docente: UsuarioSesion = {
   correo: 'docente.prueba@urap.local',
   roles: [ROL.docente],
   jti: 'jti-20',
+  idSesion: 20,
 };
 
 const EN_DILIGENCIAMIENTO = {

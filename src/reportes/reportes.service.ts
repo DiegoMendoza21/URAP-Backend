@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import writeXlsxFile, { type Row } from 'write-excel-file/node';
 import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
@@ -82,8 +82,6 @@ type MedicionReporte = Prisma.medicion_rapGetPayload<{
  */
 @Injectable()
 export class ReportesService {
-  private readonly logger = new Logger(ReportesService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly alcance: AlcanceService,
@@ -265,10 +263,6 @@ export class ReportesService {
       }),
     };
 
-    await this.auditar(usuario.id, idPrograma, {
-      idPeriodo,
-      idRap: idRap ?? null,
-    });
     return reporte;
   }
 
@@ -497,31 +491,6 @@ export class ReportesService {
       liderazgos.set(idRap as number, periodos);
     }
     return liderazgos;
-  }
-
-  /** Generar un reporte queda en la auditoría (RF-29); un fallo al auditar no lo impide. */
-  private async auditar(
-    idUsuario: number,
-    idPrograma: number,
-    valorNuevo: Prisma.InputJsonValue,
-  ): Promise<void> {
-    try {
-      await this.prisma.auditoria.create({
-        data: {
-          id_usuario: idUsuario,
-          accion: 'generar_reporte_logro_rap',
-          tabla_afectada: 'programa',
-          id_registro: idPrograma,
-          valor_nuevo: valorNuevo,
-          fecha: new Date(),
-        },
-      });
-    } catch (error) {
-      this.logger.error(
-        `No se pudo auditar el reporte de logro del programa ${idPrograma}.`,
-        error instanceof Error ? error.stack : String(error),
-      );
-    }
   }
 }
 

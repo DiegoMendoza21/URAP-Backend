@@ -691,6 +691,40 @@ describe('Medición de RAP (e2e) · RF-30, HU-11-01 a HU-11-03', () => {
       ]).expect(403);
     });
 
+    it('audita con AuditoriaService: la consulta de la hoja y los cambios, sin niveles (RF-29)', async () => {
+      const desde = new Date();
+      await conToken('departamento', http().get(rutaMedicion())).expect(200);
+      const consulta = await prisma.auditoria.findFirst({
+        where: {
+          id_usuario: usuarios.departamento,
+          accion: 'consulta_sensible',
+          tabla_afectada: 'medicion_rap',
+          id_registro: idMedicion,
+          fecha: { gte: new Date(desde.getTime() - 1000) },
+        },
+      });
+      expect(consulta?.ip).toBeTruthy();
+
+      const cambios = await prisma.auditoria.findMany({
+        where: {
+          id_usuario: usuarios.docente,
+          tabla_afectada: 'medicion_rap',
+          id_registro: idMedicion,
+        },
+        select: { accion: true, valor_nuevo: true, ip: true },
+        orderBy: { id: 'asc' },
+      });
+      expect(cambios.map((fila) => fila.accion)).toEqual(
+        expect.arrayContaining(['crear', 'actualizar']),
+      );
+      expect(cambios.every((fila) => fila.ip)).toBe(true);
+      // Las valoraciones quedan como conteos: ningún nivel de un estudiante (Ley 1581).
+      expect(cambios.map((fila) => fila.valor_nuevo)).toContainEqual({
+        valoraciones: { registradas: 136, borradas: 0 },
+      });
+      expect(JSON.stringify(cambios)).not.toContain('idMatricula');
+    });
+
     it('una medición cerrada no se puede modificar (excepción de p7)', async () => {
       await prisma.medicion_rap.update({
         where: { id: idMedicion },
@@ -914,6 +948,21 @@ describe('Medición de RAP (e2e) · RF-30, HU-11-01 a HU-11-03', () => {
         fechaCierre: null,
       });
       await reabrir('departamento').expect(409);
+      // Cierre y reapertura quedan en auditoría con su estado anterior y nuevo (RF-29).
+      const reapertura = await prisma.auditoria.findFirst({
+        where: {
+          id_usuario: usuarios.departamento,
+          accion: 'actualizar',
+          tabla_afectada: 'medicion_rap',
+          id_registro: idMedicion,
+        },
+        orderBy: { id: 'desc' },
+      });
+      expect(reapertura).toMatchObject({
+        valor_anterior: { estado: 'cerrada' },
+        valor_nuevo: { estado: 'borrador' },
+      });
+      expect(reapertura?.ip).toBeTruthy();
       await cerrar('docente').expect(200);
     });
 
@@ -1098,6 +1147,15 @@ describe('Medición de RAP (e2e) · RF-30, HU-11-01 a HU-11-03', () => {
       expect((unRap.body.raps as { id: number }[]).map((r) => r.id)).toEqual([
         raps.sinRubrica,
       ]);
+      // La consulta del reporte queda en auditoría con el usuario y la IP (RF-29).
+      const auditada = await prisma.auditoria.findFirst({
+        where: {
+          id_usuario: usuarios.direccion,
+          accion: 'consulta_sensible',
+          tabla_afectada: 'programa',
+        },
+      });
+      expect(auditada?.ip).toBeTruthy();
       // El líder solo ve el RAP que lidera.
       const lider = await conToken('lider', http().get(consulta())).expect(200);
       expect((lider.body.raps as { id: number }[]).map((r) => r.id)).toEqual([

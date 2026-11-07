@@ -52,6 +52,7 @@ function usuario(id: number, ...roles: string[]): UsuarioSesion {
     correo: `usuario${id}@urap.local`,
     roles,
     jti: `jti-${id}`,
+    idSesion: id,
   };
 }
 

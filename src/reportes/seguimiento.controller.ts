@@ -11,6 +11,7 @@ import {
   ApiUnauthorizedResponse,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
+import { AuditarConsulta } from '../auditoria/auditar-consulta.decorator.js';
 import { Roles } from '../auth/decoradores/roles.decorator.js';
 import { UsuarioActual } from '../auth/decoradores/usuario-actual.decorator.js';
 import { ROL } from '../auth/roles.js';
@@ -100,6 +101,7 @@ export class SeguimientoController {
 
   @Get('tablero/excel')
   @Roles(ROL.administrador, ROL.departamento, ROL.direccion)
+  @AuditarConsulta('proyecto_docente')
   @ApiOperation({ summary: 'Exporta el tablero a Excel (RF-25, p5)' })
   @ApiProduces(TIPO_EXCEL)
   @ApiOkResponse({
@@ -152,6 +154,7 @@ export class SeguimientoController {
 
   @Get('pendientes/excel')
   @Roles(ROL.administrador, ROL.departamento, ROL.direccion)
+  @AuditarConsulta('proyecto_docente')
   @ApiOperation({
     summary: 'Exporta la lista de pendientes a Excel (HU-12-02)',
   })

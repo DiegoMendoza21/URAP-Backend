@@ -1,7 +1,8 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { ParametrosService } from './parametros.service.js';
 
-/** Parámetros de negocio de `parametro_sistema`. Lo importa cada módulo que los lee. */
+/** Parámetros de negocio de `parametro_sistema` (HU-03-07). Global, como en main. */
+@Global()
 @Module({
   providers: [ParametrosService],
   exports: [ParametrosService],
