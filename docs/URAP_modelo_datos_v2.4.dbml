@@ -684,8 +684,8 @@ Table evidencia_rap {
   id_rap integer
   id_sesion integer // opcional: sesion en la que se tomo la evidencia
   nombre_original varchar
-  url varchar // ruta en S3, nunca publica (NFR-007)
-  tipo varchar // JPG | PNG | PDF
+  url varchar // clave en el almacenamiento documental (disco local en el prototipo, S3 en produccion), nunca publica (NFR-007)
+  tipo varchar // tipo MIME segun el contenido: image/jpeg | image/png | application/pdf
   tamano_bytes integer
   descripcion text
   fecha date

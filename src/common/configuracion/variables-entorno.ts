@@ -5,12 +5,14 @@ import {
   ArrayNotEmpty,
   IsEnum,
   IsInt,
+  IsNotEmpty,
   IsString,
   IsUrl,
   Matches,
   Max,
   Min,
   MinLength,
+  ValidateIf,
   validateSync,
 } from 'class-validator';
 
@@ -105,7 +107,33 @@ export class VariablesEntorno {
     },
   )
   CORS_ORIGENES: string[];
+
+  /**
+   * Carpeta del almacenamiento documental en disco (RF-24, NFR-007): ahí quedan las evidencias
+   * y la base guarda solo su referencia. Debe estar fuera de cualquier carpeta servida por web
+   * y, en un despliegue, en un volumen persistente. Es obligatoria en producción; en
+   * desarrollo y pruebas, si falta, se usa `almacenamiento/` dentro del proyecto.
+   */
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' && value.trim() === '' ? undefined : value,
+  )
+  @ValidateIf(
+    (variables: VariablesEntorno) =>
+      variables.NODE_ENV === Entorno.Produccion ||
+      variables.ALMACENAMIENTO_DIRECTORIO !== undefined,
+  )
+  @IsString({
+    message: 'ALMACENAMIENTO_DIRECTORIO debe ser una ruta de carpeta',
+  })
+  @IsNotEmpty({
+    message:
+      'ALMACENAMIENTO_DIRECTORIO es obligatoria en producción: indique la carpeta del volumen persistente de los archivos',
+  })
+  ALMACENAMIENTO_DIRECTORIO?: string;
 }
+
+/** Carpeta del almacenamiento documental cuando ALMACENAMIENTO_DIRECTORIO no está definida. */
+export const ALMACENAMIENTO_DIRECTORIO_DESARROLLO = 'almacenamiento';
 
 export function validarVariablesEntorno(
   entrada: Record<string, unknown>,
