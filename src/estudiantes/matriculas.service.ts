@@ -1,10 +1,10 @@
 import {
   BadRequestException,
   Injectable,
-  Logger,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import {
@@ -48,6 +48,14 @@ interface ProyectoAccesible {
 }
 
 /**
+ * Cómo queda la lista en `auditoria` (RF-29): la carga (`actualizar`, desde este servicio) y
+ * la consulta (`consulta_sensible`, con `@AuditarConsulta` en el controlador) se registran
+ * sobre la tabla `matricula`, con el proyecto docente como `id_registro`, porque la lista es
+ * de todo el curso. En `valor_nuevo` van solo los conteos, nunca datos de los estudiantes.
+ */
+export const TABLA_AUDITORIA = 'matricula';
+
+/**
  * Tiempo máximo de la transacción de carga. Menor que la espera del servidor de Next (12 s):
  * si se agota, la transacción se deshace y el usuario recibe el error, en lugar de ver «tardó
  * demasiado» mientras la carga termina por detrás.
@@ -67,12 +75,11 @@ const TIEMPO_MAXIMO_CARGA_MS = 10_000;
  */
 @Injectable()
 export class MatriculasService {
-  private readonly logger = new Logger(MatriculasService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly alcance: AlcanceService,
     private readonly parametros: ParametrosService,
+    private readonly auditoria: AuditoriaService,
   ) {}
 
   /**
@@ -113,7 +120,12 @@ export class MatriculasService {
     );
 
     // Solo conteos: la auditoría no repite datos personales de los estudiantes.
-    await this.auditar(usuario.id, 'cargar_lista', proyecto.id, conteo);
+    await this.auditoria.registrar({
+      accion: 'actualizar',
+      tablaAfectada: TABLA_AUDITORIA,
+      idRegistro: proyecto.id,
+      valorNuevo: conteo,
+    });
     return {
       ...conteo,
       carga: {
@@ -175,12 +187,6 @@ export class MatriculasService {
 
     const contar = (valor: EstadoMatricula) =>
       porEstado.find((grupo) => grupo.estado === valor)?._count._all ?? 0;
-
-    // Consulta de datos personales: queda en la auditoría (CLAUDE.md, «Auditoría»).
-    await this.auditar(usuario.id, 'consultar_lista', proyecto.id, {
-      estado,
-      pagina,
-    });
 
     return {
       elementos: filas.map(aMatriculado),
@@ -389,35 +395,6 @@ export class MatriculasService {
       retirados: salen.length,
       actualizados,
     };
-  }
-
-  /**
-   * Registra la acción en `auditoria` (RF-29). Un fallo al auditar no deshace la operación:
-   * queda en el registro técnico y la operación sigue (CLAUDE.md, «Auditoría»).
-   */
-  private async auditar(
-    idUsuario: number,
-    accion: string,
-    idProyecto: number,
-    valorNuevo: Prisma.InputJsonValue,
-  ): Promise<void> {
-    try {
-      await this.prisma.auditoria.create({
-        data: {
-          id_usuario: idUsuario,
-          accion,
-          tabla_afectada: 'matricula',
-          id_registro: idProyecto,
-          valor_nuevo: valorNuevo,
-          fecha: new Date(),
-        },
-      });
-    } catch (error) {
-      this.logger.error(
-        `No se pudo auditar «${accion}» de la lista del proyecto docente ${idProyecto}.`,
-        error instanceof Error ? error.stack : String(error),
-      );
-    }
   }
 }
 
