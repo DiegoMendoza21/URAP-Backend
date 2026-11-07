@@ -36,14 +36,10 @@ export const ESTADO_RUBRICA_VIGENTE = 'vigente';
 
 /**
  * Estados del proyecto docente en los que ya fue aprobado por el departamento académico
- * (precondición de RF-30). La aprobación es de EP-07 (RF-17, RF-18); en ejecución y cerrado
- * son posteriores a ella.
+ * (precondición de RF-30). La aprobación es de EP-07 (RF-17, RF-18); en ejecución es
+ * posterior a ella. «Cerrado» queda fuera: el período terminó y RF-17 bloquea los registros.
  */
-export const ESTADOS_PROYECTO_APROBADO = [
-  'aprobado',
-  'en_ejecucion',
-  'cerrado',
-] as const;
+export const ESTADOS_PROYECTO_APROBADO = ['aprobado', 'en_ejecucion'] as const;
 
 /** Años admitidos para la toma de datos: evita errores de digitación como 226 o 20026. */
 export const ANIO_TOMA_MINIMO = 2000;
@@ -67,6 +63,8 @@ export const MENSAJE_MEDICION_NO_EXISTE =
   'La medición no existe o no tiene acceso a ella.';
 export const MENSAJE_SOLO_DOCENTE_ASIGNADO =
   'Solo el docente asignado al curso registra la medición de RAP.';
+export const MENSAJE_PERIODO_CERRADO =
+  'El período académico del curso está cerrado: ya no se pueden iniciar mediciones en él.';
 export const MENSAJE_PROYECTO_NO_APROBADO =
   'El proyecto docente todavía no está aprobado. La medición de RAP se registra cuando el departamento académico lo aprueba.';
 export const MENSAJE_SIN_LISTA =

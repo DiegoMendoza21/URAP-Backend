@@ -89,6 +89,12 @@ export class RequisitosMedicionDto {
 
   @ApiProperty({
     example: true,
+    description: 'El período académico del curso no está cerrado (RF-17)',
+  })
+  periodoAbierto: boolean;
+
+  @ApiProperty({
+    example: true,
     description: 'El curso tiene la lista de estudiantes matriculados (RF-22)',
   })
   listaCargada: boolean;
