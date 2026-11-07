@@ -156,15 +156,40 @@ export class DiligenciamientoService {
           },
           orderBy: { rap: { numero: 'asc' } },
         },
-        rac: { select: { rac_rap: { select: { id_rap: true } } } },
+        rac: {
+          select: {
+            codigo: true,
+            rac_rap: { select: { id_rap: true } },
+            _count: { select: { evaluacion_rac: true } },
+          },
+          orderBy: [{ orden: 'asc' }, { id: 'asc' }],
+        },
+        periodo_academico: { select: { numero_semanas: true } },
+        contenido_programatico: {
+          where: { tema: { not: null } },
+          select: { semana: true, tema: true },
+        },
+        _count: {
+          select: { estrategia_metodologica: true, bibliografia: true },
+        },
       },
     });
     return {
       descripcion: proyecto.descripcion,
       raps: proyecto.proyecto_docente_rap.map(({ rap }) => rap),
       racs: proyecto.rac.map((rac) => ({
+        codigo: rac.codigo,
         idsRap: rac.rac_rap.map((relacion) => relacion.id_rap),
+        evaluaciones: rac._count.evaluacion_rac,
       })),
+      estrategias: proyecto._count.estrategia_metodologica,
+      contenidos: {
+        numeroSemanas: proyecto.periodo_academico?.numero_semanas ?? null,
+        semanasConTema: proyecto.contenido_programatico
+          .filter((fila) => fila.semana !== null && fila.tema?.trim())
+          .map((fila) => fila.semana as number),
+      },
+      bibliografia: proyecto._count.bibliografia,
     };
   }
 
