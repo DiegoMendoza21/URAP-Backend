@@ -431,8 +431,9 @@ describe('Diligenciamiento del proyecto docente (e2e) · RF-11, RF-12, HU-06-01 
       const { body } = await como('docente')
         .get(`/proyectos-docentes/${proyecto}/diligenciamiento`)
         .expect(200);
-      expect(body).toMatchObject({
-        puedeEditar: true,
+      expect(body).toMatchObject({ puedeEditar: true });
+      // Los puntos 4 a 7 se prueban en planeacion.e2e-spec.ts.
+      expect({ secciones: body.secciones.slice(0, 2) }).toMatchObject({
         secciones: [
           { numero: 2, completa: true, pendientes: [] },
           {

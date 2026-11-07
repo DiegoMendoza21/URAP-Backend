@@ -36,7 +36,7 @@ import {
 import { RacService } from './rac.service.js';
 
 /** Quienes consultan proyectos docentes (los mismos de la bandeja de RF-08). */
-const ROLES_CONSULTA = [
+export const ROLES_CONSULTA = [
   ROL.administrador,
   ROL.departamento,
   ROL.direccion,
@@ -44,20 +44,20 @@ const ROLES_CONSULTA = [
   ROL.docente,
 ] as const;
 
-const NO_EXISTE = {
+export const NO_EXISTE = {
   type: RespuestaErrorDto,
   description: 'El proyecto no existe o el usuario no tiene acceso a él',
 };
-const SIN_ROL_CONSULTA = {
+export const SIN_ROL_CONSULTA = {
   type: RespuestaErrorDto,
   description: 'El usuario no tiene un rol que consulte proyectos docentes',
 };
-const SOLO_ASIGNADOS = {
+export const SOLO_ASIGNADOS = {
   type: RespuestaErrorDto,
   description:
     'No es Docente responsable o no está asignado a este proyecto (alcance «propios»)',
 };
-const NO_EDITABLE = {
+export const NO_EDITABLE = {
   type: RespuestaErrorDto,
   description:
     'El estado del proyecto no admite cambios: enviado a revisión, aprobado, en ejecución o ' +
@@ -66,8 +66,9 @@ const NO_EDITABLE = {
 
 /**
  * Diligenciamiento del proyecto docente por secciones (EP-06). Cada sección tiene su propia
- * ruta y se guarda por separado (HU-06-08). Los puntos 4 a 7 se agregan aquí con el mismo
- * patrón: `GET` para leer y `PUT`/`POST` para guardar, con `EdicionProyectoService.editar()`.
+ * ruta y se guarda por separado (HU-06-08). Los puntos 4 a 7 están en `PlaneacionController`,
+ * con el mismo patrón: `GET` para leer y `PUT`/`POST` para guardar, con
+ * `EdicionProyectoService.editar()`.
  */
 @ApiTags('Diligenciamiento del proyecto docente')
 @ApiBearerAuth()

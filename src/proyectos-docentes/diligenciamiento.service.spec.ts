@@ -47,7 +47,16 @@ function crear(valorParametro: string | null = '10') {
           { rap: { id: 1, codigo: 'RAP 1', numero: 1 } },
           { rap: { id: 2, codigo: 'RAP 2', numero: 2 } },
         ],
-        rac: [{ rac_rap: [{ id_rap: 1 }] }],
+        rac: [
+          {
+            codigo: 'RAC 1',
+            rac_rap: [{ id_rap: 1 }],
+            _count: { evaluacion_rac: 0 },
+          },
+        ],
+        periodo_academico: { numero_semanas: 2 },
+        contenido_programatico: [{ semana: 1, tema: 'Presentación' }],
+        _count: { estrategia_metodologica: 2, bibliografia: 0 },
       }),
     },
   };
@@ -149,6 +158,18 @@ describe('DiligenciamientoService', () => {
           completa: false,
           pendientes: ['RAP 2 no tiene RAC asociados.'],
         },
+        { numero: 4, completa: true, pendientes: [] },
+        {
+          numero: 5,
+          completa: false,
+          pendientes: ['RAC 1 no tiene actividades de evaluación.'],
+        },
+        {
+          numero: 6,
+          completa: false,
+          pendientes: ['La semana 2 no tiene tema.'],
+        },
+        { numero: 7, completa: false },
       ],
     });
   });
