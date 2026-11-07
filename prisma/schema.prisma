@@ -460,7 +460,7 @@ model plan_curso {
   observaciones_iniciales String?           @db.Text
   created_at              DateTime?         @default(dbgenerated("(now())")) @db.DateTime(0)
   updated_at              DateTime?         @updatedAt @db.DateTime(0)
-  proyecto_docente        proyecto_docente?
+  proyecto_docente        proyecto_docente? @relation(fields: [id_proyecto_docente], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "plan_curso_ibfk_1")
 }
 
 model programa {
@@ -517,7 +517,7 @@ model proyecto_docente {
   proyecto_docente         proyecto_docente?          @relation("proyecto_docenteToproyecto_docente", fields: [id_proyecto_origen], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "proyecto_docente_ibfk_4")
   other_proyecto_docente   proyecto_docente[]         @relation("proyecto_docenteToproyecto_docente")
   usuario                  usuario?                   @relation(fields: [id_creado_por], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "proyecto_docente_ibfk_5")
-  plan_curso               plan_curso                 @relation(fields: [id], references: [id_proyecto_docente], onDelete: NoAction, onUpdate: NoAction, map: "proyecto_docente_ibfk_6")
+  plan_curso               plan_curso?
   proyecto_docente_docente proyecto_docente_docente[]
   proyecto_docente_rap     proyecto_docente_rap[]
   rac                      rac[]
