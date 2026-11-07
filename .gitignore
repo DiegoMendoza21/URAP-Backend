@@ -12,6 +12,9 @@ coverage/
 .env.*
 !.env.example
 
+# Almacenamiento documental local (ALMACENAMIENTO_DIRECTORIO): evidencias con datos personales
+/almacenamiento/
+
 # Registros
 logs/
 *.log

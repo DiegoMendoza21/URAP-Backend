@@ -105,7 +105,7 @@ Table sesion {
 // RF-03: matriz de permisos por modulo (Tabla 17 del Producto 1)
 Table modulo {
   id integer [primary key, increment]
-  codigo varchar [unique] // usuarios, estructura, proyectos, rap, clases, documentos, reportes, auditoria
+  codigo varchar [unique] // usuarios, estructura, proyectos, plan_curso, rap, clases, documentos, reportes, auditoria (Producto 1, Tabla 17)
   nombre varchar
   orden integer
 }
@@ -684,8 +684,8 @@ Table evidencia_rap {
   id_rap integer
   id_sesion integer // opcional: sesion en la que se tomo la evidencia
   nombre_original varchar
-  url varchar // ruta en S3, nunca publica (NFR-007)
-  tipo varchar // JPG | PNG | PDF
+  url varchar // clave en el almacenamiento documental (disco local en el prototipo, S3 en produccion), nunca publica (NFR-007)
+  tipo varchar // tipo MIME segun el contenido: image/jpeg | image/png | application/pdf
   tamano_bytes integer
   descripcion text
   fecha date

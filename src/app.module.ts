@@ -10,9 +10,11 @@ import { FiltroExcepciones } from './common/filtros/filtro-excepciones.js';
 import { MedicionesModule } from './mediciones/mediciones.module.js';
 import { PrismaModule } from './common/prisma/prisma.module.js';
 import { crearPipeValidacion } from './common/validacion/pipe-validacion.js';
+import { DocumentosModule } from './documentos/documentos.module.js';
 import { ProyectosDocentesModule } from './proyectos-docentes/proyectos-docentes.module.js';
 import { ReportesModule } from './reportes/reportes.module.js';
 import { SaludModule } from './salud/salud.module.js';
+import { UsuariosModule } from './usuarios/usuarios.module.js';
 import { SesionesModule } from './sesiones/sesiones.module.js';
 
 @Module({
@@ -27,10 +29,12 @@ import { SesionesModule } from './sesiones/sesiones.module.js';
     AuditoriaModule,
     AuthModule,
     SaludModule,
+    UsuariosModule,
     ProyectosDocentesModule,
     EstudiantesModule,
     MedicionesModule,
     ReportesModule,
+    DocumentosModule,
     SesionesModule,
   ],
   providers: [

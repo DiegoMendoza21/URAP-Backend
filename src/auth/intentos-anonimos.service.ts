@@ -33,8 +33,14 @@ export interface LimitesBloqueo {
  * correos inexistentes llevan el mismo conteo y el mismo bloqueo, aquí en memoria: no hay fila
  * de `usuario` donde guardarlo.
  *
- * La clave es un hash del correo, no el correo. El conteo se pierde al reiniciar la API y, con
- * varias instancias, cada una cuenta por su lado; el límite por IP sigue aplicando.
+ * La clave es un hash del correo, no el correo. Límites aceptados para el prototipo, a tener en
+ * cuenta al desplegar:
+ * - El conteo se pierde al reiniciar la API y, con varias instancias, cada una cuenta por su
+ *   lado; el límite por IP sigue aplicando.
+ * - Con el mapa lleno se olvida el correo más antiguo. Quien bloquee un correo y luego llene el
+ *   mapa con correos inventados antes de que venza el bloqueo (unas 670 peticiones por minuto
+ *   en 15 minutos, desde más de 60 IP) puede volver a probarlo: un 401 delataría que no existe.
+ *   Lo mismo si la API se reinicia durante el bloqueo.
  */
 @Injectable()
 export class IntentosAnonimosService {
