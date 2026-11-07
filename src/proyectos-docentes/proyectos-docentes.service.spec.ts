@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import type { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import type { PrismaService } from '../common/prisma/prisma.service.js';
@@ -29,6 +30,7 @@ const usuarioDepartamento: UsuarioSesion = {
   correo: 'departamento.prueba@urap.local',
   roles: [ROL.departamento],
   jti: 'jti-1',
+  idSesion: 1,
 };
 
 const asignatura = {
@@ -121,7 +123,6 @@ describe('ProyectosDocentesService', () => {
     estado_proyecto: { findUnique: vi.fn() },
     rap: { count: vi.fn() },
     usuario: { count: vi.fn() },
-    auditoria: { create: vi.fn() },
     proyecto_docente: { count: vi.fn(), findMany: vi.fn(), findFirst: vi.fn() },
     $transaction: vi.fn((trabajo: (cliente: typeof tx) => unknown) =>
       trabajo(tx),
@@ -129,10 +130,12 @@ describe('ProyectosDocentesService', () => {
   };
   const alcance = { alcance: vi.fn() };
   const asistente = { exigirPrograma: vi.fn(), periodoVigente: vi.fn() };
+  const auditoria = { registrar: vi.fn() };
   const servicio = new ProyectosDocentesService(
     prisma as unknown as PrismaService,
     alcance as unknown as AlcanceService,
     asistente as unknown as AsistenteService,
+    auditoria as unknown as AuditoriaService,
   );
 
   beforeEach(() => {
@@ -146,7 +149,7 @@ describe('ProyectosDocentesService', () => {
     });
     prisma.rap.count.mockResolvedValue(2);
     prisma.usuario.count.mockResolvedValue(2);
-    prisma.auditoria.create.mockResolvedValue({});
+    auditoria.registrar.mockResolvedValue(undefined);
     tx.proyecto_docente.findFirst.mockResolvedValue(null);
     tx.proyecto_docente.create.mockImplementation(({ data }) =>
       Promise.resolve(proyectoCreado(data)),
@@ -299,25 +302,21 @@ describe('ProyectosDocentesService', () => {
       expect(idAsignatura).toBe(asignatura.id);
     });
 
-    it('registra la creación en auditoría', async () => {
+    it('registra la creación en auditoría, después de confirmar la transacción', async () => {
       await servicio.crear(usuarioDepartamento, datosValidos({ grupo: 'A' }));
 
-      expect(prisma.auditoria.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          id_usuario: usuarioDepartamento.id,
+      // El usuario y la IP los pone AuditoriaService desde el contexto de la petición.
+      expect(auditoria.registrar).toHaveBeenCalledWith(
+        expect.objectContaining({
           accion: 'crear',
-          tabla_afectada: 'proyecto_docente',
-          id_registro: 99,
+          tablaAfectada: 'proyecto_docente',
+          idRegistro: 99,
+          valorNuevo: expect.objectContaining({ grupo: 'A' }),
         }),
-      });
-    });
-
-    it('un fallo al auditar no deshace la creación', async () => {
-      prisma.auditoria.create.mockRejectedValue(new Error('base caída'));
-
-      await expect(
-        servicio.crear(usuarioDepartamento, datosValidos()),
-      ).resolves.toMatchObject({ id: 99 });
+      );
+      expect(auditoria.registrar.mock.invocationCallOrder[0]).toBeGreaterThan(
+        prisma.$transaction.mock.invocationCallOrder[0],
+      );
     });
   });
 

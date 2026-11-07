@@ -5,6 +5,7 @@ import { AppModule } from '../src/app.module.js';
 import { ContrasenasService } from '../src/auth/contrasenas.service.js';
 import { PrismaService } from '../src/common/prisma/prisma.service.js';
 import { configurarAplicacion } from '../src/configurar-aplicacion.js';
+import { borrarUsuariosDePrueba } from './utilidades/limpieza.js';
 
 // Requiere el .env configurado y la base local levantada (npm run db:levantar).
 // Crea sus propios datos ficticios y los borra al terminar.
@@ -53,13 +54,7 @@ describe('Autenticación (e2e) · HU-01-01', () => {
 
   afterAll(async () => {
     if (prisma) {
-      await prisma.sesion.deleteMany({
-        where: { id_usuario: { in: idsUsuarios } },
-      });
-      await prisma.usuario_rol.deleteMany({
-        where: { id_usuario: { in: idsUsuarios } },
-      });
-      await prisma.usuario.deleteMany({ where: { id: { in: idsUsuarios } } });
+      await borrarUsuariosDePrueba(prisma, idsUsuarios);
       await prisma.rol.deleteMany({ where: { id: idRol } });
     }
     await app?.close();

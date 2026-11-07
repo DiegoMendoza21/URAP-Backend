@@ -51,6 +51,23 @@ describe('validarVariablesEntorno', () => {
     },
   );
 
+  it('aplica el límite de inicio de sesión por IP por defecto: 10 cada 60 s', () => {
+    const variables = validarVariablesEntorno(VARIABLES_VALIDAS);
+    expect(variables.INICIO_SESION_LIMITE_POR_IP).toBe(10);
+    expect(variables.INICIO_SESION_VENTANA_SEGUNDOS).toBe(60);
+  });
+
+  it.each([
+    ['INICIO_SESION_LIMITE_POR_IP', '0'],
+    ['INICIO_SESION_LIMITE_POR_IP', 'muchos'],
+    ['INICIO_SESION_VENTANA_SEGUNDOS', '0'],
+    ['INICIO_SESION_VENTANA_SEGUNDOS', '7200'],
+  ])('rechaza %s inválido (%s)', (clave, valor) => {
+    expect(() =>
+      validarVariablesEntorno({ ...VARIABLES_VALIDAS, [clave]: valor }),
+    ).toThrow(new RegExp(clave));
+  });
+
   it('impide arrancar sin secreto JWT', () => {
     expect(() => validarVariablesEntorno(sin('JWT_SECRETO'))).toThrow(
       /JWT_SECRETO/,
