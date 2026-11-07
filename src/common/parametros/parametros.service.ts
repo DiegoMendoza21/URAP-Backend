@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 export const PARAMETRO = {
   archivoTamanoMaximoMb: 'archivo_tamano_maximo_mb',
   archivoTiposPermitidos: 'archivo_tipos_permitidos',
+  evidenciaTiposPermitidos: 'evidencia_tipos_permitidos',
 } as const;
 
 export type ClaveParametro = (typeof PARAMETRO)[keyof typeof PARAMETRO];

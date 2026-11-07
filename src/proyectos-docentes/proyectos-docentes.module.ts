@@ -39,8 +39,8 @@ import { RacService } from './rac.service.js';
     BibliografiaService,
   ],
   // La lista de matriculados (EstudiantesModule) usa el mismo alcance por programa, el
-  // calendario de sesiones (RF-19) la visibilidad del proyecto y el tablero (RF-25) el resumen
-  // de diligenciamiento.
+  // calendario de sesiones (RF-19) y las evidencias (RF-24) la visibilidad del proyecto, y el
+  // tablero (RF-25) el resumen de diligenciamiento.
   exports: [AlcanceService, ProyectosDocentesService, DiligenciamientoService],
 })
 export class ProyectosDocentesModule {}
