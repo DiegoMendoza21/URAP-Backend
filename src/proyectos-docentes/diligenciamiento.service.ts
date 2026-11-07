@@ -1,5 +1,6 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import type { UsuarioSesion } from '../auth/tipos.js';
+import { ParametrosService } from '../common/parametros/parametros.service.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import {
   DESCRIPCION_TOPE_TECNICO,
@@ -7,7 +8,11 @@ import {
   type DiligenciamientoDto,
   type GuardarDescripcionDto,
 } from './dto/diligenciamiento.dto.js';
-import { EdicionProyectoService } from './edicion-proyecto.service.js';
+import {
+  type Auditable,
+  EdicionProyectoService,
+  soloCambios,
+} from './edicion-proyecto.service.js';
 import { type DatosCompletitud, SECCIONES } from './entities/secciones.js';
 
 /** Parámetro de negocio con la longitud máxima de la descripción (RF-11, p3). */
@@ -23,17 +28,36 @@ export function mensajeDescripcionLarga(maximo: number): string {
   return `La descripción supera los ${maximo.toLocaleString('es-CO')} caracteres permitidos. Acórtela para poder guardarla.`;
 }
 
+/** Solo si el texto cambió: guardar lo mismo otra vez no deja rastro en la auditoría. */
+function auditarDescripcion(
+  id: number,
+  anterior: string | null,
+  nuevo: string | null,
+): Auditable | null {
+  const cambios = soloCambios(
+    { descripcion: anterior },
+    { descripcion: nuevo },
+  );
+  return cambios
+    ? {
+        accion: 'actualizar',
+        tabla: 'proyecto_docente',
+        idRegistro: id,
+        ...cambios,
+      }
+    : null;
+}
+
 /**
  * Resumen del diligenciamiento (HU-06-08) y punto 2 «Descripción» del proyecto docente
  * (RF-11, HU-06-01). El punto 3 vive en `RacService`.
  */
 @Injectable()
 export class DiligenciamientoService {
-  private readonly logger = new Logger(DiligenciamientoService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly edicion: EdicionProyectoService,
+    private readonly parametros: ParametrosService,
   ) {}
 
   /** Estado de cada sección y si el usuario puede editar (HU-06-08). */
@@ -98,25 +122,24 @@ export class DiligenciamientoService {
     return this.edicion.editar(usuario, id, async (tx, ahora) => {
       const anterior = await tx.proyecto_docente.findUniqueOrThrow({
         where: { id },
-        select: { descripcion: true },
+        select: { descripcion: true, fecha_actualizacion: true },
       });
-      await tx.proyecto_docente.update({
-        where: { id },
-        data: { descripcion: nuevo },
-      });
+      const auditoria = auditarDescripcion(id, anterior.descripcion, nuevo);
+      if (auditoria) {
+        await tx.proyecto_docente.update({
+          where: { id },
+          data: { descripcion: nuevo },
+        });
+      }
+      // Sin cambios, `editar` no mueve la fecha: se devuelve la que ya tenía.
+      const fecha = auditoria ? ahora : anterior.fecha_actualizacion;
       return {
         resultado: {
           texto: nuevo,
           longitudMaxima: maximo,
-          fechaActualizacion: ahora.toISOString(),
+          fechaActualizacion: fecha?.toISOString() ?? null,
         },
-        auditoria: {
-          accion: 'actualizar',
-          tabla: 'proyecto_docente',
-          idRegistro: id,
-          anterior: { descripcion: anterior.descripcion },
-          nuevo: { descripcion: nuevo },
-        },
+        auditoria,
       };
     });
   }
@@ -172,19 +195,15 @@ export class DiligenciamientoService {
 
   /** Longitud máxima de la descripción, leída de `parametro_sistema` (RF-11, p3). */
   async longitudMaxima(): Promise<number> {
-    const parametro = await this.prisma.parametro_sistema.findUnique({
-      where: { clave: PARAMETRO_LONGITUD_DESCRIPCION },
-      select: { valor: true },
-    });
-    const valor = Number(parametro?.valor);
-    if (Number.isInteger(valor) && valor > 0) {
-      // El DTO no deja pasar más que el tope técnico: un parámetro mayor no puede prometerlo.
-      return Math.min(valor, DESCRIPCION_TOPE_TECNICO);
-    }
-    this.logger.warn(
-      `El parámetro «${PARAMETRO_LONGITUD_DESCRIPCION}» falta o no es un entero positivo; ` +
-        `se usa ${LONGITUD_DESCRIPCION_RESPALDO}. Corra npm run db:sembrar.`,
+    // Inválido o sin sembrar, ParametrosService lo registra como error de configuración y
+    // devuelve nulo: se usa entonces el valor inicial. Mayor que el tope del DTO, se recorta:
+    // el servidor no puede prometer más de lo que acepta.
+    const valor = await this.parametros.leerEntero(
+      PARAMETRO_LONGITUD_DESCRIPCION,
+      { minimo: 1, maximo: Number.MAX_SAFE_INTEGER },
     );
-    return LONGITUD_DESCRIPCION_RESPALDO;
+    return valor === null
+      ? LONGITUD_DESCRIPCION_RESPALDO
+      : Math.min(valor, DESCRIPCION_TOPE_TECNICO);
   }
 }

@@ -12,7 +12,11 @@ import type {
   RacDto,
   SeccionRacDto,
 } from './dto/diligenciamiento.dto.js';
-import { EdicionProyectoService } from './edicion-proyecto.service.js';
+import {
+  type Auditable,
+  EdicionProyectoService,
+  soloCambios,
+} from './edicion-proyecto.service.js';
 import { aRap } from './mapeo.js';
 
 export const MENSAJE_RAC_NO_EXISTE = 'El RAC no existe en este proyecto.';
@@ -52,16 +56,30 @@ function aRac(rac: RacConRaps): RacDto {
   };
 }
 
-/** Lo que se guarda en `auditoria` de un RAC. */
-function instantanea(rac: RacConRaps): Prisma.InputJsonValue {
+/** Lo que se guarda en `auditoria` de un RAC creado o eliminado. */
+function instantanea(rac: RacConRaps): Record<string, Prisma.InputJsonValue> {
   return {
-    codigo: rac.codigo,
-    enunciado: rac.descripcion,
-    raps: rac.rac_rap.map((relacion) => ({
-      idRap: relacion.id_rap,
-      descripcionContribucion: relacion.descripcion_contribucion,
-    })),
+    codigo: rac.codigo ?? '',
+    enunciado: rac.descripcion ?? '',
+    raps: [...rac.rac_rap]
+      .sort((a, b) => a.id_rap - b.id_rap)
+      .map((relacion) => ({
+        idRap: relacion.id_rap,
+        descripcionContribucion: relacion.descripcion_contribucion,
+      })),
   };
+}
+
+/** Solo los campos que cambiaron; nulo si se guardó el RAC tal como estaba. */
+function auditarActualizacion(
+  idRac: number,
+  anterior: RacConRaps,
+  actualizado: RacConRaps,
+): Auditable | null {
+  const cambios = soloCambios(instantanea(anterior), instantanea(actualizado));
+  return cambios
+    ? { accion: 'actualizar', tabla: 'rac', idRegistro: idRac, ...cambios }
+    : null;
 }
 
 /**
@@ -140,13 +158,7 @@ export class RacService {
       });
       return {
         resultado: await this.leerSeccion(tx, id),
-        auditoria: {
-          accion: 'actualizar',
-          tabla: 'rac',
-          idRegistro: idRac,
-          anterior: instantanea(anterior),
-          nuevo: instantanea(actualizado),
-        },
+        auditoria: auditarActualizacion(idRac, anterior, actualizado),
       };
     });
   }

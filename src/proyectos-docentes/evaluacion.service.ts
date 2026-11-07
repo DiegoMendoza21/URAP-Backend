@@ -8,6 +8,7 @@ import type {
   RacEvaluacionDto,
   SeccionEvaluacionDto,
 } from './dto/planeacion.dto.js';
+import { auditarCambios } from './auditar-seccion.js';
 import { EdicionProyectoService } from './edicion-proyecto.service.js';
 import { nombreRap } from './entities/secciones.js';
 import { MENSAJE_RAC_NO_EXISTE } from './rac.service.js';
@@ -126,15 +127,13 @@ export class EvaluacionService {
       }
       return {
         resultado: await this.leerSeccion(tx, id),
-        auditoria: {
-          accion: 'actualizar',
-          tabla: 'rac',
-          idRegistro: idRac,
-          anterior: {
-            evaluacion: instantanea(rac.evaluacion_rac.map(aActividad)),
-          },
-          nuevo: { evaluacion: instantanea(actividades) },
-        },
+        // Solo si la evaluación cambió: guardar lo mismo no audita ni mueve la fecha.
+        auditoria: auditarCambios(
+          'rac',
+          idRac,
+          { evaluacion: instantanea(rac.evaluacion_rac.map(aActividad)) },
+          { evaluacion: instantanea(actividades) },
+        ),
       };
     });
   }
