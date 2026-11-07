@@ -682,18 +682,31 @@ export class MedicionesService {
     if (datos.accionesPropuestas !== undefined) {
       cambios.acciones_propuestas = datos.accionesPropuestas;
     }
-    await this.prisma.$transaction(async (tx) => {
+    const anterior = await this.prisma.$transaction(async (tx) => {
       await this.bloquearBorrador(tx, idMedicion);
+      const actual = await tx.medicion_rap.findUniqueOrThrow({
+        where: { id: idMedicion },
+        select: {
+          acciones_implementadas: true,
+          resultados_obtenidos: true,
+          acciones_propuestas: true,
+        },
+      });
       await tx.medicion_rap.update({
         where: { id: idMedicion },
         data: { ...cambios, updated_at: new Date() },
       });
+      return actual;
     });
-    // Solo los campos del análisis que se enviaron, con su texto nuevo.
+    // Solo los campos del análisis que se enviaron, con su texto anterior y el nuevo.
+    const campos = Object.keys(cambios) as (keyof typeof anterior)[];
     await this.auditoria.registrar({
       accion: 'actualizar',
       tablaAfectada: 'medicion_rap',
       idRegistro: idMedicion,
+      valorAnterior: Object.fromEntries(
+        campos.map((campo) => [campo, anterior[campo]]),
+      ),
       valorNuevo: cambios as Prisma.InputJsonValue,
     });
     return this.detalle(usuario, idMedicion, { proyecto, acceso });

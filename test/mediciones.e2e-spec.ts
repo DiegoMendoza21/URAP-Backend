@@ -891,6 +891,24 @@ describe('Medición de RAP (e2e) · RF-30, HU-11-01 a HU-11-03', () => {
         accionesPropuestas: null,
         puedeAnalizar: true,
       });
+      // La auditoría guarda solo los campos enviados, con su texto anterior y el nuevo.
+      const auditada = await prisma.auditoria.findFirst({
+        where: {
+          id_usuario: usuarios.lider,
+          accion: 'actualizar',
+          tabla_afectada: 'medicion_rap',
+          id_registro: idMedicion,
+        },
+        orderBy: { id: 'desc' },
+      });
+      expect(auditada?.valor_anterior).toEqual({
+        acciones_implementadas: null,
+        resultados_obtenidos: null,
+      });
+      expect(auditada?.valor_nuevo).toEqual({
+        acciones_implementadas: 'Talleres de refuerzo',
+        resultados_obtenidos: null,
+      });
       await analizar('departamento', { accionesPropuestas: 'X' }).expect(403);
       await analizar('liderOtroRap', { accionesPropuestas: 'X' }).expect(404);
     });
