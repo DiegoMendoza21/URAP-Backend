@@ -170,6 +170,14 @@ export class PeriodoCalendarioDto {
   cerrado: boolean;
 }
 
+export class SemanaRecesoDto {
+  @ApiProperty({ example: '2026-11-09', format: 'date', description: 'Lunes' })
+  desde: string;
+
+  @ApiProperty({ example: '2026-11-14', format: 'date', description: 'Sábado' })
+  hasta: string;
+}
+
 export class CalendarioSesionesDto {
   @ApiProperty({ type: [SesionCalendarioDto] })
   elementos: SesionCalendarioDto[];
@@ -220,6 +228,14 @@ export class CalendarioSesionesDto {
     description: 'Alertas de todo el calendario, no solo de la página (RF-23)',
   })
   resumen: ResumenAlertasDto;
+
+  @ApiProperty({
+    type: [SemanaRecesoDto],
+    description:
+      'Semanas de receso del período: de lunes a sábado sin clase en la tabla de festivos. No ' +
+      'tienen sesiones ni cuentan en la numeración de semanas (Acuerdo 46 de 2026).',
+  })
+  recesos: SemanaRecesoDto[];
 }
 
 export class ProyectoConPendientesDto {

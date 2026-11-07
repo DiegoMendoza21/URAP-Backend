@@ -66,40 +66,122 @@ export interface DatosPlanificacion {
   /** Semanas de clase del período; sin valor, el calendario llega hasta la fecha final. */
   numeroSemanas: number | null;
   diasClase: readonly number[];
+  /**
+   * Fechas `YYYY-MM-DD` sin clase de `dia_festivo`: festivos de ley e institucionales. Solo
+   * sirven aquí para reconocer las semanas de receso; el marcado de festivos lo hace el servicio.
+   */
+  diasSinClase?: ReadonlySet<string>;
+}
+
+/** Lunes de la semana de una fecha, a medianoche UTC. */
+export function lunesDe(fecha: Date): Date {
+  return new Date(
+    fecha.getTime() - (diaSemanaDe(fecha) - 1) * MILISEGUNDOS_DIA,
+  );
+}
+
+/** Sábado de la semana de una fecha: el último día en que puede haber clase. */
+export function sabadoDe(fecha: Date): Date {
+  return new Date(
+    lunesDe(fecha).getTime() + (DIA_SEMANA_MAXIMO - 1) * MILISEGUNDOS_DIA,
+  );
 }
 
 /**
- * RF-19, p1 y p2: una sesión por cada día de clase entre el inicio y el fin del período,
+ * Semana de receso: los seis días en que puede haber clase, de lunes a sábado, están en la tabla
+ * de festivos, sea por ley o por decisión institucional. Así se carga el receso de noviembre
+ * del Acuerdo 46 de 2026 (del 9 al 14, con origen `institucional`), y también serviría una
+ * semana de receso que combine festivos de ley con días institucionales.
+ */
+function esSemanaDeReceso(
+  lunes: Date,
+  diasSinClase: ReadonlySet<string>,
+): boolean {
+  if (diasSinClase.size === 0) {
+    return false;
+  }
+  for (let dia = 0; dia < DIA_SEMANA_MAXIMO; dia++) {
+    const fecha = new Date(lunes.getTime() + dia * MILISEGUNDOS_DIA);
+    if (!diasSinClase.has(aTextoFecha(fecha))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export interface SemanaDeReceso {
+  /** Lunes, `YYYY-MM-DD` */
+  desde: string;
+  /** Sábado, `YYYY-MM-DD` */
+  hasta: string;
+}
+
+/** Semanas de receso que tocan el período, para mostrarlas en el calendario. */
+export function semanasDeReceso(
+  fechaInicio: Date,
+  fechaFin: Date,
+  diasSinClase: ReadonlySet<string>,
+): SemanaDeReceso[] {
+  const recesos: SemanaDeReceso[] = [];
+  for (
+    let lunes = lunesDe(fechaInicio);
+    lunes.getTime() <= fechaFin.getTime();
+    lunes = new Date(lunes.getTime() + 7 * MILISEGUNDOS_DIA)
+  ) {
+    if (esSemanaDeReceso(lunes, diasSinClase)) {
+      recesos.push({
+        desde: aTextoFecha(lunes),
+        hasta: aTextoFecha(sabadoDe(lunes)),
+      });
+    }
+  }
+  return recesos;
+}
+
+/**
+ * RF-19, p1 y p2: una sesión por cada encuentro previsto entre el inicio y el fin del período,
  * numerada por semana. La semana 1 es la semana (de lunes a domingo) en que inicia el período,
  * aunque empiece a mitad de semana. Si el período define su número de semanas, no se generan
  * sesiones después de la última.
+ *
+ * Calendario académico (Acuerdo 46 de 2026): una semana de receso no es semana de clase, así
+ * que no tiene sesiones ni cuenta en la numeración; la semana siguiente toma su número. Un
+ * festivo suelto, en cambio, es un encuentro previsto que cae en festivo: su sesión se genera
+ * (el servicio la marca «Festivo» para que el docente la reprograme) y la numeración sigue.
  */
 export function planificarSesiones({
   fechaInicio,
   fechaFin,
   numeroSemanas,
   diasClase,
+  diasSinClase = new Set(),
 }: DatosPlanificacion): SesionPlanificada[] {
   const dias = new Set(diasClase);
-  const lunesInicial =
-    fechaInicio.getTime() - (diaSemanaDe(fechaInicio) - 1) * MILISEGUNDOS_DIA;
   const sesiones: SesionPlanificada[] = [];
+  let semana = 0;
   for (
-    let instante = fechaInicio.getTime();
-    instante <= fechaFin.getTime();
-    instante += MILISEGUNDOS_DIA
+    let lunes = lunesDe(fechaInicio);
+    lunes.getTime() <= fechaFin.getTime();
+    lunes = new Date(lunes.getTime() + 7 * MILISEGUNDOS_DIA)
   ) {
-    const fecha = new Date(instante);
-    const diaSemana = diaSemanaDe(fecha);
-    if (!dias.has(diaSemana)) {
+    if (esSemanaDeReceso(lunes, diasSinClase)) {
       continue;
     }
-    const semana =
-      Math.floor((instante - lunesInicial) / (7 * MILISEGUNDOS_DIA)) + 1;
+    semana++;
     if (numeroSemanas !== null && semana > numeroSemanas) {
       break;
     }
-    sesiones.push({ fecha: aTextoFecha(fecha), semana, diaSemana });
+    for (let dia = 0; dia < 7; dia++) {
+      const instante = lunes.getTime() + dia * MILISEGUNDOS_DIA;
+      if (instante < fechaInicio.getTime() || instante > fechaFin.getTime()) {
+        continue;
+      }
+      const fecha = new Date(instante);
+      const diaSemana = diaSemanaDe(fecha);
+      if (dias.has(diaSemana)) {
+        sesiones.push({ fecha: aTextoFecha(fecha), semana, diaSemana });
+      }
+    }
   }
   return sesiones;
 }
