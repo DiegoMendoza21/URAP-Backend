@@ -310,10 +310,11 @@ export class RolesService {
     );
 
     if (agregados.length > 0 || retirados.length > 0) {
-      // Solo lo que cambia: los permisos retirados y los agregados.
+      // Solo lo que cambia: los permisos retirados y los agregados. Va sobre `rol`, porque
+      // `rol_permiso` tiene clave compuesta: así el historial del rol (HU-14-03) los muestra.
       await this.auditoria.registrar({
         accion: 'actualizar',
-        tablaAfectada: 'rol_permiso',
+        tablaAfectada: 'rol',
         idRegistro: id,
         valorAnterior: { retirados: retirados.sort() },
         valorNuevo: { agregados: agregados.sort() },

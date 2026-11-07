@@ -364,7 +364,12 @@ describe('Roles y matriz de permisos (e2e) · HU-02-05 y HU-02-06', () => {
       ]);
 
       const auditoria = await prisma.auditoria.findFirst({
-        where: { tabla_afectada: 'rol_permiso', id_registro: idRol },
+        where: {
+          tabla_afectada: 'rol',
+          id_registro: idRol,
+          accion: 'actualizar',
+        },
+        orderBy: { id: 'desc' },
       });
       expect(auditoria?.valor_anterior).toEqual({
         retirados: ['proyectos.crear'],

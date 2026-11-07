@@ -65,6 +65,14 @@ describe('Matriz inicial de permisos (Producto 1, Tabla 17)', () => {
     expect(conAdministracion).toEqual(['Administrador']);
   });
 
+  it('el Docente diligencia sus proyectos docentes pero no los crea (Tabla 17 v2; RF-08 a RF-10)', () => {
+    const proyectosDocente = permisosInicialesDe('Docente responsable')
+      .filter(({ modulo }) => modulo === 'proyectos')
+      .map(({ permiso }) => permiso)
+      .sort();
+    expect(proyectosDocente).toEqual(['actualizar', 'leer']);
+  });
+
   it('el Departamento crea y aprueba proyectos docentes (RF-08, RF-17), y el Administrador no los aprueba', () => {
     const departamento = permisosInicialesDe('Departamento académico');
     expect(departamento).toEqual(

@@ -39,7 +39,9 @@ export const MATRIZ_PERMISOS_INICIAL: Record<
   'Docente responsable': {
     usuarios: '—',
     estructura: 'C',
-    proyectos: 'R/E', // propios
+    // Tabla 17 v2: E y no R/E. El proyecto lo crea el Departamento (RF-08, RF-09, RF-10);
+    // el Docente solo diligencia los que tiene asignados.
+    proyectos: 'E', // propios
     plan_curso: 'R/E', // propios
     rap: 'R/E', // RAC propios
     clases: 'R/E', // propios

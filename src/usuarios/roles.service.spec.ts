@@ -102,7 +102,7 @@ describe('RolesService', () => {
       ).resolves.toBeDefined();
       expect(auditoria.registrar).toHaveBeenCalledWith({
         accion: 'actualizar',
-        tablaAfectada: 'rol_permiso',
+        tablaAfectada: 'rol',
         idRegistro: 5,
         valorAnterior: { retirados: ['usuarios.administrar'] },
         valorNuevo: { agregados: [] },

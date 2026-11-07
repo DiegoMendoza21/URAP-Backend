@@ -75,7 +75,8 @@ async function sembrarCatalogos(tx: Transaccion): Promise<void> {
     await tx.modulo.upsert({
       where: { codigo: modulo.codigo },
       create: modulo,
-      update: {},
+      // El orden se corrige en las bases ya sembradas: plan_curso entró entre proyectos y rap.
+      update: { nombre: modulo.nombre, orden: modulo.orden },
     });
   }
   for (const permiso of PERMISOS) {
