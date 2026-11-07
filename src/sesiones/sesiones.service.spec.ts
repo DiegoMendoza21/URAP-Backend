@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
+import type { ParametrosService } from '../common/parametros/parametros.service.js';
 import type { PrismaService } from '../common/prisma/prisma.service.js';
 import type { AlcanceService } from '../proyectos-docentes/alcance.service.js';
 import type { ProyectosDocentesService } from '../proyectos-docentes/proyectos-docentes.service.js';
@@ -108,7 +109,8 @@ describe('SesionesService', () => {
     },
   };
   const prisma = {
-    proyecto_docente: { findFirst: vi.fn() },
+    proyecto_docente: { findFirst: vi.fn(), findMany: vi.fn() },
+    sesion_clase: { findMany: vi.fn() },
     proyecto_docente_docente: { findFirst: vi.fn() },
     dia_festivo: { findMany: vi.fn() },
     tipo_sesion: { findMany: vi.fn() },
@@ -123,15 +125,19 @@ describe('SesionesService', () => {
   };
   const alcance = { alcanzaPrograma: vi.fn() };
   const proyectos = { filtroVisibilidad: vi.fn() };
+  const parametros = { entero: vi.fn() };
   const servicio = new SesionesService(
     prisma as unknown as PrismaService,
     alcance as unknown as AlcanceService,
     proyectos as unknown as ProyectosDocentesService,
+    parametros as unknown as ParametrosService,
   );
 
   beforeEach(() => {
     vi.clearAllMocks();
     proyectos.filtroVisibilidad.mockResolvedValue({});
+    // Umbral de «Por vencer» del parámetro alerta_dias_anticipacion (seed: 2 días).
+    parametros.entero.mockResolvedValue(2);
     prisma.proyecto_docente.findFirst.mockResolvedValue(proyecto());
     prisma.proyecto_docente_docente.findFirst.mockResolvedValue({
       id_usuario: docente.id,
@@ -450,6 +456,276 @@ describe('SesionesService', () => {
         servicio.generarCalendario(departamento, 99),
       ).rejects.toThrow(new ForbiddenException(MENSAJE_SOLO_DOCENTE_ASIGNADO));
       expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('alertas del calendario (RF-23)', () => {
+    /** Fila de `sesion_clase` como la devuelve Prisma, con su tipo y su festivo. */
+    function fila(
+      id: number,
+      fecha: string,
+      cambios: Record<string, unknown> = {},
+    ) {
+      return {
+        ...sesion(id, fecha),
+        tipo_sesion: TIPO_CLASE,
+        dia_festivo: null,
+        ...cambios,
+      };
+    }
+
+    beforeEach(() => {
+      // Sábado 7 de noviembre de 2026, 10 a. m. en Bogotá.
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-11-07T15:00:00Z'));
+      prisma.proyecto_docente.findFirst.mockResolvedValue(
+        proyecto({
+          periodo_academico: {
+            ...proyecto().periodo_academico,
+            fecha_fin: aFechaColumna('2026-11-21'),
+          },
+        }),
+      );
+      prisma.sesion_clase.findMany.mockResolvedValue([
+        fila(1, '2026-11-02', {
+          tipo_sesion: TIPO_FESTIVO,
+          dia_festivo: { nombre: 'Todos los Santos' },
+        }),
+        fila(2, '2026-11-04'),
+        fila(3, '2026-11-05', {
+          estado: 'registrada',
+          fecha_registro: new Date(),
+          id_registrado_por: 20,
+        }),
+        fila(4, '2026-11-09'),
+        fila(5, '2026-11-11'),
+      ]);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('marca vencidas, por vencer y el resumen, sin contar festivos ni diligenciadas', async () => {
+      const calendario = await servicio.consultarCalendario(departamento, 99, {
+        pagina: 1,
+        tamano: 100,
+      });
+
+      expect(
+        calendario.elementos.map(
+          ({ fecha, alerta, diasAtraso, diasRestantes }) => [
+            fecha,
+            alerta,
+            diasAtraso,
+            diasRestantes,
+          ],
+        ),
+      ).toEqual([
+        ['2026-11-02', null, null, null],
+        ['2026-11-04', 'vencida', 3, null],
+        ['2026-11-05', null, null, null],
+        ['2026-11-09', 'por_vencer', null, 2],
+        ['2026-11-11', null, null, null],
+      ]);
+      expect(calendario).toMatchObject({
+        hoy: '2026-11-07',
+        umbralDias: 2,
+        total: 5,
+        resumen: { vencidas: 1, porVencer: 1, incumplidas: 0, mayorAtraso: 3 },
+      });
+      expect(parametros.entero).toHaveBeenCalledWith(
+        'alerta_dias_anticipacion',
+      );
+    });
+
+    it('con el período cerrado, la vencida queda incumplida y sin por vencer (excepción p4)', async () => {
+      prisma.proyecto_docente.findFirst.mockResolvedValue(
+        proyecto({
+          periodo_academico: {
+            ...proyecto().periodo_academico,
+            fecha_fin: aFechaColumna('2026-11-21'),
+            cerrado: true,
+          },
+        }),
+      );
+
+      const calendario = await servicio.consultarCalendario(departamento, 99, {
+        pagina: 1,
+        tamano: 100,
+      });
+
+      expect(calendario.resumen).toEqual({
+        vencidas: 0,
+        porVencer: 0,
+        incumplidas: 1,
+        mayorAtraso: null,
+      });
+      expect(calendario.elementos[1]).toMatchObject({
+        alerta: 'incumplida',
+        diasAtraso: 3,
+      });
+    });
+
+    it('sin el parámetro del umbral no marca por vencer', async () => {
+      parametros.entero.mockResolvedValue(null);
+
+      const calendario = await servicio.consultarCalendario(departamento, 99, {
+        pagina: 1,
+        tamano: 100,
+      });
+
+      expect(calendario.umbralDias).toBeNull();
+      expect(calendario.resumen).toMatchObject({ vencidas: 1, porVencer: 0 });
+    });
+  });
+
+  describe('pendientesDelDocente (RF-23, p5)', () => {
+    const periodoAbierto = {
+      codigo: '2026-2',
+      fecha_fin: aFechaColumna('2026-11-21'),
+    };
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-11-07T15:00:00Z'));
+      prisma.proyecto_docente.findMany.mockResolvedValue([
+        {
+          id: 98,
+          grupo: null,
+          asignatura: {
+            nombre: 'Gestión de la calidad',
+            codigo_interno: 'DEMO-04',
+          },
+          periodo_academico: periodoAbierto,
+        },
+        {
+          id: 99,
+          grupo: 'A',
+          asignatura: {
+            nombre: 'Investigación de operaciones',
+            codigo_interno: 'DEMO-03',
+          },
+          periodo_academico: periodoAbierto,
+        },
+        {
+          id: 97,
+          grupo: null,
+          asignatura: {
+            nombre: 'Finanzas a corto plazo',
+            codigo_interno: 'DEMO-01',
+          },
+          periodo_academico: periodoAbierto,
+        },
+      ]);
+      prisma.sesion_clase.findMany.mockResolvedValue([
+        {
+          ...sesion(1, '2026-10-30'),
+          id_proyecto_docente: 99,
+          tipo_sesion: TIPO_CLASE,
+        },
+        {
+          ...sesion(2, '2026-11-04'),
+          id_proyecto_docente: 99,
+          tipo_sesion: TIPO_CLASE,
+        },
+        {
+          ...sesion(3, '2026-11-02'),
+          id_proyecto_docente: 99,
+          tipo_sesion: TIPO_FESTIVO,
+        },
+        {
+          ...sesion(4, '2026-11-08'),
+          id_proyecto_docente: 98,
+          tipo_sesion: TIPO_CLASE,
+        },
+        {
+          ...sesion(5, '2026-11-03', {
+            estado: 'registrada',
+            fecha_registro: new Date(),
+          }),
+          id_proyecto_docente: 97,
+          tipo_sesion: TIPO_CLASE,
+        },
+      ]);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('cuenta vencidas y por vencer de sus proyectos, los más atrasados primero', async () => {
+      const pendientes = await servicio.pendientesDelDocente(docente, {
+        pagina: 1,
+        tamano: 20,
+      });
+
+      expect(pendientes).toMatchObject({
+        hoy: '2026-11-07',
+        umbralDias: 2,
+        vencidas: 2,
+        porVencer: 1,
+        total: 2,
+      });
+      expect(pendientes.elementos).toEqual([
+        {
+          idProyectoDocente: 99,
+          asignatura: 'Investigación de operaciones',
+          codigoAsignatura: 'DEMO-03',
+          grupo: 'A',
+          periodo: '2026-2',
+          vencidas: 2,
+          porVencer: 0,
+          mayorAtraso: 8,
+        },
+        expect.objectContaining({
+          idProyectoDocente: 98,
+          vencidas: 0,
+          porVencer: 1,
+        }),
+      ]);
+      // Solo sus proyectos, con el período abierto, y las sesiones hasta el final del umbral.
+      expect(prisma.proyecto_docente.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            proyecto_docente_docente: { some: { id_usuario: docente.id } },
+            periodo_academico: {
+              is: { OR: [{ cerrado: false }, { cerrado: null }] },
+            },
+          },
+        }),
+      );
+      const { where } = prisma.sesion_clase.findMany.mock.calls[0][0];
+      expect(where.AND).toContainEqual({
+        fecha: { lte: aFechaColumna('2026-11-09') },
+      });
+      expect(where.AND).toContainEqual({
+        id_proyecto_docente: { in: [98, 99, 97] },
+      });
+    });
+
+    it('pagina la lista de proyectos sin cambiar los totales', async () => {
+      const pendientes = await servicio.pendientesDelDocente(docente, {
+        pagina: 2,
+        tamano: 1,
+      });
+
+      expect(pendientes).toMatchObject({ vencidas: 2, porVencer: 1, total: 2 });
+      expect(pendientes.elementos.map((p) => p.idProyectoDocente)).toEqual([
+        98,
+      ]);
+    });
+
+    it('sin proyectos no consulta sesiones', async () => {
+      prisma.proyecto_docente.findMany.mockResolvedValue([]);
+
+      const pendientes = await servicio.pendientesDelDocente(docente, {
+        pagina: 1,
+        tamano: 20,
+      });
+
+      expect(pendientes).toMatchObject({ vencidas: 0, porVencer: 0, total: 0 });
+      expect(prisma.sesion_clase.findMany).not.toHaveBeenCalled();
     });
   });
 });

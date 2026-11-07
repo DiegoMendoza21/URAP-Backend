@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { TIPOS_ALERTA, type TipoAlerta } from '../alertas.js';
 
 /* Respuestas del horario (HU-08-02) y del calendario de sesiones (HU-08-03), RF-19. */
 
@@ -90,6 +91,56 @@ export class SesionCalendarioDto {
       'Si el docente ya la diligenció. Una sesión diligenciada no se recalcula.',
   })
   diligenciada: boolean;
+
+  @ApiProperty({
+    enum: TIPOS_ALERTA,
+    enumName: 'TipoAlertaSesion',
+    nullable: true,
+    example: 'vencida',
+    description:
+      'RF-23. vencida: la fecha pasó sin registro (rojo). por_vencer: es hoy o cae dentro del ' +
+      'umbral del parámetro alerta_dias_anticipacion (advertencia). incumplida: vencida de un ' +
+      'período cerrado. Nulo: diligenciada, festivo o todavía lejos.',
+  })
+  alerta: TipoAlerta | null;
+
+  @ApiProperty({
+    example: 3,
+    nullable: true,
+    type: Number,
+    description: 'Días de atraso de una vencida o incumplida (RF-23, p3)',
+  })
+  diasAtraso: number | null;
+
+  @ApiProperty({
+    example: null,
+    nullable: true,
+    type: Number,
+    description: 'Días que faltan para una sesión por vencer: 0 es hoy',
+  })
+  diasRestantes: number | null;
+}
+
+export class ResumenAlertasDto {
+  @ApiProperty({ example: 3, description: 'Sesiones vencidas sin diligenciar' })
+  vencidas: number;
+
+  @ApiProperty({ example: 1, description: 'Sesiones por vencer' })
+  porVencer: number;
+
+  @ApiProperty({
+    example: 0,
+    description: 'Vencidas de un período cerrado (RF-23, excepción p4)',
+  })
+  incumplidas: number;
+
+  @ApiProperty({
+    example: 12,
+    nullable: true,
+    type: Number,
+    description: 'Días de atraso de la vencida más antigua',
+  })
+  mayorAtraso: number | null;
 }
 
 export class PeriodoCalendarioDto {
@@ -146,6 +197,89 @@ export class CalendarioSesionesDto {
       '(RF-19, excepción p3)',
   })
   advertencias: string[];
+
+  @ApiProperty({
+    example: '2026-11-07',
+    format: 'date',
+    description:
+      'La fecha de hoy en la zona horaria de la institución (America/Bogota)',
+  })
+  hoy: string;
+
+  @ApiProperty({
+    example: 2,
+    nullable: true,
+    type: Number,
+    description:
+      'Umbral de «Por vencer» en días, del parámetro alerta_dias_anticipacion. Nulo si falta.',
+  })
+  umbralDias: number | null;
+
+  @ApiProperty({
+    type: ResumenAlertasDto,
+    description: 'Alertas de todo el calendario, no solo de la página (RF-23)',
+  })
+  resumen: ResumenAlertasDto;
+}
+
+export class ProyectoConPendientesDto {
+  @ApiProperty({ example: 4 })
+  idProyectoDocente: number;
+
+  @ApiProperty({ example: 'Investigación de operaciones' })
+  asignatura: string;
+
+  @ApiProperty({ example: 'DEMO-03', nullable: true, type: String })
+  codigoAsignatura: string | null;
+
+  @ApiProperty({ example: 'A', nullable: true, type: String })
+  grupo: string | null;
+
+  @ApiProperty({ example: '2026-2', nullable: true, type: String })
+  periodo: string | null;
+
+  @ApiProperty({ example: 3 })
+  vencidas: number;
+
+  @ApiProperty({ example: 1 })
+  porVencer: number;
+
+  @ApiProperty({ example: 12, nullable: true, type: Number })
+  mayorAtraso: number | null;
+}
+
+export class PendientesDocenteDto {
+  @ApiProperty({ example: '2026-11-07', format: 'date' })
+  hoy: string;
+
+  @ApiProperty({ example: 2, nullable: true, type: Number })
+  umbralDias: number | null;
+
+  @ApiProperty({
+    example: 5,
+    description:
+      'Vencidas de todos sus proyectos con el período abierto (RF-23, p5)',
+  })
+  vencidas: number;
+
+  @ApiProperty({ example: 1 })
+  porVencer: number;
+
+  @ApiProperty({
+    type: [ProyectoConPendientesDto],
+    description:
+      'Proyectos con vencidas o por vencer, los más atrasados primero',
+  })
+  elementos: ProyectoConPendientesDto[];
+
+  @ApiProperty({ example: 1 })
+  pagina: number;
+
+  @ApiProperty({ example: 20 })
+  tamano: number;
+
+  @ApiProperty({ example: 2, description: 'Proyectos con pendientes' })
+  total: number;
 }
 
 export class ResultadoGeneracionDto {

@@ -7,6 +7,12 @@ import { ROL } from '../src/auth/roles.js';
 import { PrismaService } from '../src/common/prisma/prisma.service.js';
 import { configurarAplicacion } from '../src/configurar-aplicacion.js';
 import {
+  diasEntre,
+  fechaDeHoy,
+  PARAMETRO_UMBRAL_ALERTA,
+  sumarDias,
+} from '../src/sesiones/alertas.js';
+import {
   MENSAJE_PERIODO_CERRADO,
   MENSAJE_SIN_HORARIO,
   MENSAJE_SOLO_DOCENTE_ASIGNADO,
@@ -118,13 +124,14 @@ describe('Calendario de sesiones (e2e) · RF-19, HU-08-02 y HU-08-03', () => {
     inicio: string,
     fin: string,
     cerrado = false,
+    numeroSemanas: number | null = 4,
   ): Promise<number> {
     const periodo = await prisma.periodo_academico.create({
       data: {
         codigo: `E2E-${creados.periodos.length}-${sufijo}`,
         fecha_inicio: new Date(inicio),
         fecha_fin: new Date(fin),
-        numero_semanas: 4,
+        numero_semanas: numeroSemanas,
         activo: false,
         cerrado,
       },
@@ -603,6 +610,268 @@ describe('Calendario de sesiones (e2e) · RF-19, HU-08-02 y HU-08-03', () => {
       expect(consulta.body.puedeEditar).toBe(false);
       expect(generar.status).toBe(403);
       expect(generar.body.mensaje).toBe(MENSAJE_SOLO_DOCENTE_ASIGNADO);
+    });
+  });
+
+  describe('sesiones vencidas y por vencer (RF-23, HU-08-07 y HU-08-08)', () => {
+    /** Umbral que usa esta prueba, distinto del valor inicial (2) para probar que se lee. */
+    const UMBRAL = 3;
+    const hoy = fechaDeHoy();
+    let parametroAnterior: string | null | undefined;
+    let proyectoAlertas: number;
+    let proyectoAlertasCerrado: number;
+    let periodoAlertasCerrado: number;
+    let idFestivo: number;
+    let idDiligenciada: number;
+
+    type SesionRespuesta = {
+      id: number;
+      fecha: string;
+      alerta: string | null;
+      diasAtraso: number | null;
+      diasRestantes: number | null;
+    };
+
+    const todosLosDias = {
+      bloques: [1, 2, 3, 4, 5, 6].map((diaSemana) => ({
+        diaSemana,
+        horaInicio: '07:00',
+        horaFin: '09:00',
+      })),
+    };
+
+    beforeAll(async () => {
+      const parametro = await prisma.parametro_sistema.findUnique({
+        where: { clave: PARAMETRO_UMBRAL_ALERTA },
+      });
+      parametroAnterior = parametro ? parametro.valor : undefined;
+      await prisma.parametro_sistema.upsert({
+        where: { clave: PARAMETRO_UMBRAL_ALERTA },
+        create: {
+          clave: PARAMETRO_UMBRAL_ALERTA,
+          valor: String(UMBRAL),
+          tipo_dato: 'entero',
+        },
+        update: { valor: String(UMBRAL) },
+      });
+
+      // Período abierto de tres semanas antes a tres semanas después de hoy, clase de lunes a
+      // sábado. Sin tope de semanas, para que el calendario llegue hasta la fecha final.
+      const periodoAbierto = await crearPeriodo(
+        sumarDias(hoy, -21),
+        sumarDias(hoy, 21),
+        false,
+        null,
+      );
+      proyectoAlertas = await crearProyecto(periodoAbierto, 'ALE');
+      await como('docente')
+        .put(`/proyectos-docentes/${proyectoAlertas}/horario`, todosLosDias)
+        .expect(200);
+      await como('docente')
+        .post(`/proyectos-docentes/${proyectoAlertas}/calendario`)
+        .expect(200);
+      // Sin depender de los festivos que haya en la base: todas son clase, salvo una que se
+      // marca festivo a propósito. Otra se marca diligenciada, como lo hará el registro de
+      // clase (HU-08-04).
+      const tipoClase = await prisma.tipo_sesion.findUniqueOrThrow({
+        where: { codigo: 'clase' },
+      });
+      const tipoFestivo = await prisma.tipo_sesion.findUniqueOrThrow({
+        where: { codigo: 'festivo' },
+      });
+      await prisma.sesion_clase.updateMany({
+        where: { id_proyecto_docente: proyectoAlertas },
+        data: { id_tipo_sesion: tipoClase.id, id_dia_festivo: null },
+      });
+      const pasadas = await prisma.sesion_clase.findMany({
+        where: {
+          id_proyecto_docente: proyectoAlertas,
+          fecha: { lt: new Date(hoy) },
+        },
+        orderBy: { fecha: 'desc' },
+        take: 2,
+      });
+      [idFestivo, idDiligenciada] = pasadas.map((sesion) => sesion.id);
+      await prisma.sesion_clase.update({
+        where: { id: idFestivo },
+        data: { id_tipo_sesion: tipoFestivo.id },
+      });
+      await prisma.sesion_clase.update({
+        where: { id: idDiligenciada },
+        data: {
+          estado: 'registrada',
+          fecha_registro: new Date(),
+          id_registrado_por: usuarios.docente,
+        },
+      });
+
+      // Período ya terminado: se genera abierto y luego se cierra (excepción p4).
+      periodoAlertasCerrado = await crearPeriodo(
+        sumarDias(hoy, -50),
+        sumarDias(hoy, -30),
+        false,
+        null,
+      );
+      proyectoAlertasCerrado = await crearProyecto(
+        periodoAlertasCerrado,
+        'ALC',
+      );
+      await como('docente')
+        .put(
+          `/proyectos-docentes/${proyectoAlertasCerrado}/horario`,
+          lunesYMiercoles,
+        )
+        .expect(200);
+      await como('docente')
+        .post(`/proyectos-docentes/${proyectoAlertasCerrado}/calendario`)
+        .expect(200);
+      await prisma.sesion_clase.updateMany({
+        where: { id_proyecto_docente: proyectoAlertasCerrado },
+        data: { id_tipo_sesion: tipoClase.id, id_dia_festivo: null },
+      });
+      await prisma.periodo_academico.update({
+        where: { id: periodoAlertasCerrado },
+        data: { cerrado: true },
+      });
+    }, 60_000);
+
+    afterAll(async () => {
+      if (!prisma) {
+        return;
+      }
+      if (parametroAnterior === undefined) {
+        await prisma.parametro_sistema.deleteMany({
+          where: { clave: PARAMETRO_UMBRAL_ALERTA },
+        });
+      } else {
+        await prisma.parametro_sistema.update({
+          where: { clave: PARAMETRO_UMBRAL_ALERTA },
+          data: { valor: parametroAnterior },
+        });
+      }
+    });
+
+    it('marca vencidas con sus días de atraso y por vencer dentro del umbral, en menos de 3 s', async () => {
+      const inicio = Date.now();
+      const respuesta = await como('docente').get(
+        `/proyectos-docentes/${proyectoAlertas}/calendario`,
+      );
+      const duracion = Date.now() - inicio;
+
+      expect(respuesta.status).toBe(200);
+      expect(duracion).toBeLessThan(3000);
+      expect(respuesta.body).toMatchObject({ hoy, umbralDias: UMBRAL });
+      const sesiones = respuesta.body.elementos as SesionRespuesta[];
+      for (const sesion of sesiones) {
+        if (sesion.id === idFestivo || sesion.id === idDiligenciada) {
+          // Festivo (excepción p2) y diligenciada: sin alerta.
+          expect(sesion.alerta).toBeNull();
+        } else if (sesion.fecha < hoy) {
+          expect(sesion).toMatchObject({
+            alerta: 'vencida',
+            diasAtraso: diasEntre(sesion.fecha, hoy),
+          });
+        } else if (diasEntre(hoy, sesion.fecha) <= UMBRAL) {
+          expect(sesion).toMatchObject({
+            alerta: 'por_vencer',
+            diasRestantes: diasEntre(hoy, sesion.fecha),
+          });
+        } else {
+          expect(sesion.alerta).toBeNull();
+        }
+      }
+      const pasadas = sesiones.filter((sesion) => sesion.fecha < hoy).length;
+      const porVencer = sesiones.filter(
+        (sesion) =>
+          sesion.fecha >= hoy && diasEntre(hoy, sesion.fecha) <= UMBRAL,
+      ).length;
+      expect(respuesta.body.resumen).toEqual({
+        vencidas: pasadas - 2,
+        porVencer,
+        incumplidas: 0,
+        mayorAtraso: Math.max(
+          ...sesiones
+            .filter((sesion) => sesion.alerta === 'vencida')
+            .map((sesion) => sesion.diasAtraso ?? 0),
+        ),
+      });
+      expect(respuesta.body.resumen.vencidas).toBeGreaterThan(10);
+      expect(porVencer).toBeGreaterThan(0);
+    });
+
+    it('el Departamento ve las mismas alertas en el calendario', async () => {
+      const docente = await como('docente').get(
+        `/proyectos-docentes/${proyectoAlertas}/calendario`,
+      );
+      const departamento = await como('departamento').get(
+        `/proyectos-docentes/${proyectoAlertas}/calendario`,
+      );
+
+      expect(departamento.status).toBe(200);
+      expect(departamento.body.resumen).toEqual(docente.body.resumen);
+    });
+
+    it('con el período cerrado, las vencidas quedan incumplidas y no suman días (excepción p4)', async () => {
+      const respuesta = await como('docente').get(
+        `/proyectos-docentes/${proyectoAlertasCerrado}/calendario`,
+      );
+
+      expect(respuesta.status).toBe(200);
+      const fin = sumarDias(hoy, -30);
+      const sesiones = respuesta.body.elementos as SesionRespuesta[];
+      expect(sesiones.length).toBeGreaterThan(0);
+      for (const sesion of sesiones) {
+        expect(sesion).toMatchObject({
+          alerta: 'incumplida',
+          diasAtraso: diasEntre(sesion.fecha, fin),
+        });
+      }
+      expect(respuesta.body.resumen).toMatchObject({
+        vencidas: 0,
+        porVencer: 0,
+        incumplidas: sesiones.length,
+      });
+    });
+
+    it('el panel del docente cuenta sus vencidas y por vencer, sin los períodos cerrados (p5)', async () => {
+      const calendario = await como('docente').get(
+        `/proyectos-docentes/${proyectoAlertas}/calendario`,
+      );
+      const respuesta = await como('docente').get('/sesiones/pendientes');
+
+      expect(respuesta.status).toBe(200);
+      expect(respuesta.body).toMatchObject({
+        hoy,
+        umbralDias: UMBRAL,
+        vencidas: calendario.body.resumen.vencidas,
+        porVencer: calendario.body.resumen.porVencer,
+        total: 1,
+      });
+      expect(respuesta.body.elementos).toEqual([
+        expect.objectContaining({
+          idProyectoDocente: proyectoAlertas,
+          vencidas: calendario.body.resumen.vencidas,
+          porVencer: calendario.body.resumen.porVencer,
+          mayorAtraso: calendario.body.resumen.mayorAtraso,
+        }),
+      ]);
+    });
+
+    it('el panel de pendientes es solo del docente (403 para Departamento y Estudiante)', async () => {
+      await como('departamento').get('/sesiones/pendientes').expect(403);
+      await como('estudiante').get('/sesiones/pendientes').expect(403);
+    });
+
+    it('un docente sin proyectos asignados no tiene pendientes', async () => {
+      const respuesta = await como('otroDocente').get('/sesiones/pendientes');
+
+      expect(respuesta.status).toBe(200);
+      expect(respuesta.body).toMatchObject({
+        vencidas: 0,
+        porVencer: 0,
+        total: 0,
+        elementos: [],
+      });
     });
   });
 });
