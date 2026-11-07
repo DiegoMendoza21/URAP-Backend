@@ -53,12 +53,12 @@ export class VariablesEntorno {
   JWT_EXPIRACION_MINUTOS: number;
 
   /**
-   * Cuántos proxies hay delante de la API: el servidor de Next.js del frontend y, en el
-   * despliegue, el balanceador de carga si queda entre los dos. Con 0, Express toma la IP de
-   * la conexión directa, que con el frontend delante es siempre la de Next.js. Con N, toma la
-   * IP del cliente del encabezado X-Forwarded-For después de saltar N proxies. Un valor mayor
-   * que los proxies reales permite falsificar la IP que queda en la sesión y en la auditoría,
-   * y saltarse el límite de intentos por IP. Sin la variable vale 0, el valor seguro.
+   * Cuántos balanceadores hay delante del servidor de Next.js del frontend, que reenvía cada
+   * petición sin agregar su propia entrada a X-Forwarded-For. Con 0, Express toma la IP de la
+   * conexión directa: en local es la del usuario, pero en el despliegue sería la de Next.js
+   * para todos. Con N, toma la IP del cliente de X-Forwarded-For después de saltar N
+   * proxies. Un valor mayor que los balanceadores reales permite falsificar la IP que queda
+   * en la sesión y en la auditoría, y saltarse el límite de intentos por IP.
    */
   @IsInt({ message: 'PROXIES_CONFIABLES debe ser un número entero' })
   @Min(0, { message: 'PROXIES_CONFIABLES no puede ser negativo' })
