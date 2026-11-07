@@ -25,6 +25,7 @@ import {
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import type { Request } from 'express';
+import { AuditarConsulta } from '../auditoria/auditar-consulta.decorator.js';
 import { Roles } from '../auth/decoradores/roles.decorator.js';
 import { UsuarioActual } from '../auth/decoradores/usuario-actual.decorator.js';
 import { ROL } from '../auth/roles.js';
@@ -39,7 +40,7 @@ import {
   PaginaMatriculadosDto,
   ResultadoCargaMatriculadosDto,
 } from './dto/respuestas.dto.js';
-import { MatriculasService } from './matriculas.service.js';
+import { MatriculasService, TABLA_AUDITORIA } from './matriculas.service.js';
 
 @ApiTags('Estudiantes matriculados')
 @ApiBearerAuth()
@@ -108,6 +109,8 @@ export class MatriculasController {
 
   @Get()
   @Roles(ROL.administrador, ROL.docente)
+  // Datos personales (Ley 1581): cada consulta exitosa queda en auditoría con usuario e IP.
+  @AuditarConsulta(TABLA_AUDITORIA, 'idProyecto')
   @ApiOperation({
     summary: 'Lista de estudiantes del curso (RF-22)',
     description:
