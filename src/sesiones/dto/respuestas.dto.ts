@@ -1,0 +1,186 @@
+import { ApiProperty } from '@nestjs/swagger';
+
+/* Respuestas del horario (HU-08-02) y del calendario de sesiones (HU-08-03), RF-19. */
+
+export class BloqueHorarioDto {
+  @ApiProperty({ example: 1, description: '1 = lunes … 6 = sábado' })
+  diaSemana: number;
+
+  @ApiProperty({ example: '07:00' })
+  horaInicio: string;
+
+  @ApiProperty({ example: '09:00' })
+  horaFin: string;
+}
+
+export class HorarioCursoDto {
+  @ApiProperty({ example: 4 })
+  idProyectoDocente: number;
+
+  @ApiProperty({ type: [BloqueHorarioDto] })
+  bloques: BloqueHorarioDto[];
+
+  @ApiProperty({
+    example: true,
+    description:
+      'Si el usuario puede cambiar el horario y generar el calendario: el docente asignado ' +
+      'al proyecto o el administrador, con el período abierto.',
+  })
+  puedeEditar: boolean;
+}
+
+export class TipoSesionDto {
+  @ApiProperty({
+    example: 'clase',
+    description: 'clase | parcial | festivo | actividad_complementaria',
+  })
+  codigo: string;
+
+  @ApiProperty({ example: 'Clase' })
+  nombre: string;
+}
+
+export class SesionCalendarioDto {
+  @ApiProperty({ example: 120 })
+  id: number;
+
+  @ApiProperty({ example: 1, description: 'Semana del período' })
+  semana: number;
+
+  @ApiProperty({ example: '2026-08-03', format: 'date' })
+  fecha: string;
+
+  @ApiProperty({ example: 1, description: '1 = lunes … 6 = sábado' })
+  diaSemana: number;
+
+  @ApiProperty({
+    example: '07:00',
+    nullable: true,
+    type: String,
+    description:
+      'Del horario vigente; nulo si ese día ya no está en el horario',
+  })
+  horaInicio: string | null;
+
+  @ApiProperty({ example: '09:00', nullable: true, type: String })
+  horaFin: string | null;
+
+  @ApiProperty({ type: TipoSesionDto, nullable: true })
+  tipo: TipoSesionDto | null;
+
+  @ApiProperty({
+    example: 'programada',
+    nullable: true,
+    type: String,
+    description: 'programada | registrada (RF-20)',
+  })
+  estado: string | null;
+
+  @ApiProperty({
+    example: 'Batalla de Boyacá',
+    nullable: true,
+    type: String,
+    description: 'Nombre del festivo con el que coincide la fecha (RF-19, p4)',
+  })
+  festivo: string | null;
+
+  @ApiProperty({
+    example: false,
+    description:
+      'Si el docente ya la diligenció. Una sesión diligenciada no se recalcula.',
+  })
+  diligenciada: boolean;
+}
+
+export class PeriodoCalendarioDto {
+  @ApiProperty({ example: '2026-2', nullable: true, type: String })
+  codigo: string | null;
+
+  @ApiProperty({
+    example: '2026-08-03',
+    format: 'date',
+    nullable: true,
+    type: String,
+  })
+  fechaInicio: string | null;
+
+  @ApiProperty({
+    example: '2026-11-21',
+    format: 'date',
+    nullable: true,
+    type: String,
+  })
+  fechaFin: string | null;
+
+  @ApiProperty({ example: 16, nullable: true, type: Number })
+  numeroSemanas: number | null;
+
+  @ApiProperty({ example: false })
+  cerrado: boolean;
+}
+
+export class CalendarioSesionesDto {
+  @ApiProperty({ type: [SesionCalendarioDto] })
+  elementos: SesionCalendarioDto[];
+
+  @ApiProperty({ example: 1 })
+  pagina: number;
+
+  @ApiProperty({ example: 100 })
+  tamano: number;
+
+  @ApiProperty({ example: 48 })
+  total: number;
+
+  @ApiProperty({ type: PeriodoCalendarioDto })
+  periodo: PeriodoCalendarioDto;
+
+  @ApiProperty({ example: true })
+  puedeEditar: boolean;
+
+  @ApiProperty({
+    type: [String],
+    example: [],
+    description:
+      'Avisos para el usuario, por ejemplo un año del período sin festivos parametrizados ' +
+      '(RF-19, excepción p3)',
+  })
+  advertencias: string[];
+}
+
+export class ResultadoGeneracionDto {
+  @ApiProperty({ example: 48, description: 'Sesiones nuevas' })
+  creadas: number;
+
+  @ApiProperty({
+    example: 0,
+    description:
+      'Sesiones sin diligenciar a las que se les recalculó la semana o el festivo',
+  })
+  actualizadas: number;
+
+  @ApiProperty({
+    example: 0,
+    description:
+      'Sesiones sin diligenciar que ya no caen en el horario: nunca tuvieron datos, se retiran',
+  })
+  retiradas: number;
+
+  @ApiProperty({
+    example: 0,
+    description: 'Sesiones diligenciadas, que se dejan intactas',
+  })
+  conservadas: number;
+
+  @ApiProperty({ example: 3, description: 'Sesiones marcadas como festivo' })
+  festivos: number;
+
+  @ApiProperty({
+    example: 48,
+    description: 'Sesiones del calendario después de generar',
+  })
+  total: number;
+
+  @ApiProperty({ type: [String], example: [] })
+  advertencias: string[];
+}

@@ -713,7 +713,8 @@ Table documento_soporte {
 Table tipo_notificacion {
   id integer [primary key, increment]
   codigo varchar [unique] // asignacion_proyecto, sesion_por_vencer, sesion_vencida,
-                          // proyecto_devuelto, proyecto_aprobado, cierre_periodo
+                          // proyecto_devuelto, proyecto_aprobado, cierre_periodo,
+                          // festivos_no_parametrizados (RF-19, excepcion p3)
   nombre varchar
   plantilla text
   envia_email boolean [default: true]
