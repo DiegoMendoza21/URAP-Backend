@@ -67,7 +67,8 @@ export class RegistrarSesionDto {
     maxLength: OBSERVACIONES_MAXIMO,
     description:
       'Observaciones de la sesión (RF-20, p5; RF-22, p5). Si el curso no tiene lista cargada, ' +
-      'aquí se anota la inasistencia en texto libre (RF-22, excepción p3).',
+      'aquí se anota la inasistencia en texto libre (RF-22, excepción p3). Sin el campo se ' +
+      'conservan las anteriores; un texto vacío las borra.',
   })
   @IsOptional()
   @Transform(recortar)

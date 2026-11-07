@@ -694,6 +694,15 @@ describe('Registro de clase (e2e) · RF-20 y RF-22, HU-08-04 y HU-09-02', () => 
   describe('permisos y datos personales (Ley 1581)', () => {
     it('el Departamento ve los temas y el número de ausentes, pero no la lista ni las observaciones', async () => {
       const sesion = await sesionDe(proyecto, 'anterior');
+      // Estado propio de esta prueba: dos ausentes y una observación, registrados por el docente.
+      await como('docente')
+        .put(`${rutaSesion(proyecto, sesion.id)}/registro`, {
+          idsContenido: [contenido[1]],
+          ausentes: matriculas,
+          confirmarTodoElGrupo: true,
+          observaciones: 'Observación con datos del grupo.',
+        })
+        .expect(200);
 
       const detalle = await como('departamento').get(
         rutaSesion(proyecto, sesion.id),

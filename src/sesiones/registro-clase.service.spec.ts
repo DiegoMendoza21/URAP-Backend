@@ -260,6 +260,24 @@ describe('RegistroClaseService', () => {
       });
     });
 
+    it('sin el campo de observaciones conserva las anteriores; vacío las borra', async () => {
+      tx.sesion_clase.findFirst.mockResolvedValue(
+        sesionEnTransaccion({ observaciones: 'Faltaron dos.' }),
+      );
+
+      await registrar({});
+      expect(tx.sesion_clase.update).toHaveBeenLastCalledWith({
+        where: { id: 500 },
+        data: expect.objectContaining({ observaciones: 'Faltaron dos.' }),
+      });
+
+      await registrar({ observaciones: '  ' });
+      expect(tx.sesion_clase.update).toHaveBeenLastCalledWith({
+        where: { id: 500 },
+        data: expect.objectContaining({ observaciones: null }),
+      });
+    });
+
     it('no registra una sesión de fecha futura (RF-20, excepción p6)', async () => {
       tx.sesion_clase.findFirst.mockResolvedValue(
         sesionEnTransaccion({ fecha: aFechaColumna('2026-11-09') }),

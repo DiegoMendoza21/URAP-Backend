@@ -151,7 +151,6 @@ export class RegistroClaseService {
     }
     const hoy = fechaDeHoy();
     const ausentes = datos.ausentes ?? [];
-    const observaciones = datos.observaciones?.trim() || null;
 
     const { anterior, nuevo, primeraVez } = await this.prisma.$transaction(
       async (tx) => {
@@ -282,6 +281,11 @@ export class RegistroClaseService {
             })),
           });
         }
+        // Sin el campo se conservan las observaciones; un texto vacío las borra.
+        const observaciones =
+          datos.observaciones === undefined
+            ? sesion.observaciones
+            : datos.observaciones.trim() || null;
         await tx.sesion_clase.update({
           where: { id: sesion.id },
           data: {
