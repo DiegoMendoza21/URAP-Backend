@@ -158,6 +158,10 @@ export const TIPOS_NOTIFICACION = [
   },
   { codigo: 'proyecto_aprobado', nombre: 'Proyecto aprobado' },
   { codigo: 'cierre_periodo', nombre: 'Cierre del período' },
+  {
+    codigo: 'festivos_no_parametrizados',
+    nombre: 'Año sin días festivos parametrizados (RF-19)',
+  },
 ];
 
 /**
@@ -199,6 +203,13 @@ export const PARAMETROS = [
     tipo_dato: 'lista',
     descripcion:
       'Extensiones de archivo permitidas, separadas por coma (NFR-019). Por validar.',
+  },
+  {
+    clave: 'descripcion_curso_longitud_maxima',
+    valor: '4000',
+    tipo_dato: 'entero',
+    descripcion:
+      'Caracteres máximos de la descripción del curso, punto 2 del proyecto docente (RF-11). Valor propuesto, por validar.',
   },
 ];
 

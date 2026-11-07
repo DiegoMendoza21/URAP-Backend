@@ -2,12 +2,14 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { AuthModule } from './auth/auth.module.js';
+import { EstudiantesModule } from './estudiantes/estudiantes.module.js';
 import { validarVariablesEntorno } from './common/configuracion/variables-entorno.js';
 import { FiltroExcepciones } from './common/filtros/filtro-excepciones.js';
 import { PrismaModule } from './common/prisma/prisma.module.js';
 import { crearPipeValidacion } from './common/validacion/pipe-validacion.js';
 import { ProyectosDocentesModule } from './proyectos-docentes/proyectos-docentes.module.js';
 import { SaludModule } from './salud/salud.module.js';
+import { SesionesModule } from './sesiones/sesiones.module.js';
 
 @Module({
   imports: [
@@ -20,6 +22,8 @@ import { SaludModule } from './salud/salud.module.js';
     AuthModule,
     SaludModule,
     ProyectosDocentesModule,
+    SesionesModule,
+    EstudiantesModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: FiltroExcepciones },
