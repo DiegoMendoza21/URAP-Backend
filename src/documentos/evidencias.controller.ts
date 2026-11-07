@@ -33,6 +33,7 @@ import {
 } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { pipeline } from 'node:stream/promises';
+import { AuditarConsulta } from '../auditoria/auditar-consulta.decorator.js';
 import { Roles } from '../auth/decoradores/roles.decorator.js';
 import { UsuarioActual } from '../auth/decoradores/usuario-actual.decorator.js';
 import { ROL } from '../auth/roles.js';
@@ -184,6 +185,9 @@ export class EvidenciasController {
 
   @Get(':idEvidencia/archivo')
   @Roles(...ROLES_CONSULTA)
+  // Una foto de clase es un dato personal (Ley 1581): cada descarga que no falla queda en
+  // auditoría con usuario e IP, también la revalidación con 304.
+  @AuditarConsulta('evidencia_rap', 'idEvidencia')
   @ApiProduces('image/jpeg', 'image/png', 'application/pdf')
   @ApiOperation({
     summary: 'Descarga el archivo de una evidencia (NFR-007)',

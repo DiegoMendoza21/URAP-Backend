@@ -450,14 +450,21 @@ describe('Evidencias (e2e) · RF-24, HU-10-01', () => {
         expect.arrayContaining(['tablero del taller.png', 'acta firmada.pdf']),
       );
 
-      const auditoria = await prisma.auditoria.count({
-        where: {
-          accion: 'crear',
-          tabla_afectada: 'evidencia_rap',
-          id_usuario: usuarios.docente,
-        },
-      });
-      expect(auditoria).toBe(2);
+      // Si la auditoría tarda más de 1 s, la carga no la espera (RF-29, q1): se da margen.
+      await expect
+        .poll(
+          () =>
+            prisma.auditoria.count({
+              where: {
+                accion: 'crear',
+                tabla_afectada: 'evidencia_rap',
+                id_usuario: usuarios.docente,
+                ip: { not: null },
+              },
+            }),
+          { timeout: 5000 },
+        )
+        .toBe(2);
     });
 
     it('rechaza la carga si un archivo supera el tamaño máximo e informa el límite (p4)', async () => {
@@ -650,32 +657,37 @@ describe('Evidencias (e2e) · RF-24, HU-10-01', () => {
       expect(respuesta.headers['content-disposition']).toContain(
         "filename*=UTF-8''tablero%20del%20taller.png",
       );
-      expect(
-        await prisma.auditoria.count({
-          where: {
-            accion: 'consultar',
-            tabla_afectada: 'evidencia_rap',
-            id_registro: idEvidenciaRap1,
-            id_usuario: usuarios.direccion,
-          },
-        }),
-      ).toBe(1);
+      // RF-29: @AuditarConsulta registra la descarga con usuario e IP.
+      const consultas = {
+        accion: 'consulta_sensible',
+        tabla_afectada: 'evidencia_rap',
+        id_registro: idEvidenciaRap1,
+        id_usuario: usuarios.direccion,
+      };
+      // Con @Res() la respuesta sale antes de que el interceptor termine de auditar: se espera.
+      await expect
+        // La auditoría puede tardar hasta 1 s por diseño (RF-29, q1): se da margen.
+        .poll(
+          () =>
+            prisma.auditoria.count({
+              where: { ...consultas, ip: { not: null } },
+            }),
+          { timeout: 5000 },
+        )
+        .toBe(1);
 
-      // Revalidación: el navegador ya la tiene y no se vuelve a enviar ni a auditar.
+      // Revalidación: el archivo no se vuelve a enviar, pero el usuario vuelve a ver la foto
+      // (dato personal, Ley 1581) con su acceso comprobado de nuevo: también queda auditada.
       await http()
         .get(ruta(proyecto, `/${idEvidenciaRap1}/archivo`))
         .set('Authorization', autorizar('direccion'))
         .set('If-None-Match', respuesta.headers.etag)
         .expect(304);
-      expect(
-        await prisma.auditoria.count({
-          where: {
-            accion: 'consultar',
-            id_registro: idEvidenciaRap1,
-            id_usuario: usuarios.direccion,
-          },
-        }),
-      ).toBe(1);
+      await expect
+        .poll(() => prisma.auditoria.count({ where: consultas }), {
+          timeout: 5000,
+        })
+        .toBe(2);
     });
 
     it('si el archivo ya no está, responde 404 sin dejar la versión en caché', async () => {
