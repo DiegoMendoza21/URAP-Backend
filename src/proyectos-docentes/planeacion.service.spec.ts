@@ -42,7 +42,7 @@ const docente: UsuarioSesion = {
   correo: 'docente.prueba@urap.local',
   roles: [ROL.docente],
   jti: 'jti-20',
-  idSesion: 20,
+  idSesion: 1,
 };
 
 type Cambio = (
