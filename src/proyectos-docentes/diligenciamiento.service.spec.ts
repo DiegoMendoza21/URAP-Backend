@@ -3,6 +3,7 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
+import { ParametrosService } from '../common/parametros/parametros.service.js';
 import type { PrismaService } from '../common/prisma/prisma.service.js';
 import {
   DiligenciamientoService,
@@ -23,12 +24,16 @@ const docente: UsuarioSesion = {
   correo: 'docente.prueba@urap.local',
   roles: [ROL.docente],
   jti: 'jti-20',
+  idSesion: 1,
 };
 
 function crear(valorParametro: string | null = '10') {
   const tx = {
     proyecto_docente: {
-      findUniqueOrThrow: vi.fn().mockResolvedValue({ descripcion: 'antes' }),
+      findUniqueOrThrow: vi.fn().mockResolvedValue({
+        descripcion: 'antes',
+        fecha_actualizacion: new Date('2026-11-01T10:00:00Z'),
+      }),
       update: vi.fn().mockResolvedValue({}),
     },
   };
@@ -61,6 +66,7 @@ function crear(valorParametro: string | null = '10') {
     },
   };
   const ahora = new Date('2026-11-07T15:00:00Z');
+  const auditorias: unknown[] = [];
   const edicion = {
     consultable: vi.fn().mockResolvedValue({
       id: 7,
@@ -78,15 +84,23 @@ function crear(valorParametro: string | null = '10') {
       (
         _usuario: unknown,
         _id: number,
-        cambio: (t: typeof tx, a: Date) => Promise<{ resultado: unknown }>,
-      ) => cambio(tx, ahora).then((hecho) => hecho.resultado),
+        cambio: (
+          t: typeof tx,
+          a: Date,
+        ) => Promise<{ resultado: unknown; auditoria: unknown }>,
+      ) =>
+        cambio(tx, ahora).then((hecho) => {
+          auditorias.push(hecho.auditoria);
+          return hecho.resultado;
+        }),
     ),
   };
   const servicio = new DiligenciamientoService(
     prisma as unknown as PrismaService,
     edicion as unknown as EdicionProyectoService,
+    new ParametrosService(prisma as unknown as PrismaService),
   );
-  return { servicio, prisma, tx, edicion };
+  return { servicio, prisma, tx, edicion, auditorias };
 }
 
 describe('DiligenciamientoService', () => {
@@ -126,12 +140,42 @@ describe('DiligenciamientoService', () => {
       });
       expect(respuesta.texto).toBeNull();
     });
+
+    it('audita solo la descripción, con el valor anterior y el nuevo (RF-29)', async () => {
+      const { servicio, auditorias } = crear();
+      await servicio.guardarDescripcion(docente, 7, { texto: 'después' });
+      expect(auditorias).toEqual([
+        {
+          accion: 'actualizar',
+          tabla: 'proyecto_docente',
+          idRegistro: 7,
+          anterior: { descripcion: 'antes' },
+          nuevo: { descripcion: 'después' },
+        },
+      ]);
+    });
+
+    it('guardar el mismo texto no deja rastro en la auditoría', async () => {
+      const { servicio, auditorias, tx } = crear();
+      const respuesta = await servicio.guardarDescripcion(docente, 7, {
+        texto: 'antes',
+      });
+      expect(auditorias).toEqual([null]);
+      // Ni se escribe ni cambia la fecha: se devuelve la que ya tenía.
+      expect(tx.proyecto_docente.update).not.toHaveBeenCalled();
+      expect(respuesta.fechaActualizacion).toBe('2026-11-01T10:00:00.000Z');
+    });
   });
 
   it('no promete más que el tope técnico del DTO', async () => {
-    expect(await crear('999999').servicio.longitudMaxima()).toBe(
-      DESCRIPCION_TOPE_TECNICO,
-    );
+    expect(
+      await crear(String(DESCRIPCION_TOPE_TECNICO)).servicio.longitudMaxima(),
+    ).toBe(DESCRIPCION_TOPE_TECNICO);
+    expect(
+      await crear(
+        String(DESCRIPCION_TOPE_TECNICO + 1),
+      ).servicio.longitudMaxima(),
+    ).toBe(DESCRIPCION_TOPE_TECNICO);
   });
 
   it('usa el valor de respaldo si el parámetro falta o es inválido', async () => {

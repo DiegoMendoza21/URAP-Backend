@@ -2,9 +2,9 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
-  Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
@@ -32,12 +32,42 @@ export type ProyectoConAcceso = Prisma.proyecto_docenteGetPayload<{
   include: typeof INCLUIR_ACCESO;
 }>;
 
+/**
+ * Lo que un cambio de sección deja en `auditoria` (RF-29). En `anterior` y `nuevo` van solo los
+ * campos que cambian (CLAUDE.md, «Auditoría»): use `soloCambios()`. El usuario y la IP los
+ * pone `AuditoriaService` desde el contexto de la petición.
+ */
 export interface Auditable {
   accion: 'crear' | 'actualizar' | 'eliminar';
   tabla: string;
   idRegistro: number;
   anterior?: Prisma.InputJsonValue;
   nuevo?: Prisma.InputJsonValue;
+}
+
+type Campos = Record<string, Prisma.InputJsonValue | null>;
+
+/**
+ * De dos versiones de un registro, solo los campos que cambian. Nulo si no cambió nada: en ese
+ * caso no hay nada que auditar. Compara por su JSON, así que arme las dos versiones con las
+ * claves y las listas en el mismo orden (ordene las listas, como hace `RacService`).
+ */
+export function soloCambios(
+  anterior: Campos,
+  nuevo: Campos,
+): { anterior: Campos; nuevo: Campos } | null {
+  const claves = [
+    ...new Set([...Object.keys(anterior), ...Object.keys(nuevo)]),
+  ].filter(
+    (clave) => JSON.stringify(anterior[clave]) !== JSON.stringify(nuevo[clave]),
+  );
+  if (claves.length === 0) {
+    return null;
+  }
+  return {
+    anterior: Object.fromEntries(claves.map((c) => [c, anterior[c] ?? null])),
+    nuevo: Object.fromEntries(claves.map((c) => [c, nuevo[c] ?? null])),
+  };
 }
 
 /**
@@ -68,11 +98,10 @@ export function motivoEstadoNoEditable(
  */
 @Injectable()
 export class EdicionProyectoService {
-  private readonly logger = new Logger(EdicionProyectoService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly proyectos: ProyectosDocentesService,
+    private readonly auditoria: AuditoriaService,
   ) {}
 
   /** El proyecto si el usuario lo puede ver; si no, 404 sin revelar si existe. */
@@ -121,7 +150,8 @@ export class EdicionProyectoService {
    * Ejecuta un cambio de una sección dentro de una transacción. Bloquea la fila del proyecto
    * para que el estado no cambie a mitad del guardado (por ejemplo, un envío a revisión
    * simultáneo) y para que dos guardados del mismo proyecto se atiendan de a uno. Al terminar,
-   * actualiza la fecha de última modificación (RF-11, p4) y audita el cambio (RF-29).
+   * actualiza la fecha de última modificación (RF-11, p4) y audita el cambio (RF-29). Si el
+   * cambio devuelve `auditoria: null` (no cambió nada), no se toca la fecha ni se audita.
    */
   async editar<T>(
     usuario: UsuarioSesion,
@@ -129,7 +159,7 @@ export class EdicionProyectoService {
     cambio: (
       tx: Tx,
       ahora: Date,
-    ) => Promise<{ resultado: T; auditoria: Auditable }>,
+    ) => Promise<{ resultado: T; auditoria: Auditable | null }>,
   ): Promise<T> {
     const visible = await this.consultable(usuario, id);
     if (!this.esDocenteAsignado(usuario, visible)) {
@@ -153,40 +183,29 @@ export class EdicionProyectoService {
         }
         const ahora = new Date();
         const hecho = await cambio(tx, ahora);
-        await tx.proyecto_docente.update({
-          where: { id },
-          data: { fecha_actualizacion: ahora },
-        });
+        // Sin cambios no hay modificación: ni fecha nueva ni fila de auditoría.
+        if (hecho.auditoria) {
+          await tx.proyecto_docente.update({
+            where: { id },
+            data: { fecha_actualizacion: ahora },
+          });
+        }
         return hecho;
       },
     );
 
-    await this.auditar(usuario.id, auditoria);
-    return resultado;
-  }
-
-  /**
-   * Registra el cambio en `auditoria` (RF-29). Un fallo al auditar no deshace el guardado:
-   * queda en el registro técnico y la operación sigue (CLAUDE.md, «Auditoría»).
-   */
-  private async auditar(idUsuario: number, datos: Auditable): Promise<void> {
-    try {
-      await this.prisma.auditoria.create({
-        data: {
-          id_usuario: idUsuario,
-          accion: datos.accion,
-          tabla_afectada: datos.tabla,
-          id_registro: datos.idRegistro,
-          valor_anterior: datos.anterior,
-          valor_nuevo: datos.nuevo,
-          fecha: new Date(),
-        },
+    // RF-29: después de confirmar, fuera de la transacción. AuditoriaService toma el usuario
+    // y la IP del contexto de la petición, limpia los valores y nunca lanza: un fallo al
+    // auditar no deshace el guardado.
+    if (auditoria) {
+      await this.auditoria.registrar({
+        accion: auditoria.accion,
+        tablaAfectada: auditoria.tabla,
+        idRegistro: auditoria.idRegistro,
+        valorAnterior: auditoria.anterior,
+        valorNuevo: auditoria.nuevo,
       });
-    } catch (error) {
-      this.logger.error(
-        `No se pudo auditar «${datos.accion}» en ${datos.tabla} ${datos.idRegistro}.`,
-        error instanceof Error ? error.stack : String(error),
-      );
     }
+    return resultado;
   }
 }

@@ -5,11 +5,13 @@ import {
 } from '@nestjs/common';
 import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
+import type { AuditoriaService } from '../auditoria/auditoria.service.js';
 import type { PrismaService } from '../common/prisma/prisma.service.js';
 import {
   EdicionProyectoService,
   MENSAJE_SOLO_DOCENTES_ASIGNADOS,
   motivoEstadoNoEditable,
+  soloCambios,
 } from './edicion-proyecto.service.js';
 import type { ProyectosDocentesService } from './proyectos-docentes.service.js';
 
@@ -21,6 +23,7 @@ const docente: UsuarioSesion = {
   correo: 'docente.prueba@urap.local',
   roles: [ROL.docente],
   jti: 'jti-20',
+  idSesion: 1,
 };
 
 const EN_DILIGENCIAMIENTO = {
@@ -60,16 +63,17 @@ function crear(
   const prisma = {
     proyecto_docente: { findFirst: vi.fn().mockResolvedValue(visible) },
     $transaction: vi.fn((fn: (t: typeof tx) => unknown) => fn(tx)),
-    auditoria: { create: vi.fn().mockResolvedValue({}) },
   };
+  const auditoria = { registrar: vi.fn().mockResolvedValue(undefined) };
   const proyectos = {
     filtroVisibilidad: vi.fn().mockResolvedValue({}),
   };
   const servicio = new EdicionProyectoService(
     prisma as unknown as PrismaService,
     proyectos as unknown as ProyectosDocentesService,
+    auditoria as unknown as AuditoriaService,
   );
-  return { servicio, prisma, tx };
+  return { servicio, prisma, tx, auditoria };
 }
 
 const cambio = vi.fn(() =>
@@ -118,7 +122,7 @@ describe('EdicionProyectoService.editar', () => {
   beforeEach(() => cambio.mockClear());
 
   it('guarda, actualiza la fecha de modificación y audita', async () => {
-    const { servicio, prisma, tx } = crear();
+    const { servicio, tx, auditoria } = crear();
     await expect(servicio.editar(docente, 7, cambio)).resolves.toBe('hecho');
     expect(tx.$queryRaw).toHaveBeenCalled();
     expect(cambio).toHaveBeenCalledWith(tx, expect.any(Date));
@@ -126,13 +130,13 @@ describe('EdicionProyectoService.editar', () => {
       where: { id: 7 },
       data: { fecha_actualizacion: expect.any(Date) },
     });
-    expect(prisma.auditoria.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        id_usuario: 20,
-        accion: 'actualizar',
-        tabla_afectada: 'proyecto_docente',
-        id_registro: 7,
-      }),
+    // El usuario y la IP los pone AuditoriaService desde el contexto de la petición.
+    expect(auditoria.registrar).toHaveBeenCalledWith({
+      accion: 'actualizar',
+      tablaAfectada: 'proyecto_docente',
+      idRegistro: 7,
+      valorAnterior: undefined,
+      valorNuevo: undefined,
     });
   });
 
@@ -163,18 +167,41 @@ describe('EdicionProyectoService.editar', () => {
   });
 
   it('vuelve a mirar el estado con la fila bloqueada', async () => {
-    const { servicio, prisma } = crear(proyecto(APROBADO), proyecto());
+    const { servicio, auditoria } = crear(proyecto(APROBADO), proyecto());
     await expect(servicio.editar(docente, 7, cambio)).rejects.toThrow(
       ConflictException,
     );
     expect(cambio).not.toHaveBeenCalled();
-    expect(prisma.auditoria.create).not.toHaveBeenCalled();
+    expect(auditoria.registrar).not.toHaveBeenCalled();
   });
 
-  it('un fallo al auditar no deshace el guardado', async () => {
-    const { servicio, prisma } = crear();
-    prisma.auditoria.create.mockRejectedValue(new Error('sin conexión'));
-    await expect(servicio.editar(docente, 7, cambio)).resolves.toBe('hecho');
+  it('sin cambios tampoco mueve la fecha de modificación', async () => {
+    const { servicio, tx } = crear();
+    const sinCambios = vi.fn(() =>
+      Promise.resolve({ resultado: 'igual', auditoria: null }),
+    );
+    await servicio.editar(docente, 7, sinCambios);
+    expect(tx.proyecto_docente.update).not.toHaveBeenCalled();
+  });
+
+  it('sin cambios que auditar, no registra nada', async () => {
+    const { servicio, auditoria } = crear();
+    const sinCambios = vi.fn(() =>
+      Promise.resolve({ resultado: 'igual', auditoria: null }),
+    );
+    await expect(servicio.editar(docente, 7, sinCambios)).resolves.toBe(
+      'igual',
+    );
+    expect(auditoria.registrar).not.toHaveBeenCalled();
+  });
+
+  it('sin cambios tampoco mueve la fecha de modificación', async () => {
+    const { servicio, tx } = crear();
+    const sinCambios = vi.fn(() =>
+      Promise.resolve({ resultado: 'igual', auditoria: null }),
+    );
+    await servicio.editar(docente, 7, sinCambios);
+    expect(tx.proyecto_docente.update).not.toHaveBeenCalled();
   });
 });
 
@@ -190,5 +217,36 @@ describe('EdicionProyectoService.motivoNoEditable', () => {
     expect(servicio.motivoNoEditable(departamento, proyecto() as never)).toBe(
       MENSAJE_SOLO_DOCENTES_ASIGNADOS,
     );
+  });
+});
+
+describe('soloCambios', () => {
+  it('deja solo los campos que cambian', () => {
+    expect(
+      soloCambios(
+        { codigo: 'RAC 1', enunciado: 'A', raps: [{ idRap: 1 }] },
+        { codigo: 'RAC 1', enunciado: 'B', raps: [{ idRap: 1 }] },
+      ),
+    ).toEqual({ anterior: { enunciado: 'A' }, nuevo: { enunciado: 'B' } });
+  });
+
+  it('compara arreglos y objetos por su contenido', () => {
+    expect(
+      soloCambios({ raps: [{ idRap: 1 }] }, { raps: [{ idRap: 2 }] }),
+    ).toEqual({
+      anterior: { raps: [{ idRap: 1 }] },
+      nuevo: { raps: [{ idRap: 2 }] },
+    });
+  });
+
+  it('detecta un campo que desaparece', () => {
+    expect(soloCambios({ a: 1, b: 2 }, { a: 1 })).toEqual({
+      anterior: { b: 2 },
+      nuevo: { b: null },
+    });
+  });
+
+  it('nulo si no cambió nada', () => {
+    expect(soloCambios({ descripcion: 'x' }, { descripcion: 'x' })).toBeNull();
   });
 });

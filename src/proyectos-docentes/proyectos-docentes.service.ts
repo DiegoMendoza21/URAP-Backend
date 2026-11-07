@@ -6,6 +6,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
@@ -65,6 +66,7 @@ export class ProyectosDocentesService {
     private readonly prisma: PrismaService,
     private readonly alcance: AlcanceService,
     private readonly asistente: AsistenteService,
+    private readonly auditoria: AuditoriaService,
   ) {}
 
   /**
@@ -170,15 +172,22 @@ export class ProyectosDocentesService {
       });
     });
 
-    await this.auditarCreacion(usuario.id, creado.id, {
-      idAsignatura: asignatura.id,
-      idPeriodo: periodo.id,
-      grupo,
-      idsRap: datos.idsRap,
-      docentes: docentes.map(({ idUsuario, responsable }) => ({
-        idUsuario,
-        responsable,
-      })),
+    // RF-29: después de confirmar, fuera de la transacción. El usuario y la IP salen del
+    // contexto de la petición, y un fallo al auditar no deshace la creación.
+    await this.auditoria.registrar({
+      accion: 'crear',
+      tablaAfectada: 'proyecto_docente',
+      idRegistro: creado.id,
+      valorNuevo: {
+        idAsignatura: asignatura.id,
+        idPeriodo: periodo.id,
+        grupo,
+        idsRap: datos.idsRap,
+        docentes: docentes.map(({ idUsuario, responsable }) => ({
+          idUsuario,
+          responsable,
+        })),
+      },
     });
     return aDetalle(creado);
   }
@@ -227,6 +236,7 @@ export class ProyectosDocentesService {
    * Matriz de permisos (`URAP-34`): el Docente ve solo los proyectos donde está asignado
    * (`proyecto_docente_docente`); Departamento, Dirección y Líder RAP, los de su programa; el
    * Administrador, todos. Un usuario con varios roles ve la unión. Nulo: no ve ninguno.
+   * Lo usa también el calendario de sesiones (RF-19), con el mismo criterio.
    */
   async filtroVisibilidad(
     usuario: UsuarioSesion,
@@ -259,34 +269,6 @@ export class ProyectosDocentesService {
     }
     if (docentes.filter((docente) => docente.responsable).length !== 1) {
       throw new BadRequestException(MENSAJE_UN_RESPONSABLE);
-    }
-  }
-
-  /**
-   * Registra la creación en `auditoria` (RF-29). Un fallo al auditar no deshace la creación:
-   * queda en el registro técnico y la operación sigue (CLAUDE.md, «Auditoría»).
-   */
-  private async auditarCreacion(
-    idUsuario: number,
-    idProyecto: number,
-    valorNuevo: Prisma.InputJsonValue,
-  ): Promise<void> {
-    try {
-      await this.prisma.auditoria.create({
-        data: {
-          id_usuario: idUsuario,
-          accion: 'crear',
-          tabla_afectada: 'proyecto_docente',
-          id_registro: idProyecto,
-          valor_nuevo: valorNuevo,
-          fecha: new Date(),
-        },
-      });
-    } catch (error) {
-      this.logger.error(
-        `No se pudo auditar la creación del proyecto docente ${idProyecto}.`,
-        error instanceof Error ? error.stack : String(error),
-      );
     }
   }
 }
