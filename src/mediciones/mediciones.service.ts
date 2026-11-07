@@ -25,6 +25,7 @@ import {
   MENSAJE_MEDICION_EXISTENTE,
   MENSAJE_MEDICION_NO_EXISTE,
   MENSAJE_NIVEL_INVALIDO,
+  MENSAJE_PERIODO_CERRADO,
   MENSAJE_PROYECTO_NO_APROBADO,
   MENSAJE_PROYECTO_NO_EXISTE,
   MENSAJE_RAP_NO_DEL_PROYECTO,
@@ -67,7 +68,7 @@ const SELECCION_PROYECTO = {
   grupo: true,
   id_periodo: true,
   asignatura: { select: { nombre: true, id_programa: true } },
-  periodo_academico: { select: { codigo: true } },
+  periodo_academico: { select: { codigo: true, cerrado: true } },
   estado_proyecto: { select: { codigo: true, nombre: true } },
   proyecto_docente_rap: {
     select: {
@@ -154,6 +155,19 @@ type MedicionLeida = Prisma.medicion_rapGetPayload<{
 }>;
 
 /**
+ * Lo que hace falta para registrar instrumentos o valoraciones. El autoguardado del teléfono
+ * llega cada pocos segundos: no relee todas las valoraciones solo para comprobar el acceso.
+ */
+const INCLUIR_MEDICION_EDICION = {
+  rubrica: { select: { id_escala: true } },
+  medicion_indicador: { select: { id: true, id_indicador: true } },
+} satisfies Prisma.medicion_rapInclude;
+
+type MedicionEnEdicion = Prisma.medicion_rapGetPayload<{
+  include: typeof INCLUIR_MEDICION_EDICION;
+}>;
+
+/**
  * Medición de RAP (RF-30, HU-11-01 a HU-11-03): la hoja «Valoración» del formato
  * FO-DO/PC-023. El docente asignado al curso la inicia sobre un RAP del curso con rúbrica
  * vigente, registra el instrumento de cada indicador y el nivel de cada estudiante en cada
@@ -204,6 +218,7 @@ export class MedicionesService {
         : null,
       requisitos: {
         proyectoAprobado: estaAprobado(proyecto),
+        periodoAbierto: !proyecto.periodo_academico?.cerrado,
         listaCargada: matriculados > 0,
         matriculados,
       },
@@ -246,6 +261,10 @@ export class MedicionesService {
     }
     if (!estaAprobado(proyecto)) {
       throw new ConflictException(MENSAJE_PROYECTO_NO_APROBADO);
+    }
+    // RF-17: un período cerrado bloquea los registros.
+    if (proyecto.periodo_academico?.cerrado) {
+      throw new ConflictException(MENSAJE_PERIODO_CERRADO);
     }
     // RF-30, excepción de p1.
     if ((await this.contarMatriculados(proyecto.id)) === 0) {
@@ -314,7 +333,7 @@ export class MedicionesService {
       periodoToma: datos.periodoToma,
       anioToma: datos.anioToma,
     });
-    return this.detalle(usuario, idMedicion, false);
+    return this.detalle(usuario, idMedicion, false, { proyecto, acceso });
   }
 
   /** Hoja de valoración de la medición. Consulta de datos personales: queda en auditoría. */
@@ -331,7 +350,10 @@ export class MedicionesService {
     idMedicion: number,
     { indicadores }: RegistrarInstrumentosDto,
   ): Promise<MedicionDetalleDto> {
-    const { medicion } = await this.exigirEditable(usuario, idMedicion);
+    const { medicion, ...contexto } = await this.exigirEditable(
+      usuario,
+      idMedicion,
+    );
     const porIndicador = new Map(
       medicion.medicion_indicador.map((fila) => [fila.id_indicador, fila.id]),
     );
@@ -369,7 +391,7 @@ export class MedicionesService {
         instrumento,
       })),
     });
-    return this.detalle(usuario, idMedicion, false);
+    return this.detalle(usuario, idMedicion, false, contexto);
   }
 
   /**
@@ -497,15 +519,25 @@ export class MedicionesService {
   // Lectura y acceso
   // ---------------------------------------------------------------------------------------
 
+  /**
+   * Hoja de la medición. Tras una escritura se pasa el `contexto` ya comprobado: solo se
+   * vuelve a leer la medición, no el acceso.
+   */
   private async detalle(
     usuario: UsuarioSesion,
     idMedicion: number,
     auditarConsulta: boolean,
+    contexto?: ProyectoConAcceso,
   ): Promise<MedicionDetalleDto> {
-    const { medicion, proyecto, acceso } = await this.exigirMedicion(
-      usuario,
-      idMedicion,
-    );
+    const { medicion, proyecto, acceso } = contexto
+      ? {
+          ...contexto,
+          medicion: await this.prisma.medicion_rap.findUniqueOrThrow({
+            where: { id: idMedicion },
+            include: INCLUIR_MEDICION,
+          }),
+        }
+      : await this.exigirMedicion(usuario, idMedicion);
     const [escala, matriculas] = await Promise.all([
       this.escalaDeMedicion(
         medicion.rubrica?.id_escala ?? null,
@@ -597,6 +629,42 @@ export class MedicionesService {
       where: { id: idMedicion },
       include: INCLUIR_MEDICION,
     });
+    return {
+      ...(await this.accesoAMedicion(usuario, medicion)),
+      medicion: medicion!,
+    };
+  }
+
+  /** Para registrar: docente asignado y medición en borrador (RF-30, excepción de p7). */
+  private async exigirEditable(
+    usuario: UsuarioSesion,
+    idMedicion: number,
+  ): Promise<ProyectoConAcceso & { medicion: MedicionEnEdicion }> {
+    const medicion = await this.prisma.medicion_rap.findUnique({
+      where: { id: idMedicion },
+      include: INCLUIR_MEDICION_EDICION,
+    });
+    const contexto = await this.accesoAMedicion(usuario, medicion);
+    if (!contexto.acceso.docenteAsignado) {
+      throw new ForbiddenException(MENSAJE_SOLO_DOCENTE_ASIGNADO);
+    }
+    if (aEstado(medicion!.estado) !== ESTADO_MEDICION.borrador) {
+      throw new ConflictException(MENSAJE_MEDICION_CERRADA);
+    }
+    return { ...contexto, medicion: medicion! };
+  }
+
+  /**
+   * Resuelve el acceso a una medición leída. Responde 404 igual si no existe o si el usuario
+   * no la puede ver: docente asignado, departamento del programa o líder del RAP.
+   */
+  private async accesoAMedicion(
+    usuario: UsuarioSesion,
+    medicion: {
+      id_proyecto_docente: number | null;
+      id_rap: number | null;
+    } | null,
+  ): Promise<ProyectoConAcceso> {
     const encontrado =
       medicion?.id_proyecto_docente && medicion.id_rap
         ? await this.proyectoConAcceso(usuario, medicion.id_proyecto_docente)
@@ -612,22 +680,7 @@ export class MedicionesService {
     if (!ve) {
       throw new NotFoundException(MENSAJE_MEDICION_NO_EXISTE);
     }
-    return { ...encontrado, medicion };
-  }
-
-  /** Para registrar: docente asignado y medición en borrador (RF-30, excepción de p7). */
-  private async exigirEditable(
-    usuario: UsuarioSesion,
-    idMedicion: number,
-  ): Promise<ProyectoConAcceso & { medicion: MedicionLeida }> {
-    const encontrada = await this.exigirMedicion(usuario, idMedicion);
-    if (!encontrada.acceso.docenteAsignado) {
-      throw new ForbiddenException(MENSAJE_SOLO_DOCENTE_ASIGNADO);
-    }
-    if (aEstado(encontrada.medicion.estado) !== ESTADO_MEDICION.borrador) {
-      throw new ConflictException(MENSAJE_MEDICION_CERRADA);
-    }
-    return encontrada;
+    return encontrado;
   }
 
   /**

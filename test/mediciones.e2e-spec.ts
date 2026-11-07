@@ -9,6 +9,7 @@ import { configurarAplicacion } from '../src/configurar-aplicacion.js';
 import {
   MENSAJE_MEDICION_CERRADA,
   MENSAJE_MEDICION_EXISTENTE,
+  MENSAJE_PERIODO_CERRADO,
   MENSAJE_PROYECTO_NO_APROBADO,
   MENSAJE_SIN_LISTA,
   MENSAJE_SIN_RUBRICA,
@@ -407,6 +408,7 @@ describe('Medición de RAP (e2e) · RF-30, HU-11-01 a HU-11-03', () => {
       ).expect(200);
       expect(body.requisitos).toEqual({
         proyectoAprobado: true,
+        periodoAbierto: true,
         listaCargada: true,
         matriculados: 34,
       });
@@ -445,6 +447,27 @@ describe('Medición de RAP (e2e) · RF-30, HU-11-01 a HU-11-03', () => {
         proyectos.sinAprobar,
       ).expect(409);
       expect(body.mensaje).toBe(MENSAJE_PROYECTO_NO_APROBADO);
+    });
+
+    it('impide iniciar en un período cerrado (RF-17)', async () => {
+      await prisma.periodo_academico.update({
+        where: { id: idPeriodo },
+        data: { cerrado: true },
+      });
+      try {
+        const { body } = await iniciar('docente', datosInicio()).expect(409);
+        expect(body.mensaje).toBe(MENSAJE_PERIODO_CERRADO);
+        const consulta = await conToken(
+          'docente',
+          http().get(rutaProyecto()),
+        ).expect(200);
+        expect(consulta.body.requisitos.periodoAbierto).toBe(false);
+      } finally {
+        await prisma.periodo_academico.update({
+          where: { id: idPeriodo },
+          data: { cerrado: false },
+        });
+      }
     });
 
     it('impide iniciar si el curso no tiene lista de estudiantes (excepción de p1)', async () => {
