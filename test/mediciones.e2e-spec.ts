@@ -1036,8 +1036,9 @@ describe('Medición de RAP (e2e) · RF-30, HU-11-01 a HU-11-03', () => {
       expect(porId.get(raps.conRubrica)).toMatchObject({
         evaluado: true,
         porcentajeCumplimiento: 63.97,
-        porcentajeEsperado: null,
-        alcanzado: null,
+        // La meta congelada en la medición (70 %), no la vigente del programa (sin definir).
+        porcentajeEsperado: 70,
+        alcanzado: false,
         comparacion: [
           {
             periodo: `E2E-RF32-ANT-${sufijo}`,

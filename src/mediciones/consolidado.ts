@@ -19,6 +19,18 @@ export interface NivelParaConsolidar {
   etiqueta: string;
 }
 
+/** Niveles de una escala (`nivel_escala`) con valor, en el orden de la escala. */
+export function nivelesDeEscala(
+  niveles: readonly { valor: number | null; etiqueta: string | null }[],
+): NivelParaConsolidar[] {
+  return niveles
+    .filter((nivel) => nivel.valor !== null)
+    .map((nivel) => ({
+      valor: nivel.valor as number,
+      etiqueta: nivel.etiqueta ?? `Nivel ${nivel.valor}`,
+    }));
+}
+
 export interface IndicadorParaConsolidar {
   idIndicador: number;
   numero: number | null;

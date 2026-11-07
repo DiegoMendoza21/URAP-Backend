@@ -47,6 +47,7 @@ import {
   type Consolidado,
   consolidar,
   contarPorIndicador,
+  nivelesDeEscala,
 } from './consolidado.js';
 import { ConsolidadoService } from './consolidado.service.js';
 import type {
@@ -215,7 +216,12 @@ export class MedicionesService {
       return { elementos: [], pagina, tamano, total: 0 };
     }
     const donde: Prisma.medicion_rapWhereInput = {
-      AND: [visibles, estado ? { estado } : {}, idRap ? { id_rap: idRap } : {}],
+      AND: [
+        visibles,
+        { id_proyecto_docente: { not: null } },
+        estado ? { estado } : {},
+        idRap ? { id_rap: idRap } : {},
+      ],
     };
     const [total, filas] = await Promise.all([
       this.prisma.medicion_rap.count({ where: donde }),
@@ -235,21 +241,19 @@ export class MedicionesService {
       filas.map((fila) => fila.id),
     );
     return {
-      elementos: filas
-        .filter((fila) => fila.proyecto_docente !== null)
-        .map((fila) => {
-          const consolidado = consolidados.get(fila.id);
-          return {
-            ...aResumen(
-              fila,
-              fila.proyecto_docente as ProyectoLeido,
-              fila.rubrica?.version ?? null,
-            ),
-            porcentajeCumplimiento: consolidado?.porcentajeCumplimiento ?? null,
-            porcentajeEsperado: consolidado?.porcentajeEsperado ?? null,
-            alcanzado: consolidado?.alcanzado ?? null,
-          };
-        }),
+      elementos: filas.map((fila) => {
+        const consolidado = consolidados.get(fila.id);
+        return {
+          ...aResumen(
+            fila,
+            fila.proyecto_docente as ProyectoLeido,
+            fila.rubrica?.version ?? null,
+          ),
+          porcentajeCumplimiento: consolidado?.porcentajeCumplimiento ?? null,
+          porcentajeEsperado: consolidado?.porcentajeEsperado ?? null,
+          alcanzado: consolidado?.alcanzado ?? null,
+        };
+      }),
       pagina,
       tamano,
       total,
@@ -625,7 +629,10 @@ export class MedicionesService {
     idMedicion: number,
     datos: RegistrarAnalisisDto,
   ): Promise<MedicionDetalleDto> {
-    await this.exigirAnalizable(usuario, idMedicion);
+    const { proyecto, acceso } = await this.exigirAnalizable(
+      usuario,
+      idMedicion,
+    );
     const cambios: Prisma.medicion_rapUpdateInput = {};
     if (datos.accionesImplementadas !== undefined) {
       cambios.acciones_implementadas = datos.accionesImplementadas;
@@ -646,7 +653,7 @@ export class MedicionesService {
     await this.auditar(usuario.id, 'registrar_analisis', idMedicion, {
       campos: Object.keys(cambios),
     });
-    return this.detalle(usuario, idMedicion, false);
+    return this.detalle(usuario, idMedicion, false, { proyecto, acceso });
   }
 
   /**
@@ -658,7 +665,7 @@ export class MedicionesService {
     usuario: UsuarioSesion,
     idMedicion: number,
   ): Promise<MedicionDetalleDto> {
-    const { medicion, proyecto } = await this.exigirAnalizable(
+    const { medicion, proyecto, acceso } = await this.exigirAnalizable(
       usuario,
       idMedicion,
     );
@@ -721,7 +728,7 @@ export class MedicionesService {
       porcentajeCumplimiento: resultado.porcentajeCumplimiento,
       porcentajeEsperado: resultado.porcentajeEsperado,
     });
-    return this.detalle(usuario, idMedicion, false);
+    return this.detalle(usuario, idMedicion, false, { proyecto, acceso });
   }
 
   /** RF-30, excepción de p7: solo el departamento académico del programa la reabre. */
@@ -729,7 +736,7 @@ export class MedicionesService {
     usuario: UsuarioSesion,
     idMedicion: number,
   ): Promise<MedicionDetalleDto> {
-    const { acceso } = await this.exigirMedicion(usuario, idMedicion);
+    const { proyecto, acceso } = await this.exigirMedicion(usuario, idMedicion);
     if (!acceso.departamento) {
       throw new ForbiddenException(MENSAJE_SOLO_DEPARTAMENTO_REABRE);
     }
@@ -760,7 +767,7 @@ export class MedicionesService {
         idCerradoPor: anterior.id_cerrado_por,
       },
     );
-    return this.detalle(usuario, idMedicion, false);
+    return this.detalle(usuario, idMedicion, false, { proyecto, acceso });
   }
 
   // ---------------------------------------------------------------------------------------
@@ -1318,12 +1325,7 @@ function aEscala(escala: {
   return {
     nombre: escala.nombre,
     umbralCumplimiento: escala.umbral_cumplimiento as number,
-    niveles: escala.nivel_escala
-      .filter((nivel) => nivel.valor !== null)
-      .map((nivel) => ({
-        valor: nivel.valor as number,
-        etiqueta: nivel.etiqueta ?? `Nivel ${nivel.valor}`,
-      })),
+    niveles: nivelesDeEscala(escala.nivel_escala),
   };
 }
 
@@ -1457,12 +1459,7 @@ function armarConsolidado(
       ),
     );
   return consolidar({
-    niveles: escala.nivel_escala
-      .filter((nivel) => nivel.valor !== null)
-      .map((nivel) => ({
-        valor: nivel.valor as number,
-        etiqueta: nivel.etiqueta ?? `Nivel ${nivel.valor}`,
-      })),
+    niveles: nivelesDeEscala(escala.nivel_escala),
     umbralCumplimiento: escala.umbral_cumplimiento as number,
     porcentajeEsperado:
       medicion.porcentaje_esperado === null

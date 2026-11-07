@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service.js';
-import { type Consolidado, consolidar } from './consolidado.js';
+import {
+  type Consolidado,
+  consolidar,
+  nivelesDeEscala,
+} from './consolidado.js';
 
 /**
  * Consolidado de varias mediciones a la vez (RF-31), para la lista de mediciones y el reporte
@@ -102,12 +106,7 @@ export class ConsolidadoService {
       resultado.set(
         medicion.id,
         consolidar({
-          niveles: escala.nivel_escala
-            .filter((nivel) => nivel.valor !== null)
-            .map((nivel) => ({
-              valor: nivel.valor as number,
-              etiqueta: nivel.etiqueta ?? `Nivel ${nivel.valor}`,
-            })),
+          niveles: nivelesDeEscala(escala.nivel_escala),
           umbralCumplimiento: escala.umbral_cumplimiento,
           porcentajeEsperado:
             medicion.porcentaje_esperado === null

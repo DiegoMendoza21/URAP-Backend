@@ -229,6 +229,7 @@ export class ReportesService {
         const porcentaje = promedio(
           asignaturas.map((asignatura) => asignatura.porcentajeCumplimiento),
         );
+        const esperado = esperadoDelRap(asignaturas, porcentajeEsperado);
         const comparacion = compararPeriodos(
           delRap.filter(esAnterior),
           consolidados,
@@ -238,11 +239,11 @@ export class ReportesService {
           evaluado: asignaturas.length > 0,
           asignaturas,
           porcentajeCumplimiento: porcentaje,
-          porcentajeEsperado,
+          porcentajeEsperado: esperado,
           alcanzado:
-            porcentaje === null || porcentajeEsperado === null
+            porcentaje === null || esperado === null
               ? null
-              : porcentaje >= porcentajeEsperado,
+              : porcentaje >= esperado,
           comparacion,
           motivoSinComparacion:
             comparacion.length === 0 ? MOTIVO_SIN_PERIODOS_ANTERIORES : null,
@@ -593,6 +594,21 @@ function anteriorA(
     consultado.codigo !== null &&
     periodo.codigo < consultado.codigo
   );
+}
+
+/**
+ * Meta con que se juzga el RAP en el período: la que quedó congelada en sus mediciones, para
+ * que cambiar la meta del programa no reescriba los resultados pasados. Si las mediciones
+ * tienen metas distintas, o no hay ninguna medida, se usa la meta vigente del programa.
+ */
+function esperadoDelRap(
+  asignaturas: { porcentajeEsperado: number | null }[],
+  vigente: number | null,
+): number | null {
+  const congeladas = new Set(
+    asignaturas.map((asignatura) => asignatura.porcentajeEsperado),
+  );
+  return congeladas.size === 1 ? [...congeladas][0] : vigente;
 }
 
 /** Promedio con dos decimales de los valores no nulos; nulo si no hay ninguno. */
