@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
+import type { Prisma } from '../generated/prisma/client.js';
 import {
   DESCRIPCION_TOPE_TECNICO,
   type DescripcionDto,
@@ -125,49 +126,9 @@ export class DiligenciamientoService {
   async datosCompletitud(id: number): Promise<DatosCompletitud> {
     const proyecto = await this.prisma.proyecto_docente.findUniqueOrThrow({
       where: { id },
-      select: {
-        descripcion: true,
-        proyecto_docente_rap: {
-          select: {
-            rap: { select: { id: true, codigo: true, numero: true } },
-          },
-          orderBy: { rap: { numero: 'asc' } },
-        },
-        rac: {
-          select: {
-            codigo: true,
-            rac_rap: { select: { id_rap: true } },
-            _count: { select: { evaluacion_rac: true } },
-          },
-          orderBy: [{ orden: 'asc' }, { id: 'asc' }],
-        },
-        periodo_academico: { select: { numero_semanas: true } },
-        contenido_programatico: {
-          where: { tema: { not: null } },
-          select: { semana: true, tema: true },
-        },
-        _count: {
-          select: { estrategia_metodologica: true, bibliografia: true },
-        },
-      },
+      select: SELECCION_COMPLETITUD,
     });
-    return {
-      descripcion: proyecto.descripcion,
-      raps: proyecto.proyecto_docente_rap.map(({ rap }) => rap),
-      racs: proyecto.rac.map((rac) => ({
-        codigo: rac.codigo,
-        idsRap: rac.rac_rap.map((relacion) => relacion.id_rap),
-        evaluaciones: rac._count.evaluacion_rac,
-      })),
-      estrategias: proyecto._count.estrategia_metodologica,
-      contenidos: {
-        numeroSemanas: proyecto.periodo_academico?.numero_semanas ?? null,
-        semanasConTema: proyecto.contenido_programatico
-          .filter((fila) => fila.semana !== null && fila.tema?.trim())
-          .map((fila) => fila.semana as number),
-      },
-      bibliografia: proyecto._count.bibliografia,
-    };
+    return aDatosCompletitud(proyecto);
   }
 
   /** Longitud máxima de la descripción, leída de `parametro_sistema` (RF-11, p3). */
@@ -187,4 +148,58 @@ export class DiligenciamientoService {
     );
     return LONGITUD_DESCRIPCION_RESPALDO;
   }
+}
+
+/**
+ * Lo que hay que leer de un proyecto para evaluar sus secciones. Se exporta para que el tablero
+ * de seguimiento (RF-25) evalúe muchos proyectos con una sola consulta y la misma regla.
+ */
+export const SELECCION_COMPLETITUD = {
+  descripcion: true,
+  proyecto_docente_rap: {
+    select: {
+      rap: { select: { id: true, codigo: true, numero: true } },
+    },
+    orderBy: { rap: { numero: 'asc' } },
+  },
+  rac: {
+    select: {
+      codigo: true,
+      rac_rap: { select: { id_rap: true } },
+      _count: { select: { evaluacion_rac: true } },
+    },
+    orderBy: [{ orden: 'asc' }, { id: 'asc' }],
+  },
+  periodo_academico: { select: { numero_semanas: true } },
+  contenido_programatico: {
+    where: { tema: { not: null } },
+    select: { semana: true, tema: true },
+  },
+  _count: {
+    select: { estrategia_metodologica: true, bibliografia: true },
+  },
+} satisfies Prisma.proyecto_docenteSelect;
+
+export function aDatosCompletitud(
+  proyecto: Prisma.proyecto_docenteGetPayload<{
+    select: typeof SELECCION_COMPLETITUD;
+  }>,
+): DatosCompletitud {
+  return {
+    descripcion: proyecto.descripcion,
+    raps: proyecto.proyecto_docente_rap.map(({ rap }) => rap),
+    racs: proyecto.rac.map((rac) => ({
+      codigo: rac.codigo,
+      idsRap: rac.rac_rap.map((relacion) => relacion.id_rap),
+      evaluaciones: rac._count.evaluacion_rac,
+    })),
+    estrategias: proyecto._count.estrategia_metodologica,
+    contenidos: {
+      numeroSemanas: proyecto.periodo_academico?.numero_semanas ?? null,
+      semanasConTema: proyecto.contenido_programatico
+        .filter((fila) => fila.semana !== null && fila.tema?.trim())
+        .map((fila) => fila.semana as number),
+    },
+    bibliografia: proyecto._count.bibliografia,
+  };
 }
