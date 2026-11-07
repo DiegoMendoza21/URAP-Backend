@@ -128,7 +128,14 @@ y **nunca** usar datos reales de estudiantes en seeds, fixtures ni pruebas.
 
 **Auditoría.** Creaciones, modificaciones, eliminaciones, aprobaciones y consultas sensibles
 se registran en `auditoria`. Si un fallo al auditar rompe la operación del usuario, está mal
-implementado: se registra el error y la operación sigue.
+implementado: se registra el error y la operación sigue. Cómo: el service llama a
+`AuditoriaService.registrar()` después de confirmar la operación (fuera de su transacción),
+con la tabla, el id y los valores anterior y nuevo; las consultas sensibles llevan
+`@AuditarConsulta('tabla')` en el controlador. El usuario y la IP salen solos del contexto de
+la petición, y las contraseñas y tokens se omiten de los valores. En `valor_anterior` y
+`valor_nuevo` van solo los campos que cambian, no el registro entero: la auditoría se
+conserva un año (NFR-008) y no debe guardar copias de datos personales (Ley 1581). La
+consulta de la auditoría (HU-14-02) es solo para el administrador.
 
 **Secretos fuera del código.** Credenciales, secreto JWT y vigencia del token van en
 variables de entorno. Ningún `.env` al repositorio. Ojo con la distinción: los parámetros de

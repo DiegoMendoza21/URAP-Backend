@@ -19,6 +19,8 @@ export interface UsuarioSesion {
   /** Roles vigentes en la base al momento de la petición, no los del token. */
   roles: string[];
   jti: string;
+  /** Fila de `sesion` del token: la usan el cierre de sesión y la auditoría. */
+  idSesion: number;
 }
 
 /** Datos de la petición que se guardan con la sesión. */
