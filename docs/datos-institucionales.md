@@ -177,6 +177,37 @@ definida por el programa». Si el programa responde que la meta es distinta para
 agrega un `porcentaje_esperado` opcional en `rap` que prevalece sobre el de la escala; ese cambio
 entra primero al DBML, así que no lo hagas antes de la respuesta.
 
+### Un solo número por RAP
+
+El formato da un porcentaje por indicador, pero RF-31 («el porcentaje acumulado») y RF-32 («el
+porcentaje alcanzado frente al esperado», por RAP) necesitan uno solo. Regla, pendiente de
+confirmación del programa:
+
+**Logro del RAP = valoraciones en nivel ≥ `umbral_cumplimiento` ÷ total de valoraciones**,
+contando juntas todas las valoraciones (estudiante × indicador) de todos los indicadores y, en
+RF-32, de todas las mediciones cerradas de ese RAP en el período.
+
+- Cuando todos los indicadores tienen el mismo número de estudiantes, coincide con el promedio
+  simple de los indicadores. En la medición real de 2024-1 da 63,97 % (87 de 136).
+- Entre asignaturas **no se promedian porcentajes: se suman valoraciones**. En 2023-II el RAP 3
+  se midió en cuatro asignaturas, una con 8 estudiantes y otra con 39; promediando porcentajes,
+  la de 8 pesaría lo mismo que la de 39. El informe 2023-II del programa sumó los estudiantes de
+  todas las asignaturas de cada RAP (126 registros en el RAP 1), así que esta regla reproduce su
+  método.
+- El juicio de cumplimiento compara ese número con la meta. Además, **cada indicador se compara
+  con la meta y se señala el que quede por debajo**, aunque el RAP cumpla: es lo que muestra el
+  gráfico del formato, y es como el informe 2023-II decidió priorizar la intervención en el RAP 2
+  (por su indicador 4).
+- Muestra siempre la base, «87 de 136 valoraciones», y no solo el porcentaje: con grupos de 8 o
+  10 estudiantes, un porcentaje suelto engaña.
+- No se usa «cumple solo si cumplen todos los indicadores» como veredicto. Los RAP 1 a 4 tienen
+  cuatro indicadores y los RAP 5 a 7 tres, así que esa regla castiga a los RAP con más
+  indicadores, y además reduce el resultado a un sí o un no.
+- La regla vive en una sola función. Si el programa elige la regla estricta, se cambia esa
+  función: el detalle por indicador ya está calculado.
+- En la comparación entre períodos (RF-32, p4), indica cuándo cambió la versión de la rúbrica:
+  con otros indicadores, el número deja de ser comparable.
+
 ### Caso de verificación real para RF-31
 
 La medición del RAP 2 en Finanzas de corto plazo (FP15502), primer período de 2024, valoración
@@ -191,8 +222,9 @@ formativa, 34 estudiantes, dio estos conteos:
 
 Úsalo como prueba de aceptación de RF-31: genera 34 estudiantes ficticios, asígnales niveles de
 forma arbitraria que reproduzcan los conteos de cada indicador, y verifica que el consolidado dé
-exactamente esos cuatro porcentajes. En esa medición el tamaño de la muestra y el de la cohorte
-fueron iguales (34): el docente valoró al grupo completo.
+exactamente esos cuatro porcentajes y, como logro del RAP, 63,97 % (87 de 136 valoraciones en
+nivel 3 o 4). En esa medición el tamaño de la muestra y el de la cohorte fueron iguales (34): el
+docente valoró al grupo completo.
 
 ---
 
@@ -404,7 +436,9 @@ Esto sí es lo único que falta. No lo inventes ni lo deduzcas.
 1. **El valor del porcentaje esperado.** El formato tiene la casilla y el modelo tiene el campo
    (ver apartado 3); falta el número que fija el programa, y saber si es el mismo para los siete
    RAP o distinto para cada uno. En la medición real de 2024-1 quedó en cero. Sin valor por
-   defecto: un 70 % de relleno se vuelve dato real en cuanto alguien vea la pantalla.
+   defecto: un 70 % de relleno se vuelve dato real en cuanto alguien vea la pantalla. También
+   falta que el programa confirme la regla de «un solo número por RAP» del apartado 3, o que
+   prefiera exigir la meta a cada indicador.
 
 2. **El calendario académico 2027-1**, cuando el Consejo Académico lo apruebe. Es con el que se
    generarán las sesiones de la prueba beta. Los festivos nacionales no hay que pedirlos: se
