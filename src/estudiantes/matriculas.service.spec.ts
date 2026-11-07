@@ -3,6 +3,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import type { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import type { ParametrosService } from '../common/parametros/parametros.service.js';
@@ -45,7 +46,6 @@ function crearServicio({
       findMany: vi.fn().mockResolvedValue([]),
       findFirst: vi.fn().mockResolvedValue(null),
     },
-    auditoria: { create: vi.fn().mockResolvedValue({}) },
     $transaction: vi.fn(),
   };
   // Simula el `where: { id_usuario }` de la relación: solo devuelve al docente si está asignado.
@@ -76,12 +76,14 @@ function crearServicio({
   const parametros = {
     lista: vi.fn().mockResolvedValue(['jpg', 'png', 'pdf', 'xlsx', 'docx']),
   };
+  const auditoria = { registrar: vi.fn().mockResolvedValue(undefined) };
   const servicio = new MatriculasService(
     prisma as unknown as PrismaService,
     alcance as unknown as AlcanceService,
     parametros as unknown as ParametrosService,
+    auditoria as unknown as AuditoriaService,
   );
-  return { servicio, prisma, alcance };
+  return { servicio, prisma, alcance, auditoria };
 }
 
 const consulta = { pagina: 1, tamano: 20, estado: 'matriculado' as const };
@@ -151,7 +153,7 @@ describe('MatriculasService (RF-22, HU-09-01)', () => {
 
   describe('listar', () => {
     it('muestra la lista al docente asignado al proyecto', async () => {
-      const { servicio, prisma } = crearServicio();
+      const { servicio, auditoria } = crearServicio();
 
       const pagina = await servicio.listar(
         docenteAsignado,
@@ -168,13 +170,8 @@ describe('MatriculasService (RF-22, HU-09-01)', () => {
         totalRetirados: 0,
         ultimaCarga: null,
       });
-      expect(prisma.auditoria.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          accion: 'consultar_lista',
-          tabla_afectada: 'matricula',
-          id_registro: ID_PROYECTO,
-        }) as object,
-      });
+      // La consulta la audita @AuditarConsulta en el controlador, con la IP (RF-29).
+      expect(auditoria.registrar).not.toHaveBeenCalled();
     });
 
     it('oculta la lista a un docente que no está asignado al proyecto', async () => {
@@ -193,15 +190,6 @@ describe('MatriculasService (RF-22, HU-09-01)', () => {
       await expect(
         servicio.listar(exDocente, ID_PROYECTO, consulta),
       ).rejects.toThrow(NotFoundException);
-    });
-
-    it('sigue respondiendo aunque falle la auditoría', async () => {
-      const { servicio, prisma } = crearServicio({ esAdministrador: true });
-      prisma.auditoria.create.mockRejectedValue(new Error('sin base'));
-
-      await expect(
-        servicio.listar(administrador, ID_PROYECTO, consulta),
-      ).resolves.toMatchObject({ total: 0 });
     });
   });
 });
