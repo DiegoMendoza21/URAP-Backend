@@ -45,6 +45,10 @@ const TEXTOS_POR_ESTADO: Partial<Record<number, TextosEstado>> = {
     error: 'Contenido demasiado grande',
     mensaje: 'El contenido enviado supera el tamaño permitido.',
   },
+  [HttpStatus.UNSUPPORTED_MEDIA_TYPE]: {
+    error: 'Tipo de archivo no permitido',
+    mensaje: 'El tipo de archivo enviado no está permitido.',
+  },
   [HttpStatus.UNPROCESSABLE_ENTITY]: {
     error: 'Datos no procesables',
     mensaje: 'Los datos enviados no se pueden procesar.',
