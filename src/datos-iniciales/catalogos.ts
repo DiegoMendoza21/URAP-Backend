@@ -158,6 +158,10 @@ export const TIPOS_NOTIFICACION = [
   },
   { codigo: 'proyecto_aprobado', nombre: 'Proyecto aprobado' },
   { codigo: 'cierre_periodo', nombre: 'Cierre del período' },
+  {
+    codigo: 'festivos_no_parametrizados',
+    nombre: 'Año sin días festivos parametrizados (RF-19)',
+  },
 ];
 
 /**

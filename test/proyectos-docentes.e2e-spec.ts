@@ -475,6 +475,8 @@ describe('Proyectos docentes (e2e) · RF-08, HU-05-01 a HU-05-03', () => {
             tabla_afectada: 'proyecto_docente',
             id_registro: proyecto.id,
             id_usuario: usuarios.departamento,
+            // RF-29: la IP sale sola del contexto de la petición.
+            ip: { not: null },
           },
         }),
       ).resolves.toBe(1);

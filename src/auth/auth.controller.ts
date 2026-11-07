@@ -7,7 +7,9 @@ import {
   Ip,
   Post,
   Headers,
+  UseGuards,
 } from '@nestjs/common';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -16,6 +18,7 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiTags,
+  ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { RespuestaErrorDto } from '../common/dto/respuesta-error.dto.js';
@@ -35,12 +38,14 @@ export class AuthController {
 
   @Post('iniciar-sesion')
   @Publico()
+  @UseGuards(ThrottlerGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Inicia sesión con correo institucional y contraseña',
     description:
       'Público. Devuelve un JWT con vigencia definida por NFR-003 y los datos del usuario ' +
-      'con sus roles activos (RF-01, HU-01-01).',
+      'con sus roles activos (RF-01, HU-01-01). Tras varios intentos fallidos consecutivos ' +
+      'la cuenta se bloquea temporalmente (HU-01-04), y cada IP tiene un límite de intentos.',
   })
   @ApiOkResponse({ type: SesionIniciadaDto })
   @ApiBadRequestResponse({
@@ -56,6 +61,12 @@ export class AuthController {
     type: RespuestaErrorDto,
     description:
       'El usuario está inactivo o no tiene roles asignados: debe comunicarse con el administrador',
+  })
+  @ApiTooManyRequestsResponse({
+    type: RespuestaErrorDto,
+    description:
+      'La cuenta está bloqueada temporalmente por intentos fallidos (el mensaje dice ' +
+      'cuántos minutos faltan), o la IP superó el límite de intentos',
   })
   iniciarSesion(
     @Body() datos: IniciarSesionDto,
