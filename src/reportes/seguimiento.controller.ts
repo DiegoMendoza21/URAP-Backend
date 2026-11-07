@@ -22,23 +22,8 @@ import {
   FiltrosSeguimientoDto,
   PaginaSeguimientoDto,
 } from './dto/seguimiento.dto.js';
-import { TIPO_EXCEL } from './excel.js';
+import { aDescarga, TIPO_EXCEL } from './excel.js';
 import { SeguimientoService } from './seguimiento.service.js';
-
-/** Descarga de un libro de Excel con su nombre de archivo. */
-export function aDescarga({
-  nombreArchivo,
-  contenido,
-}: {
-  nombreArchivo: string;
-  contenido: Buffer;
-}): StreamableFile {
-  return new StreamableFile(contenido, {
-    type: TIPO_EXCEL,
-    disposition: `attachment; filename="${nombreArchivo}"`,
-    length: contenido.length,
-  });
-}
 
 /**
  * Tablero de seguimiento del diligenciamiento (RF-25). El rol abre la puerta y el servicio

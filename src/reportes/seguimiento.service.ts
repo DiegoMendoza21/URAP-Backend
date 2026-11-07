@@ -140,37 +140,48 @@ export class SeguimientoService {
   async filtros(usuario: UsuarioSesion): Promise<FiltrosSeguimientoDto> {
     const enAlcance = await this.filtroAlcance(usuario);
     if (!enAlcance) {
-      return { programas: [], periodos: [], asignaturas: [], docentes: [] };
+      return {
+        programas: [],
+        periodos: [],
+        asignaturas: [],
+        docentes: [],
+        estados: [],
+      };
     }
     const deProyectos: Prisma.proyecto_docenteWhereInput = enAlcance;
-    const [programas, periodos, asignaturas, docentes] = await Promise.all([
-      this.prisma.programa.findMany({
-        where: {
-          activo: true,
-          asignatura: { some: { proyecto_docente: { some: deProyectos } } },
-        },
-        select: { id: true, nombre: true },
-        orderBy: { nombre: 'asc' },
-      }),
-      this.prisma.periodo_academico.findMany({
-        select: { id: true, codigo: true, activo: true, cerrado: true },
-        orderBy: [{ fecha_inicio: 'desc' }, { codigo: 'desc' }],
-      }),
-      this.prisma.asignatura.findMany({
-        where: { proyecto_docente: { some: deProyectos } },
-        select: { id: true, nombre: true, id_programa: true },
-        orderBy: { nombre: 'asc' },
-      }),
-      this.prisma.usuario.findMany({
-        where: {
-          proyecto_docente_docente: {
-            some: { proyecto_docente: { is: deProyectos } },
+    const [programas, periodos, asignaturas, docentes, estados] =
+      await Promise.all([
+        this.prisma.programa.findMany({
+          where: {
+            activo: true,
+            asignatura: { some: { proyecto_docente: { some: deProyectos } } },
           },
-        },
-        select: { id: true, nombres: true, apellidos: true },
-        orderBy: [{ apellidos: 'asc' }, { nombres: 'asc' }],
-      }),
-    ]);
+          select: { id: true, nombre: true },
+          orderBy: { nombre: 'asc' },
+        }),
+        this.prisma.periodo_academico.findMany({
+          select: { id: true, codigo: true, activo: true, cerrado: true },
+          orderBy: [{ fecha_inicio: 'desc' }, { codigo: 'desc' }],
+        }),
+        this.prisma.asignatura.findMany({
+          where: { proyecto_docente: { some: deProyectos } },
+          select: { id: true, nombre: true, id_programa: true },
+          orderBy: { nombre: 'asc' },
+        }),
+        this.prisma.usuario.findMany({
+          where: {
+            proyecto_docente_docente: {
+              some: { proyecto_docente: { is: deProyectos } },
+            },
+          },
+          select: { id: true, nombres: true, apellidos: true },
+          orderBy: [{ apellidos: 'asc' }, { nombres: 'asc' }],
+        }),
+        this.prisma.estado_proyecto.findMany({
+          select: { codigo: true, nombre: true },
+          orderBy: [{ orden: 'asc' }, { id: 'asc' }],
+        }),
+      ]);
     return {
       programas: programas.map((programa) => ({
         id: programa.id,
@@ -190,6 +201,12 @@ export class SeguimientoService {
         id: docente.id,
         nombre: nombreCompleto(docente),
       })),
+      estados: estados
+        .filter((estado) => estado.codigo)
+        .map((estado) => ({
+          codigo: estado.codigo as string,
+          nombre: estado.nombre ?? (estado.codigo as string),
+        })),
     };
   }
 
@@ -410,7 +427,7 @@ export class SeguimientoService {
   }
 
   /** El período pedido o, si no se indica, el activo más reciente. */
-  private async periodo(
+  async periodo(
     idPeriodo: number | undefined,
   ): Promise<{ id: number; codigo: string } | null> {
     const periodo = idPeriodo
@@ -643,7 +660,7 @@ function agrupar<T>(
   return grupos;
 }
 
-function nombreCompleto(persona: {
+export function nombreCompleto(persona: {
   nombres: string | null;
   apellidos: string | null;
 }): string {

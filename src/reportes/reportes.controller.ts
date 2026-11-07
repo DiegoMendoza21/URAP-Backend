@@ -20,10 +20,8 @@ import {
   FiltrosLogroRapDto,
   ReporteLogroRapDto,
 } from './dto/logro-rap.dto.js';
+import { aDescarga, TIPO_EXCEL } from './excel.js';
 import { ReportesService } from './reportes.service.js';
-
-const TIPO_EXCEL =
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 /**
  * Reportes académicos. Por ahora, el de logro de los RAP del programa (RF-32). El rol abre la
@@ -108,14 +106,6 @@ export class ReportesController {
     @UsuarioActual() usuario: UsuarioSesion,
     @Query() consulta: ConsultarLogroRapDto,
   ): Promise<StreamableFile> {
-    const { nombreArchivo, contenido } = await this.reportes.excel(
-      usuario,
-      consulta,
-    );
-    return new StreamableFile(contenido, {
-      type: TIPO_EXCEL,
-      disposition: `attachment; filename="${nombreArchivo}"`,
-      length: contenido.length,
-    });
+    return aDescarga(await this.reportes.excel(usuario, consulta));
   }
 }

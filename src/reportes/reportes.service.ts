@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import writeXlsxFile, { type Row } from 'write-excel-file/node';
+import type { Row } from 'write-excel-file/node';
 import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
@@ -24,6 +24,14 @@ import type {
   RapReporteDto,
   ReporteLogroRapDto,
 } from './dto/logro-rap.dto.js';
+import {
+  encabezado,
+  fechaGeneracion,
+  libro,
+  nombreSeguro,
+  numero,
+  titulo,
+} from './excel.js';
 
 export const MENSAJE_PROGRAMA_NO_EXISTE =
   'El programa no existe o no tiene acceso a sus reportes.';
@@ -34,14 +42,14 @@ export const MOTIVO_SIN_PERIODOS_ANTERIORES =
   'No hay mediciones cerradas de este RAP en períodos anteriores: no hay con qué comparar.';
 
 /** Roles que consultan el reporte con alcance de programa (matriz de `URAP-34`, «Reportes»). */
-const ROLES_PROGRAMA = [
+export const ROLES_PROGRAMA = [
   ROL.administrador,
   ROL.departamento,
   ROL.direccion,
 ] as const;
 
 /** RAP que un líder lidera, por período (nulo: todos los períodos). */
-type Liderazgos = Map<number, Set<number | null>>;
+export type Liderazgos = Map<number, Set<number | null>>;
 
 const SELECCION_MEDICION = {
   id: true,
@@ -278,19 +286,6 @@ export class ReportesService {
     consulta: ConsultarLogroRapDto,
   ): Promise<{ nombreArchivo: string; contenido: Buffer }> {
     const reporte = await this.logroRap(usuario, consulta);
-    const titulo = (texto: string) => ({
-      value: texto,
-      fontWeight: 'bold' as const,
-    });
-    const encabezado = (textos: string[]): Row =>
-      textos.map((texto) => ({
-        value: texto,
-        fontWeight: 'bold' as const,
-        backgroundColor: '#E2E8F0',
-        wrap: true,
-      }));
-    const numero = (valor: number | null) =>
-      valor === null ? null : { value: valor, type: Number, format: '0.00' };
     const resultado = (alcanzado: boolean | null) =>
       alcanzado === null
         ? reporte.metaDefinida
@@ -303,9 +298,7 @@ export class ReportesService {
     const resumen: Row[] = [
       [titulo(`Reporte de logro de los RAP · ${reporte.programa.nombre}`)],
       [`Período académico ${reporte.periodo.codigo}`],
-      [
-        `Generado el ${new Date(reporte.generado).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}`,
-      ],
+      [`Generado el ${fechaGeneracion(new Date(reporte.generado))}`],
       [],
       encabezado([
         'RAP',
@@ -436,7 +429,7 @@ export class ReportesService {
       }
     }
 
-    const contenido = await writeXlsxFile([
+    const contenido = await libro([
       {
         data: resumen,
         sheet: 'Logro por RAP',
@@ -473,7 +466,7 @@ export class ReportesService {
         sheet: 'Comparación',
         columns: [{ width: 12 }, { width: 60 }, { width: 16 }, { width: 12 }],
       },
-    ]).toBuffer();
+    ]);
 
     return {
       nombreArchivo: `logro-rap-${nombreSeguro(reporte.periodo.codigo)}.xlsx`,
@@ -482,7 +475,7 @@ export class ReportesService {
   }
 
   /** RAP que lidera el usuario, con los períodos en que los lidera. */
-  private async liderazgos(usuario: UsuarioSesion): Promise<Liderazgos> {
+  async liderazgos(usuario: UsuarioSesion): Promise<Liderazgos> {
     const liderazgos: Liderazgos = new Map();
     if (!usuario.roles.includes(ROL.liderRap)) {
       return liderazgos;
@@ -682,8 +675,4 @@ function esperadoDelRap(
     asignaturas.map((asignatura) => asignatura.porcentajeEsperado),
   );
   return congeladas.size === 1 ? [...congeladas][0] : vigente;
-}
-
-function nombreSeguro(texto: string): string {
-  return texto.replace(/[^A-Za-z0-9-]+/g, '-');
 }
