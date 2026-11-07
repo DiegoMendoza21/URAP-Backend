@@ -5,6 +5,7 @@ import { AuthModule } from './auth/auth.module.js';
 import { EstudiantesModule } from './estudiantes/estudiantes.module.js';
 import { validarVariablesEntorno } from './common/configuracion/variables-entorno.js';
 import { FiltroExcepciones } from './common/filtros/filtro-excepciones.js';
+import { MedicionesModule } from './mediciones/mediciones.module.js';
 import { PrismaModule } from './common/prisma/prisma.module.js';
 import { crearPipeValidacion } from './common/validacion/pipe-validacion.js';
 import { ProyectosDocentesModule } from './proyectos-docentes/proyectos-docentes.module.js';
@@ -22,6 +23,7 @@ import { SaludModule } from './salud/salud.module.js';
     SaludModule,
     ProyectosDocentesModule,
     EstudiantesModule,
+    MedicionesModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: FiltroExcepciones },
