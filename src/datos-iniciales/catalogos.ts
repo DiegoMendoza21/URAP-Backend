@@ -200,6 +200,13 @@ export const PARAMETROS = [
     descripcion:
       'Extensiones de archivo permitidas, separadas por coma (NFR-019). Por validar.',
   },
+  {
+    clave: 'evidencia_tipos_permitidos',
+    valor: 'jpg,png,pdf',
+    tipo_dato: 'lista',
+    descripcion:
+      'Extensiones permitidas para las evidencias fotográficas de los RAP, separadas por coma (RF-24). Por validar.',
+  },
 ];
 
 /**
