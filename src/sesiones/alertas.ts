@@ -5,9 +5,7 @@
  *
  * Las fechas son textos `YYYY-MM-DD`, como las devuelve `aTextoFecha` de una columna `date`.
  */
-import { aFechaColumna, aTextoFecha } from './calendario.js';
-
-const MILISEGUNDOS_DIA = 24 * 60 * 60 * 1000;
+import { aFechaColumna, aTextoFecha, MILISEGUNDOS_DIA } from './calendario.js';
 
 /**
  * Zona horaria con la que se decide qué día es «hoy». Las clases ocurren en Colombia: un

@@ -7,7 +7,7 @@
  * columna `date`. Así una fecha no cambia de día por la zona horaria del servidor.
  */
 
-const MILISEGUNDOS_DIA = 24 * 60 * 60 * 1000;
+export const MILISEGUNDOS_DIA = 24 * 60 * 60 * 1000;
 
 /** Días en que puede haber clase: 1 = lunes … 6 = sábado (DBML, `horario_curso.dia_semana`). */
 export const DIA_SEMANA_MINIMO = 1;

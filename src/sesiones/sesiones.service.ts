@@ -213,23 +213,19 @@ export class SesionesService {
   ): Promise<CalendarioSesionesDto> {
     const proyecto = await this.proyectoVisible(usuario, idProyecto);
     const donde = { id_proyecto_docente: proyecto.id, ...SESION_VIGENTE };
-    const [todas, sesiones, puedeEditar, umbralDias] = await Promise.all([
-      // Todas, con lo justo para el resumen de alertas; su número es el total.
-      this.prisma.sesion_clase.findMany({
-        where: donde,
-        select: CAMPOS_ALERTA,
-      }),
+    // Una sola consulta: un curso tiene a lo sumo unas cien sesiones, y el resumen de alertas
+    // necesita todas aunque se pida una página.
+    const [todas, puedeEditar, umbralDias] = await Promise.all([
       this.prisma.sesion_clase.findMany({
         where: donde,
         include: { tipo_sesion: true, dia_festivo: true },
         orderBy: [{ fecha: 'asc' }, { id: 'asc' }],
-        skip: (pagina - 1) * tamano,
-        take: tamano,
       }),
       this.puedeEditar(usuario, proyecto),
       this.parametros.entero(PARAMETRO_UMBRAL_ALERTA),
     ]);
     const total = todas.length;
+    const sesiones = todas.slice((pagina - 1) * tamano, pagina * tamano);
     const periodo = proyecto.periodo_academico;
     const hoy = fechaDeHoy();
     const contexto: ContextoAlerta = {
@@ -302,7 +298,7 @@ export class SesionesService {
           id: true,
           grupo: true,
           asignatura: { select: { nombre: true, codigo_interno: true } },
-          periodo_academico: { select: { codigo: true, fecha_fin: true } },
+          periodo_academico: { select: { codigo: true } },
         },
       }),
     ]);
@@ -325,29 +321,21 @@ export class SesionesService {
             select: { id_proyecto_docente: true, ...CAMPOS_ALERTA },
           });
 
+    // Todos los períodos de la consulta están abiertos: la fecha de fin no interviene.
+    const contexto: ContextoAlerta = {
+      hoy,
+      umbralDias,
+      periodoCerrado: false,
+      fechaFinPeriodo: null,
+    };
     const alertasPorProyecto = new Map<number, AlertaSesion[]>();
-    const contextos = new Map(
-      proyectos.map((proyecto) => [
-        proyecto.id,
-        {
-          hoy,
-          umbralDias,
-          periodoCerrado: false,
-          fechaFinPeriodo: proyecto.periodo_academico?.fecha_fin
-            ? aTextoFecha(proyecto.periodo_academico.fecha_fin)
-            : null,
-        } satisfies ContextoAlerta,
-      ]),
-    );
     for (const sesion of sesiones) {
-      const id = sesion.id_proyecto_docente;
-      const contexto = id === null ? undefined : contextos.get(id);
-      if (id === null || !contexto) {
+      if (sesion.id_proyecto_docente === null) {
         continue;
       }
-      const lista = alertasPorProyecto.get(id) ?? [];
+      const lista = alertasPorProyecto.get(sesion.id_proyecto_docente) ?? [];
       lista.push(alertaDeFila(sesion, contexto));
-      alertasPorProyecto.set(id, lista);
+      alertasPorProyecto.set(sesion.id_proyecto_docente, lista);
     }
 
     const conPendientes: ProyectoConPendientesDto[] = proyectos
