@@ -116,6 +116,28 @@ export interface SemanaDeReceso {
   hasta: string;
 }
 
+/**
+ * Semanas de clase entre las fechas del período: las semanas calendario que toca, menos las de
+ * receso. Sirve para avisar cuando `numero_semanas` deja semanas por fuera.
+ */
+export function semanasDeClase(
+  fechaInicio: Date,
+  fechaFin: Date,
+  diasSinClase: ReadonlySet<string>,
+): number {
+  let semanas = 0;
+  for (
+    let lunes = lunesDe(fechaInicio);
+    lunes.getTime() <= fechaFin.getTime();
+    lunes = new Date(lunes.getTime() + 7 * MILISEGUNDOS_DIA)
+  ) {
+    if (!esSemanaDeReceso(lunes, diasSinClase)) {
+      semanas++;
+    }
+  }
+  return semanas;
+}
+
 /** Semanas de receso que tocan el período, para mostrarlas en el calendario. */
 export function semanasDeReceso(
   fechaInicio: Date,
