@@ -10,5 +10,7 @@ import { ProyectosDocentesService } from './proyectos-docentes.service.js';
   // El asistente va primero: sus rutas son más específicas que `proyectos-docentes/:id`.
   controllers: [AsistenteController, ProyectosDocentesController],
   providers: [AlcanceService, AsistenteService, ProyectosDocentesService],
+  // La lista de matriculados (EstudiantesModule) usa el mismo alcance por programa.
+  exports: [AlcanceService],
 })
 export class ProyectosDocentesModule {}
