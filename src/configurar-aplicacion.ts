@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { readFileSync } from 'node:fs';
 import type { VariablesEntorno } from './common/configuracion/variables-entorno.js';
+import { middlewareContextoPeticion } from './common/contexto/contexto-peticion.js';
 
 export const PREFIJO_API = 'api';
 
@@ -20,6 +21,8 @@ export function configurarAplicacion(app: INestApplication): void {
     .getHttpAdapter()
     .getInstance()
     .set('trust proxy', config.get('PROXIES_CONFIABLES', { infer: true }));
+  // Contexto de cada petición (IP y usuario) para la auditoría (RF-29). Va antes de las rutas.
+  app.use(middlewareContextoPeticion);
   app.setGlobalPrefix(PREFIJO_API);
   app.enableCors({ origin: config.get('CORS_ORIGENES', { infer: true }) });
   app.enableShutdownHooks();
