@@ -852,6 +852,7 @@ export class SesionesService {
   }
 }
 
+/** Una sesión cuenta como registrada (RF-20): la usan el calendario, las alertas y el tablero (RF-25). */
 export function esDiligenciada(sesion: {
   estado: string | null;
   fecha_registro: Date | null;

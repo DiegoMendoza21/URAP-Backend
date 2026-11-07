@@ -89,6 +89,30 @@ npm run db:sembrar:demo
 
 `migrate reset` vuelve a aplicar las migraciones; en Prisma 7 ya no siembra por su cuenta.
 
+## Almacenamiento de archivos
+
+Las evidencias fotográficas (RF-24) no van a la base de datos: la base guarda solo su
+referencia, y el archivo queda en el **almacenamiento documental**. En este prototipo es una
+carpeta del disco, que se configura con la variable `ALMACENAMIENTO_DIRECTORIO`:
+
+- **En desarrollo** se puede dejar vacía: se usa la carpeta `almacenamiento/` del proyecto, que
+  no va al repositorio. La API la crea al arrancar.
+- **En producción es obligatoria** y debe apuntar a un **volumen persistente**, por ejemplo
+  `/srv/urap/almacenamiento`. Si apunta a una carpeta del contenedor, cada despliegue borra las
+  evidencias. La API debe poder leer y escribir en ella; si no puede, no arranca.
+
+Los archivos nunca se publican: no se sirven como archivos estáticos ni con direcciones
+públicas. Se descargan solo a través de la API
+(`GET /api/proyectos-docentes/{id}/evidencias/{idEvidencia}/archivo`), que valida la sesión y
+los permisos y registra cada descarga en la auditoría, porque las fotos de clase son datos
+personales (Ley 1581 de 2012). Esa carpeta tampoco debe quedar en una ruta que sirva un
+servidor web.
+
+El tamaño máximo (`archivo_tamano_maximo_mb`) y los tipos permitidos de las evidencias
+(`evidencia_tipos_permitidos`, JPG, PNG y PDF) son parámetros de `parametro_sistema`. El tipo
+se comprueba con el contenido del archivo, no con su nombre. Para pasar a Amazon S3 basta con
+otro adaptador de la interfaz `AlmacenamientoDocumental` (`src/documentos/almacenamiento/`).
+
 ## Pruebas y calidad
 
 ```bash
