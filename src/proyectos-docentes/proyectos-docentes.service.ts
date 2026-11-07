@@ -228,7 +228,7 @@ export class ProyectosDocentesService {
    * (`proyecto_docente_docente`); Departamento, Dirección y Líder RAP, los de su programa; el
    * Administrador, todos. Un usuario con varios roles ve la unión. Nulo: no ve ninguno.
    */
-  private async filtroVisibilidad(
+  async filtroVisibilidad(
     usuario: UsuarioSesion,
   ): Promise<Prisma.proyecto_docenteWhereInput | null> {
     const { global, programas } = await this.alcance.alcance(
