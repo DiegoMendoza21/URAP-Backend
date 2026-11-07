@@ -1,28 +1,34 @@
-# Datos institucionales — Administración Industrial
+# Datos institucionales reales — Administración Industrial
 
 Datos oficiales del programa, extraídos de documentos institucionales. **No son provisionales:
-son los valores reales**, y el seed los carga como datos base (`src/datos-iniciales/programa.ts`,
-`npm run db:sembrar`).
+son los valores reales.** El seed del backend los carga en `src/datos-iniciales/` (`programa.ts`
+como datos base y `demostracion.ts` como datos de demostración).
 
-Este repositorio es público. Por eso esta copia no nombra a ninguna persona: los responsables de
-las fuentes y la asignación de líderes y docentes se describen por su función (Ley 1581 de 2012).
+Los dos repositorios son públicos. Por eso esta copia no nombra a ninguna persona: los
+responsables de las fuentes y la asignación de líderes y docentes se describen por su función
+(Ley 1581 de 2012).
 
 Fuentes:
 
-- `Matriz Consistencia RAP` — Vicerrectoría de Docencia, Desarrollo Profesoral. Responsables:
-  dos docentes del programa, los líderes del RAP 3.
+- `Matriz Consistencia RAP` — Vicerrectoría de Docencia, Desarrollo Profesoral.
+  Responsables: dos docentes del programa, los líderes del RAP 3.
 - `INFORME EVALUACIÓN RAP 2023-II — Administración Industrial`.
-- `Producto 1 — Arquitectura del Negocio URAP` (revisado), Tablas 16 y 17.
+- `Producto 1 — Arquitectura del Negocio URAP` (revisado, v2), Tablas 16 y 17.
 - `FO-DO/PC-023 v00` — Medición de resultado de aprendizaje del programa por asignatura.
+- `FO-DO/PC-023 diligenciado` — medición del RAP 2 en Finanzas de corto plazo, primer período
+  de 2024, entregado por la docente que diligenció la medición. **Contiene los nombres reales de 34
+  estudiantes: ese archivo no entra al repositorio, ni siquiera a `docs/fuentes/`.** Aquí solo
+  están sus datos agregados.
+- `Acuerdo No. 46 del 26 de mayo de 2026` — Consejo Académico, calendario académico 2026-2.
 
-Al final está **lo que todavía no existe** y hay que pedirle al programa. No se inventa.
+Al final está **lo que todavía no existe** y hay que pedirle al programa. No lo inventes.
 
 ---
 
 ## 1. Matriz de permisos por rol
 
 Fuente: Producto 1, Tabla 17 «Matriz general de permisos por rol», y Tabla 16 «Catálogo de
-roles». Es la matriz de HU-01-03.
+roles». Esta es la matriz que faltaba para HU-01-03.
 
 **Convenciones:** `ADM` = administrar · `R` = registrar · `E` = editar · `A` = aprobar ·
 `G` = generar · `C` = consultar · `—` = sin acceso.
@@ -31,7 +37,7 @@ roles». Es la matriz de HU-01-03.
 |---|---|---|---|---|---|---|
 | Usuarios y roles | ADM | — | — | C | C | — |
 | Estructura académica | ADM | C | C | C | C | C |
-| Proyectos docentes | ADM/C | R/E propios | C | R/A/C ¹ | C | C publicados |
+| Proyectos docentes | ADM/C | E propios | C | R/A/C | C | C publicados |
 | Plan de curso | ADM/C | R/E propios | C | A/C | C | C publicado |
 | RAP y RAC | ADM | R/E RAC propios | C RAP asignados | A/C | C | C autorizado |
 | Registro de clases | ADM/C | R/E propios | C | C | C | — |
@@ -39,14 +45,21 @@ roles». Es la matriz de HU-01-03.
 | Reportes | ADM | C propios | C RAP asignados | G/C | C | — |
 | Auditoría | ADM/C | — | — | C restringida | C restringida | — |
 
-¹ **Decisión del 2026-11-06.** La Tabla 17 le da al Departamento solo A/C en proyectos docentes,
-pero RF-08 dice que el Departamento académico crea el proyecto docente y le asigna los docentes.
-Se sigue RF-08: el Departamento también registra (R) el proyecto docente. El docente lo diligencia
-después (R/E propios).
-
 Los seis roles corresponden uno a uno con los actores de la especificación: Administrador =
 ACT-03, Docente = ACT-01, Líder RAP = ACT-05, Departamento = ACT-02, Dirección = ACT-06,
 Estudiante = ACT-04. ACT-07 son sistemas externos y no es un rol con credenciales.
+
+**Corrección de la fila «Proyectos docentes» (v2 del Producto 1).** La versión original decía
+Docente `R/E propios` y Departamento `A/C`, que es el supuesto inicial del equipo antes de la
+sesión con la docente que diligenció la medición del RAP 2. Lo correcto es Docente `E propios` y Departamento `R/A/C`:
+el proyecto docente lo crea el departamento académico (RF-08 asistente, RF-09 duplicación,
+RF-10 carga desde Excel; HU-05-01 a HU-05-06) y el docente lo diligencia (RF-11 a RF-16). La
+consecuencia para los guards es directa: **crear, duplicar y cargar desde Excel son del
+Departamento** (y del Administrador por `ADM`); **el Docente no puede crear un proyecto docente
+por ninguna vía**, solo editar aquellos en los que figura en `proyecto_docente_docente`. Si el
+seed de permisos de HU-01-03 le dio al Docente un permiso de creación sobre proyectos, hay que
+quitárselo. Las filas «Plan de curso» y «RAP y RAC» no cambian: ahí el `R` del Docente es
+registrar contenidos y RAC dentro de su proyecto, que sí le corresponde.
 
 **Importante sobre la granularidad.** Esta matriz es por módulo, no por endpoint. Define el
 marco y resuelve los casos de alcance («propios», «RAP asignados», «publicados»), que es lo
@@ -65,9 +78,9 @@ que verifique el rol pero no el alcance está incompleto.
 | Rol | Responsabilidad | Alcance funcional |
 |---|---|---|
 | Administrador | Configura el sistema y administra información base. | Usuarios, roles, programas, asignaturas, períodos, parámetros, auditoría y soporte. |
-| Docente responsable | Planea y ejecuta el proyecto docente de sus asignaturas. | Crear y editar proyectos propios, registrar RAC, contenidos, clases, evidencias y consultar reportes propios. |
+| Docente responsable | Planea y ejecuta el proyecto docente de sus asignaturas. | Diligenciar los proyectos docentes que tiene asignados, registrar RAC, contenidos, clases y evidencias, y consultar reportes propios. |
 | Líder RAP | Realiza seguimiento a los resultados de aprendizaje asignados. | Consultar proyectos relacionados, revisar RAC/RAP, evidencias, indicadores y reportes de los RAP asignados. |
-| Departamento académico | Supervisa la gestión académica del programa. | Revisar proyectos, aprobar o solicitar ajustes, consultar información consolidada y generar reportes. |
+| Departamento académico | Crea los proyectos docentes y supervisa la gestión académica del programa. | Crear, duplicar o cargar desde Excel los proyectos docentes y asignar sus docentes; revisarlos, aprobarlos o solicitar ajustes; consultar información consolidada y generar reportes. |
 | Dirección del programa | Consulta información estratégica para decisiones. | Acceso de consulta a indicadores, reportes consolidados y estado general de los proyectos. |
 | Estudiante | Consulta información expresamente autorizada. | Acceso de solo lectura a contenidos o proyectos publicados, si el programa habilita este alcance. |
 
@@ -104,13 +117,35 @@ FO-DO/PC-023 solo tiene cuatro columnas de indicador.
 | 7 | 16 | 3 |
 | **Total** | **73** | **25** |
 
+### Rúbrica real del RAP 2
+
+Es la rúbrica con la que se midió el RAP 2 en Finanzas de corto plazo en 2024-1, tomada del
+formato FO-DO/PC-023 diligenciado. Va al seed como versión 1 de la rúbrica del RAP 2 (RF-06).
+
+| Indicador | Texto |
+|---|---|
+| 1 | Identifica las variables del entorno económico y financiero de las organizaciones |
+| 2 | Interpreta las variables del entorno económico y financiero que inciden en las organizaciones |
+| 3 | Aplica principios económicos y financieros para la definición de alternativas que contribuyan a la toma de decisiones gerenciales en las organizaciones |
+| 4 | Evalúa el entorno económico y financiero de las organizaciones a nivel local, nacional e internacional, a partir de las variables identificadas |
+
+Los descriptores de cada nivel son el texto del indicador, con la primera letra en minúscula,
+precedido de un adverbio de frecuencia: «No» (1 Principiante), «Raras veces» (2 En Desarrollo),
+«Frecuentemente» (3 Competente) y «Siempre» (4 Ejemplar). El indicador 1 en nivel 2, por
+ejemplo, dice literalmente «Raras veces identifica las variables del entorno económico y
+financiero de las organizaciones». Así están en la rúbrica oficial: genera los dieciséis textos
+con esa regla.
+
+Las rúbricas de los otros seis RAP existen (el informe 2023-II reporta sus indicadores), pero no
+las tenemos. Hasta que lleguen, sus textos en el seed empiezan con «PROVISIONAL —», para que
+nadie las confunda con las reales en una demostración.
+
 ---
 
 ## 3. Escala de valoración del programa
 
 Cuatro niveles. Es la escala de Administración Industrial; otro programa puede definir la suya,
-por eso vive en `escala_valoracion` / `nivel_escala` y no en el código. El umbral de
-cumplimiento es el nivel 3 (RF-07).
+por eso vive en `escala_valoracion` / `nivel_escala` y no en el código.
 
 | Valor | Etiqueta | Rango de calificación |
 |---|---|---|
@@ -119,22 +154,86 @@ cumplimiento es el nivel 3 (RF-07).
 | 3 | Competente | 3,5 ≤ nota < 4,3 |
 | 4 | Ejemplar | nota ≥ 4,3 |
 
-**Hay una decisión pendiente aquí.** El formato FO-DO/PC-023 pide al docente el *nivel* (1 a 4)
-por estudiante y por indicador, y el modelo de datos guarda eso (`valoracion_estudiante.id_nivel`).
-Pero el informe 2023-II trae esta tabla de conversión desde una nota de 0 a 5, lo que sugiere que
-algunos docentes parten de la calificación. Si el programa confirma que se captura la nota y el
-sistema convierte, hay que agregar `rango_min` / `rango_max` a `nivel_escala` y `calificacion` a
-`valoracion_estudiante`. Está en la lista de preguntas abiertas del final. Mientras tanto, se
-implementa la captura por nivel, que es lo que dice el formato oficial.
+**Decidido: el docente registra el nivel, no la nota.** El instructivo del formato FO-DO/PC-023
+lo dice («Valor numérico, según el nivel de desempeño (1: Principiante, 2: En Desarrollo…)») y la
+medición real del RAP 2 de 2024-1 lo confirma: cada estudiante tiene un nivel de 1 a 4 por
+indicador, sin ninguna nota. Es lo que ya guarda `valoracion_estudiante.id_nivel`. La tabla de
+rangos de nota de arriba es solo la conversión que usó el informe 2023-II para consolidar
+resultados: **no implementes conversión de notas.**
+
+### Cómo se mide el cumplimiento de un RAP
+
+La hoja Evaluación del formato calcula, por indicador, «Nivel 3 + 4»: el porcentaje de
+estudiantes en Competente más el porcentaje en Ejemplar (la fórmula es `=D22+E22`). Ese valor se
+compara con la casilla «Nivel de Desempeño Esperado (%)», que según el instructivo es el «nivel
+de desempeño esperado definido para el RAP por el programa».
+
+El modelo ya tiene las tres piezas: `escala_valoracion.umbral_cumplimiento = 3` (desde qué nivel
+cuenta como logrado), `escala_valoracion.porcentaje_esperado` (el valor que fija el programa) y
+`medicion_rap.porcentaje_esperado` (la copia congelada en cada medición, para que cambiar la meta
+no reescriba las mediciones pasadas). **Lo único que falta es el número**: en la medición real
+de 2024-1 la casilla quedó en cero. Déjalo sin valor por defecto y que la pantalla diga «meta no
+definida por el programa». Si el programa responde que la meta es distinta para cada RAP, se
+agrega un `porcentaje_esperado` opcional en `rap` que prevalece sobre el de la escala; ese cambio
+entra primero al DBML, así que no lo hagas antes de la respuesta.
+
+### Un solo número por RAP
+
+El formato da un porcentaje por indicador, pero RF-31 («el porcentaje acumulado») y RF-32 («el
+porcentaje alcanzado frente al esperado», por RAP) necesitan uno solo. Regla, pendiente de
+confirmación del programa:
+
+**Logro del RAP = valoraciones en nivel ≥ `umbral_cumplimiento` ÷ total de valoraciones**,
+contando juntas todas las valoraciones (estudiante × indicador) de todos los indicadores y, en
+RF-32, de todas las mediciones cerradas de ese RAP en el período.
+
+- Cuando todos los indicadores tienen el mismo número de estudiantes, coincide con el promedio
+  simple de los indicadores. En la medición real de 2024-1 da 63,97 % (87 de 136).
+- Entre asignaturas **no se promedian porcentajes: se suman valoraciones**. En 2023-II el RAP 3
+  se midió en cuatro asignaturas, una con 8 estudiantes y otra con 39; promediando porcentajes,
+  la de 8 pesaría lo mismo que la de 39. El informe 2023-II del programa sumó los estudiantes de
+  todas las asignaturas de cada RAP (126 registros en el RAP 1), así que esta regla reproduce su
+  método.
+- El juicio de cumplimiento compara ese número con la meta. Además, **cada indicador se compara
+  con la meta y se señala el que quede por debajo**, aunque el RAP cumpla: es lo que muestra el
+  gráfico del formato, y es como el informe 2023-II decidió priorizar la intervención en el RAP 2
+  (por su indicador 4).
+- Muestra siempre la base, «87 de 136 valoraciones», y no solo el porcentaje: con grupos de 8 o
+  10 estudiantes, un porcentaje suelto engaña.
+- No se usa «cumple solo si cumplen todos los indicadores» como veredicto. Los RAP 1 a 4 tienen
+  cuatro indicadores y los RAP 5 a 7 tres, así que esa regla castiga a los RAP con más
+  indicadores, y además reduce el resultado a un sí o un no.
+- La regla vive en una sola función. Si el programa elige la regla estricta, se cambia esa
+  función: el detalle por indicador ya está calculado.
+- En la comparación entre períodos (RF-32, p4), indica cuándo cambió la versión de la rúbrica:
+  con otros indicadores, el número deja de ser comparable.
+
+### Caso de verificación real para RF-31
+
+La medición del RAP 2 en Finanzas de corto plazo (FP15502), primer período de 2024, valoración
+formativa, 34 estudiantes, dio estos conteos:
+
+| Indicador | Principiante | En Desarrollo | Competente | Ejemplar | Nivel 3 + 4 |
+|---|---|---|---|---|---|
+| 1 | 0 | 5 | 29 | 0 | 85,29 % |
+| 2 | 0 | 10 | 24 | 0 | 70,59 % |
+| 3 | 0 | 17 | 17 | 0 | 50,00 % |
+| 4 | 0 | 17 | 17 | 0 | 50,00 % |
+
+Úsalo como prueba de aceptación de RF-31: genera 34 estudiantes ficticios, asígnales niveles de
+forma arbitraria que reproduzcan los conteos de cada indicador, y verifica que el consolidado dé
+exactamente esos cuatro porcentajes y, como logro del RAP, 63,97 % (87 de 136 valoraciones en
+nivel 3 o 4). En esa medición el tamaño de la muestra y el de la cohorte fueron iguales (34): el
+docente valoró al grupo completo.
 
 ---
 
 ## 4. Plan de estudios y mapeo curricular
 
 69 asignaturas en 10 semestres, cada una tributando a uno o más RAP, para un total de 73
-vínculos asignatura–RAP. Es el contenido de `asignatura` y `asignatura_rap` en el seed. Los dos
-números cuadran con el informe 2023-II, que menciona «69 asignaturas que tributan a los RAP del
-programa» y contabiliza 73 vínculos.
+vínculos asignatura–RAP. Esta es la tabla de `asignatura` y de `asignatura_rap` del seed.
+Los dos números cuadran con el informe 2023-II, que menciona «69 asignaturas que tributan a los
+RAP del programa» y contabiliza 73 vínculos.
 
 | Sem. | Asignatura | RAP |
 |---|---|---|
@@ -210,14 +309,42 @@ programa» y contabiliza 73 vínculos.
 
 El programa tiene dos líneas de electivas, la general y la GPO (Gestión de Producción y
 Operaciones). Las electivas de IX aparecen sin número de semestre explícito en el informe
-original y se ubicaron en IX por el mapeo curricular; **falta confirmarlo con el programa**
-antes de tomarlo como dato definitivo del plan de estudios.
+original y se ubicaron en IX por el mapeo curricular; confirmar antes de usarlo como dato
+definitivo del plan de estudios.
 
-**Faltan el código SMA, los créditos y las horas de cada asignatura.** El formato FO-DO/PC-023
-exige el código («Código de la Asignatura establecido en el SMA») y el proyecto docente muestra
-los créditos y las horas TDE, TDP y TI (RF-08 p5). El seed los deja en `null`; RF-08 p7 ya cubre
-ese caso: el proyecto se crea y queda marcado con información incompleta. Están en la lista del
-final.
+### Asignaturas con datos completos
+
+Cuatro asignaturas traen todos los campos del punto 1 en los formatos FO-DO/PC-001 que diligenció
+el programa. Con ellas el asistente de RF-08 se puede probar de punta a punta con datos reales:
+el paso 5 autocompleta exactamente estos campos.
+
+| Asignatura | Código | Componente | Tipo | Créd. | TDE | TDP | TI | Total | Prerrequisito |
+|---|---|---|---|---|---|---|---|---|---|
+| Fundamentos de administración | NC2507 | Profesional | Obligatorio | 3 | 48 | 0 | 96 | 144 | — |
+| Fundamentos de investigación científica | NC2505 | Profesional | Obligatorio | 3 | 48 | 0 | 96 | 144 | Comprensión y producción de textos II |
+| Comportamiento organizacional | FP15503 o IX24193 | Profesional | Obligatorio | 2 | 32 | 0 | 64 | 96 | Organización y dirección |
+| Gestión ambiental | FP15804 | Profesional | Obligatorio | 2 | 32 | 0 | 64 | 96 | — |
+
+Ninguna tiene correquisitos. Las cuatro cumplen la regla de 48 horas por crédito que valida
+`asignatura.horas_totales`, y en las cuatro TDE = 16 h y TI = 32 h por crédito; no generalices esa
+proporción, porque las asignaturas prácticas (talleres, química, dibujo técnico) tendrán TDP.
+
+Tres observaciones. **Comportamiento organizacional aparece con dos códigos** en dos formatos del
+mismo programa y con la misma docente: no elijas uno, está preguntado al programa. El formato
+nombra «Fundamentos de investigación científica» a la que el mapeo curricular llama «Fundamentos
+de investigación» (III semestre); con el prerrequisito de Comprensión y producción de textos II
+encaja, pero confírmalo con el plan de estudios. Y los formatos traen nombres y correos reales de
+docentes: no los copies al seed.
+
+El formato 023 de 2024-1 trae además el código de **Finanzas de corto plazo: FP15502**
+(V semestre). Eso orienta el caso de Comportamiento organizacional: FP15502 y FP15503, las dos de
+V semestre, y FP15804, de VIII, siguen el patrón FP15 + semestre + consecutivo, mientras que
+IX24193 no se parece a ningún otro código del programa. Lo más probable es que el vigente sea
+FP15503, pero sigue preguntado: no lo asumas en el seed.
+
+El código va en `asignatura.codigo_interno`, único por programa. Que una asignatura tenga dos
+códigos sugiere que cambian entre versiones del plan de estudios: no lo uses como identificador
+estable en ninguna relación ni en ninguna URL.
 
 ---
 
@@ -250,40 +377,88 @@ Dos cosas que el modelo tiene que soportar:
 
 ---
 
-## 6. Lo que todavía NO existe y hay que pedirle al programa
+## 6. Calendario académico 2026-2 (programas presenciales)
 
-Esto es lo único que falta. No se inventa ni se deduce.
+Fuente: Acuerdo No. 46 del 26 de mayo de 2026 del Consejo Académico. Administración Industrial
+es un programa presencial; el acuerdo trae además calendarios de distancia, Odontología y
+Medicina, que aquí no aplican.
 
-1. **El porcentaje esperado por RAP.** No está en ninguna parte: ni en el formato FO-DO/PC-023,
-   ni en el informe 2023-II, ni en la matriz de consistencia. El informe reporta lo que ocurrió
-   (en 2023-II, el 56 % de los estudiantes quedó en «competente» y el 23 % en «ejemplar» para el
-   indicador 1, sobre 773 evaluaciones) pero nunca dice contra qué meta se compara. El programa
-   tiene que definir el umbral: qué porcentaje de estudiantes en qué nivel se considera
-   cumplimiento. Mientras no exista, el campo va parametrizado y sin valor por defecto
-   (`escala_valoracion.porcentaje_esperado` en `null`); no se pone un 70 % de relleno, porque se
-   vuelve dato real en cuanto alguien vea la pantalla.
+| Actividad | Desde | Hasta |
+|---|---|---|
+| Período académico (clases) | lun 3 ago 2026 | vie 27 nov 2026 |
+| Inclusión de asignaturas | lun 3 ago | mié 12 ago |
+| Retiro de asignaturas | lun 3 ago | lun 31 ago |
+| Parciales primer corte | lun 7 sep | vie 18 sep |
+| Parciales segundo corte | mar 13 oct | vie 23 oct |
+| Receso de fiestas novembrinas | lun 9 nov | sáb 14 nov |
+| Parciales finales | lun 30 nov | vie 11 dic |
+| Evaluación docente | mar 6 oct | vie 6 nov |
+| Receso docente | jue 24 dic 2026 | lun 18 ene 2027 |
+| Cierre académico | mar 12 ene 2027 | mar 19 ene 2027 |
 
-2. **El calendario académico 2026-2.** Fechas de inicio y fin del período, semanas de clase,
-   semana de parciales y festivos institucionales. Sin esto no se generan las sesiones de clase.
-   No está publicado en un sitio que se pueda consultar de forma confiable. El seed de
-   demostración usa fechas de ejemplo.
+Festivos nacionales dentro del período, con el traslado de la Ley 51 de 1983: vie 7 ago (Batalla
+de Boyacá), lun 17 ago (Asunción), lun 12 oct (Día de la Raza), lun 2 nov (Todos los Santos) y
+lun 16 nov (Independencia de Cartagena). En la ventana de parciales finales cae el mar 8 dic
+(Inmaculada Concepción). Por eso el segundo corte empieza un martes: el lunes 12 es festivo.
 
-3. **El código SMA de las asignaturas.** El formato institucional lo exige y el modelo lo espera
-   en `asignatura.codigo_interno`.
+**Cómo se carga.** `periodo_academico`: código `2026-2`, `fecha_inicio` 2026-08-03, `fecha_fin`
+2026-11-27, `numero_semanas` 16. `dia_festivo`: los seis festivos con origen `ley`, y los seis
+días del receso (9 al 14 de noviembre) con origen `institucional`, para que RF-19 los marque
+igual que un festivo.
 
-4. **Los créditos y las horas de cada asignatura.** Créditos y horas TDE, TDP y TI; tampoco están
-   el componente ni el tipo de curso. El proyecto docente los muestra (RF-08 p5) y sin ellos
-   queda marcado con información incompleta (RF-08 p7).
+**Por qué 16 semanas y no 17.** Entre el 3 de agosto y el 27 de noviembre hay 17 semanas
+calendario y una es de receso. Quedan 16 de clase, que es lo que suponen los créditos (16 semanas
+× 2 h TDE = 32 h en una asignatura de 2 créditos). Al numerar las sesiones por semana (RF-19,
+p2), una semana entera sin clase por receso institucional no cuenta: la semana 15 del curso es
+la que empieza el 16 de noviembre. Un festivo suelto, en cambio, no corre la numeración: solo
+marca esa sesión como «Festivo» para que el docente la reprograme.
+
+**Las ventanas de parciales no se modelan.** El docente marca la sesión como «Parcial» (RF-21) y
+la ventana del acuerdo es solo referencia. Los parciales finales caen después del fin del
+período, así que RF-19 no genera sesiones para ellos; si se decide que el examen final sea una
+sesión, eso pide un campo nuevo en `periodo_academico` y pasa primero por el DBML.
+
+**Dato para las pruebas de RF-19.** Con una sesión por semana, un curso de los lunes tiene 12
+sesiones en 2026-2 (pierde la semana de receso y cuatro festivos), uno de los viernes 15 y uno
+de martes a jueves 16. Es un buen caso de prueba, y la mejor explicación de por qué el programa
+pidió precargar los festivos: el curso de los lunes tiene una cuarta parte menos de clases.
+
+**Para qué sirve este calendario.** Las clases del 2026-2 terminan el 27 de noviembre de 2026,
+así que sirve para el seed de demostración. La prueba beta con docentes reales caerá en 2027-1,
+y ese calendario todavía no lo tenemos.
+
+---
+
+## 7. Lo que todavía NO existe y hay que pedirle al programa
+
+Esto sí es lo único que falta. No lo inventes ni lo deduzcas.
+
+1. **El valor del porcentaje esperado.** El formato tiene la casilla y el modelo tiene el campo
+   (ver apartado 3); falta el número que fija el programa, y saber si es el mismo para los siete
+   RAP o distinto para cada uno. En la medición real de 2024-1 quedó en cero. Sin valor por
+   defecto: un 70 % de relleno se vuelve dato real en cuanto alguien vea la pantalla. También
+   falta que el programa confirme la regla de «un solo número por RAP» del apartado 3, o que
+   prefiera exigir la meta a cada indicador.
+
+2. **El calendario académico 2027-1**, cuando el Consejo Académico lo apruebe. Es con el que se
+   generarán las sesiones de la prueba beta. Los festivos nacionales no hay que pedirlos: se
+   cargan en `dia_festivo` con origen `ley`.
+
+3. **El plan de estudios completo.** De las 65 asignaturas sin formato diligenciado falta todo
+   el punto 1: código SMA (salvo Finanzas de corto plazo, FP15502), créditos, horas TDE, TDP y
+   TI, componente, tipo de curso, prerrequisitos y correquisitos, que son los campos que el
+   asistente de RF-08 completa en el paso 5. Además, cuál de los dos códigos de Comportamiento
+   organizacional está vigente. Hasta que llegue, las asignaturas sin datos van al seed solo con
+   nombre, semestre y RAP, y el asistente debe mostrar el campo vacío, no un valor inventado.
+
+4. **Las rúbricas de los RAP 1, 3, 4, 5, 6 y 7.** Solo tenemos la del RAP 2 (apartado 2).
 
 5. **La lista de estudiantes matriculados por curso (SUP-03).** Sigue sin origen definido y de
-   ella dependen RF-22, RF-27 y RF-30. Nunca se usan nombres reales de estudiantes en seeds,
+   ella dependen RF-22, RF-27 y RF-30. Nunca uses nombres reales de estudiantes en seeds,
    fixtures ni capturas: Ley 1581 de 2012.
 
-6. **Si el docente captura el nivel o la nota.** Ver la nota del apartado 3.
-
-7. **Qué es «cohorte» (SUP-15).** El formato FO-DO/PC-023 pide «Tamaño de la Muestra» y «Tamaño
-   de la Cohorte» como columnas distintas, pero la fórmula de la hoja las iguala. Hasta que el
-   programa aclare la diferencia, `medicion_rap.tamano_cohorte` queda como está y no se usa en
-   ningún cálculo.
-
-8. **El semestre de las electivas II a VI.** Ver la nota del apartado 4.
+Ya no hace falta preguntar dos cosas que estaban en esta lista. **Nivel o nota** quedó resuelto
+por el instructivo del formato y por la medición real de 2024-1: se registra el nivel (apartado
+3). Y **«cohorte» (SUP-15)** dejó de bloquear: en esa medición, muestra y cohorte fueron iguales
+(34, el grupo completo), así que `medicion_rap.tamano_cohorte` toma por defecto el tamaño de la
+muestra y ningún cálculo lo usa.

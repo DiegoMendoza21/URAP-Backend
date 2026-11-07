@@ -128,7 +128,7 @@ describe('SesionesService', () => {
   };
   const alcance = { alcanzaPrograma: vi.fn() };
   const proyectos = { filtroVisibilidad: vi.fn() };
-  const parametros = { entero: vi.fn() };
+  const parametros = { leerEntero: vi.fn() };
   const servicio = new SesionesService(
     prisma as unknown as PrismaService,
     alcance as unknown as AlcanceService,
@@ -140,7 +140,7 @@ describe('SesionesService', () => {
     vi.clearAllMocks();
     proyectos.filtroVisibilidad.mockResolvedValue({});
     // Umbral de «Por vencer» del parámetro alerta_dias_anticipacion (seed: 2 días).
-    parametros.entero.mockResolvedValue(2);
+    parametros.leerEntero.mockResolvedValue(2);
     prisma.proyecto_docente.findFirst.mockResolvedValue(proyecto());
     prisma.proyecto_docente_docente.findFirst.mockResolvedValue({
       id_usuario: docente.id,
@@ -587,8 +587,9 @@ describe('SesionesService', () => {
         total: 5,
         resumen: { vencidas: 1, porVencer: 1, incumplidas: 0, mayorAtraso: 3 },
       });
-      expect(parametros.entero).toHaveBeenCalledWith(
+      expect(parametros.leerEntero).toHaveBeenCalledWith(
         'alerta_dias_anticipacion',
+        { minimo: 0, maximo: 365 },
       );
     });
 
@@ -621,7 +622,7 @@ describe('SesionesService', () => {
     });
 
     it('sin el parámetro del umbral no marca por vencer', async () => {
-      parametros.entero.mockResolvedValue(null);
+      parametros.leerEntero.mockResolvedValue(null);
 
       const calendario = await servicio.consultarCalendario(departamento, 99, {
         pagina: 1,

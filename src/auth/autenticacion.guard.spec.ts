@@ -5,6 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { ejecutarEnContexto } from '../common/contexto/contexto-peticion.js';
 import type { AuthService } from './auth.service.js';
 import {
   AutenticacionGuard,
@@ -124,5 +125,17 @@ describe('AutenticacionGuard', () => {
     await expect(
       guard.canActivate(contexto(ControladorMixto, 'sinDeclarar')),
     ).rejects.toThrow(UnauthorizedException);
+  });
+
+  it('deja el usuario autenticado en el contexto de la petición, para la auditoría', async () => {
+    auth.validarToken.mockResolvedValue({ id: 7, roles: ['Docente'] });
+    const peticion = { headers: { authorization: 'Bearer token-firmado' } };
+    const contextoPeticion: { idUsuario?: number } = {};
+
+    await ejecutarEnContexto(contextoPeticion, () =>
+      guard.canActivate(contexto(ControladorMixto, 'declarado', peticion)),
+    );
+
+    expect(contextoPeticion.idUsuario).toBe(7);
   });
 });

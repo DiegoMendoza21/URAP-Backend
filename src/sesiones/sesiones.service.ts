@@ -24,6 +24,7 @@ import {
   type ContextoAlerta,
   fechaDeHoy,
   PARAMETRO_UMBRAL_ALERTA,
+  RANGO_UMBRAL_ALERTA,
   resumirAlertas,
   sumarDias,
 } from './alertas.js';
@@ -239,7 +240,7 @@ export class SesionesService {
         orderBy: [{ fecha: 'asc' }, { id: 'asc' }],
       }),
       this.puedeEditar(usuario, proyecto),
-      this.parametros.entero(PARAMETRO_UMBRAL_ALERTA),
+      this.parametros.leerEntero(PARAMETRO_UMBRAL_ALERTA, RANGO_UMBRAL_ALERTA),
       periodo?.fecha_inicio && periodo.fecha_fin
         ? this.diasSinClase(periodo.fecha_inicio, periodo.fecha_fin)
         : new Set<string>(),
@@ -310,7 +311,7 @@ export class SesionesService {
   ): Promise<PendientesDocenteDto> {
     const hoy = fechaDeHoy();
     const [umbralDias, proyectos] = await Promise.all([
-      this.parametros.entero(PARAMETRO_UMBRAL_ALERTA),
+      this.parametros.leerEntero(PARAMETRO_UMBRAL_ALERTA, RANGO_UMBRAL_ALERTA),
       this.prisma.proyecto_docente.findMany({
         where: {
           proyecto_docente_docente: { some: { id_usuario: usuario.id } },

@@ -1,11 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 
+export interface RangoEntero {
+  minimo: number;
+  maximo: number;
+}
+
 /**
- * Lectura de los parámetros de negocio de `parametro_sistema` (HU-03-07): el umbral de alerta,
- * los intentos de inicio de sesión, el tamaño de archivo… Nunca se escriben en el código
- * (CLAUDE.md, «Nada de datos de negocio hardcodeados»). La pantalla para editarlos llega con
- * HU-03-07; los valores iniciales los carga `npm run db:sembrar`.
+ * Lectura de los parámetros de negocio de la tabla `parametro_sistema` (CLAUDE.md, «nada de
+ * datos de negocio hardcodeados»). La pantalla para editarlos llega con HU-03-07.
+ *
+ * Los parámetros de seguridad del despliegue (secreto y vigencia del JWT, límites de
+ * peticiones) no van aquí: son variables de entorno.
  */
 @Injectable()
 export class ParametrosService {
@@ -14,24 +20,30 @@ export class ParametrosService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Valor entero, cero o mayor, de un parámetro. Si no existe o no es un entero válido devuelve
-   * nulo y lo deja en el registro técnico: quien lo usa decide cómo seguir sin él, en lugar de
-   * suponer un valor que el programa no configuró.
+   * Valor entero de un parámetro. Si falta, no es un entero o está fuera del rango, devuelve
+   * `null` y lo registra como error técnico: es un problema de configuración que debe
+   * corregirse, pero no debe tumbar la operación que lo consulta.
    */
-  async entero(clave: string): Promise<number | null> {
+  async leerEntero(clave: string, rango: RangoEntero): Promise<number | null> {
     const parametro = await this.prisma.parametro_sistema.findUnique({
       where: { clave },
       select: { valor: true },
     });
     const texto = parametro?.valor?.trim() ?? '';
-    if (!/^\d+$/.test(texto)) {
+    const valor = /^-?\d+$/.test(texto) ? Number(texto) : Number.NaN;
+    if (
+      !Number.isSafeInteger(valor) ||
+      valor < rango.minimo ||
+      valor > rango.maximo
+    ) {
       this.logger.error(
         parametro
-          ? `El parámetro «${clave}» no es un entero válido: «${parametro.valor ?? ''}».`
-          : `Falta el parámetro «${clave}». Corra npm run db:sembrar.`,
+          ? `El parámetro «${clave}» tiene un valor inválido («${parametro.valor}»): se ` +
+              `esperaba un entero entre ${rango.minimo} y ${rango.maximo}.`
+          : `Falta el parámetro «${clave}» en parametro_sistema (ver npm run db:sembrar).`,
       );
       return null;
     }
-    return Number(texto);
+    return valor;
   }
 }
