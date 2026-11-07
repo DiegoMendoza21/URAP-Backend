@@ -7,12 +7,19 @@ import { ROL } from '../src/auth/roles.js';
 import { PrismaService } from '../src/common/prisma/prisma.service.js';
 import { configurarAplicacion } from '../src/configurar-aplicacion.js';
 import {
+  MENSAJE_FALTAN_ACCIONES_PROPUESTAS,
   MENSAJE_MEDICION_CERRADA,
   MENSAJE_MEDICION_EXISTENTE,
   MENSAJE_PROYECTO_NO_APROBADO,
   MENSAJE_SIN_LISTA,
   MENSAJE_SIN_RUBRICA,
+  MENSAJE_SIN_VALORACIONES,
 } from '../src/mediciones/constantes.js';
+import {
+  ADVERTENCIA_SIN_COHORTE,
+  ADVERTENCIA_SIN_META,
+} from '../src/mediciones/consolidado.js';
+import { MOTIVO_SIN_PERIODOS_ANTERIORES } from '../src/reportes/reportes.service.js';
 
 // Requiere el .env configurado y la base local levantada (npm run db:levantar). Crea sus
 // propios datos ficticios (programa, escala, RAP, rúbrica, curso y 34 estudiantes) y los borra
@@ -690,6 +697,419 @@ describe('Medición de RAP (e2e) · RF-30, HU-11-01 a HU-11-03', () => {
         where: { id: idMedicion },
         data: { estado: 'borrador' },
       });
+    });
+  });
+  describe('consolidado, análisis y cierre (RF-31, HU-11-04 a HU-11-07)', () => {
+    let idMedicion = 0;
+    const rutaMedicion = () => `/api/mediciones/${idMedicion}`;
+    const valorar = (valoraciones: object[]) =>
+      conToken(
+        'docente',
+        http().put(`${rutaMedicion()}/valoraciones`).send({ valoraciones }),
+      );
+    const cerrar = (quien: string) =>
+      conToken(quien, http().post(`${rutaMedicion()}/cerrar`));
+    const analizar = (quien: string, datos: object) =>
+      conToken(quien, http().put(`${rutaMedicion()}/analisis`).send(datos));
+    const porcentajes = (consolidado: {
+      indicadores: { porcentajeCumplimiento: number | null }[];
+    }) => consolidado.indicadores.map((i) => i.porcentajeCumplimiento);
+
+    it('no cierra una medición sin valoraciones', async () => {
+      const { body } = await iniciar('docente', {
+        ...datosInicio(),
+        tipoValoracion: 'sumativa',
+      }).expect(201);
+      idMedicion = body.id as number;
+      const respuesta = await cerrar('docente').expect(409);
+      expect(respuesta.body.mensaje).toBe(MENSAJE_SIN_VALORACIONES);
+    });
+
+    it('prueba de aceptación: 34 estudiantes del RAP 2 dan 85,29 %, 70,59 %, 50 % y 50 %', async () => {
+      // Conteos reales de Finanzas a corto plazo, 2024-1 (Principiante, En Desarrollo,
+      // Competente, Ejemplar). Los niveles se reparten de forma arbitraria entre estudiantes
+      // ficticios; nunca los nombres de la medición original (Ley 1581 de 2012).
+      const conteos = [
+        [0, 5, 29, 0],
+        [0, 10, 24, 0],
+        [0, 17, 17, 0],
+        [0, 17, 17, 0],
+      ];
+      const valoraciones = idsIndicador.flatMap((idIndicador, k) => {
+        const niveles = conteos[k].flatMap((cantidad, j) =>
+          Array.from({ length: cantidad }, () => j + 1),
+        );
+        return idsMatricula.map((idMatricula, i) => ({
+          idMatricula,
+          idIndicador,
+          valor: niveles[(i * 11 + k * 5) % 34],
+        }));
+      });
+      await valorar(valoraciones).expect(200);
+
+      const inicio = Date.now();
+      const { body } = await conToken(
+        'lider',
+        http().get(`${rutaMedicion()}/consolidado`),
+      ).expect(200);
+      expect(Date.now() - inicio).toBeLessThan(5_000); // RF-31, q1
+      expect(porcentajes(body)).toEqual([85.29, 70.59, 50, 50]);
+      expect(
+        body.indicadores[0].conteos.map(
+          (c: { cantidad: number }) => c.cantidad,
+        ),
+      ).toEqual([0, 5, 29, 0]);
+      expect(body).toMatchObject({
+        tamanoMuestra: 34,
+        tamanoCohorte: 34,
+        cohorteRegistrada: false,
+        porcentajeCumplimiento: 63.97,
+        metaDefinida: false,
+        alcanzado: null,
+        nivelesCumplimiento: ['Competente', 'Ejemplar'],
+      });
+      // Excepciones de p3 y p4: sin cohorte y sin meta se advierte, sin juicio.
+      expect(body.advertencias).toEqual(
+        expect.arrayContaining([ADVERTENCIA_SIN_COHORTE, ADVERTENCIA_SIN_META]),
+      );
+    });
+
+    it('corregir una valoración actualiza el consolidado sin recalcular a mano', async () => {
+      const { body: hoja } = await conToken(
+        'docente',
+        http().get(rutaMedicion()),
+      ).expect(200);
+      const enDesarrollo = (
+        hoja.estudiantes as {
+          idMatricula: number;
+          valoraciones: { idIndicador: number; valor: number }[];
+        }[]
+      ).find((e) =>
+        e.valoraciones.some(
+          (v) => v.idIndicador === idsIndicador[0] && v.valor === 2,
+        ),
+      );
+      const celda = {
+        idMatricula: enDesarrollo?.idMatricula,
+        idIndicador: idsIndicador[0],
+      };
+      await valorar([{ ...celda, valor: 3 }]).expect(200);
+      const corregido = await conToken(
+        'docente',
+        http().get(`${rutaMedicion()}/consolidado`),
+      );
+      expect(corregido.body.indicadores[0].porcentajeCumplimiento).toBe(88.24);
+      await valorar([{ ...celda, valor: 2 }]).expect(200);
+      const restaurado = await conToken(
+        'docente',
+        http().get(`${rutaMedicion()}/consolidado`),
+      );
+      expect(porcentajes(restaurado.body)).toEqual([85.29, 70.59, 50, 50]);
+    });
+
+    it('el líder del RAP registra el análisis; otros roles no (HU-11-06)', async () => {
+      const { body } = await analizar('lider', {
+        accionesImplementadas: 'Talleres de refuerzo',
+        resultadosObtenidos: '  ',
+      }).expect(200);
+      expect(body).toMatchObject({
+        accionesImplementadas: 'Talleres de refuerzo',
+        resultadosObtenidos: null,
+        accionesPropuestas: null,
+        puedeAnalizar: true,
+      });
+      await analizar('departamento', { accionesPropuestas: 'X' }).expect(403);
+      await analizar('liderOtroRap', { accionesPropuestas: 'X' }).expect(404);
+    });
+
+    it('no cierra por debajo de la meta sin acciones propuestas (excepción de p6)', async () => {
+      await prisma.medicion_rap.update({
+        where: { id: idMedicion },
+        data: { porcentaje_esperado: 70 },
+      });
+      const consolidado = await conToken(
+        'docente',
+        http().get(`${rutaMedicion()}/consolidado`),
+      );
+      expect(consolidado.body).toMatchObject({
+        metaDefinida: true,
+        porcentajeEsperado: 70,
+        alcanzado: false,
+      });
+      expect(
+        consolidado.body.indicadores.map(
+          (i: { alcanzado: boolean }) => i.alcanzado,
+        ),
+      ).toEqual([true, true, false, false]);
+
+      const { body } = await cerrar('lider').expect(409);
+      expect(body.mensaje).toBe(MENSAJE_FALTAN_ACCIONES_PROPUESTAS);
+      await analizar('docente', {
+        accionesPropuestas: 'Guía de casos sobre decisiones financieras',
+      }).expect(200);
+    });
+
+    it('cierra con usuario y fecha y bloquea las valoraciones (HU-11-07)', async () => {
+      await cerrar('departamento').expect(403);
+      const { body } = await cerrar('lider').expect(200);
+      expect(body).toMatchObject({
+        estado: 'cerrada',
+        cerradoPor: 'Usuario lider E2E',
+        puedeEditar: false,
+        puedeAnalizar: false,
+      });
+      expect(body.fechaCierre).not.toBeNull();
+      await valorar([
+        {
+          idMatricula: idsMatricula[0],
+          idIndicador: idsIndicador[0],
+          valor: 4,
+        },
+      ]).expect(409);
+      await analizar('lider', { accionesPropuestas: 'Otra' }).expect(409);
+      await cerrar('lider').expect(409);
+    });
+
+    it('solo el departamento reabre una medición cerrada (RF-30, excepción de p7)', async () => {
+      const reabrir = (quien: string) =>
+        conToken(quien, http().post(`${rutaMedicion()}/reabrir`));
+      await reabrir('docente').expect(403);
+      await reabrir('lider').expect(403);
+      const departamento = await conToken(
+        'departamento',
+        http().get(rutaMedicion()),
+      ).expect(200);
+      expect(departamento.body.puedeReabrir).toBe(true);
+
+      const { body } = await reabrir('departamento').expect(200);
+      expect(body).toMatchObject({
+        estado: 'borrador',
+        cerradoPor: null,
+        fechaCierre: null,
+      });
+      await reabrir('departamento').expect(409);
+      await cerrar('docente').expect(200);
+    });
+
+    it('lista las mediciones visibles con su resultado', async () => {
+      const lider = await conToken(
+        'lider',
+        http().get('/api/mediciones?estado=cerrada'),
+      ).expect(200);
+      expect(
+        (lider.body.elementos as { id: number }[]).map((m) => m.id),
+      ).toContain(idMedicion);
+      const fila = (
+        lider.body.elementos as { id: number; porcentajeCumplimiento: number }[]
+      ).find((m) => m.id === idMedicion);
+      expect(fila?.porcentajeCumplimiento).toBe(63.97);
+      const otro = await conToken(
+        'liderOtroRap',
+        http().get('/api/mediciones'),
+      ).expect(200);
+      expect(otro.body.total).toBe(0);
+      await conToken('direccion', http().get('/api/mediciones')).expect(403);
+    });
+  });
+
+  describe('reporte de logro de los RAP (RF-32, HU-11-08)', () => {
+    const consulta = (extra = '') =>
+      `/api/reportes/logro-rap?idPrograma=${idPrograma}&idPeriodo=${idPeriodo}${extra}`;
+    let idPeriodoAnterior = 0;
+
+    beforeAll(async () => {
+      // Un período anterior con una medición cerrada del mismo RAP, para la comparación.
+      await prisma.periodo_academico.update({
+        where: { id: idPeriodo },
+        data: { fecha_inicio: new Date('2099-08-03T00:00:00.000Z') },
+      });
+      const anterior = await prisma.periodo_academico.create({
+        data: {
+          codigo: `E2E-RF32-ANT-${sufijo}`,
+          fecha_inicio: new Date('2099-02-02T00:00:00.000Z'),
+          numero_semanas: 16,
+        },
+      });
+      idPeriodoAnterior = anterior.id;
+      creados.periodos.push(anterior.id);
+      const asignatura = await prisma.asignatura.create({
+        data: {
+          id_programa: idPrograma,
+          codigo_interno: `ANT-${sufijo}`,
+          nombre: 'Asignatura ANT E2E',
+        },
+      });
+      creados.asignaturas.push(asignatura.id);
+      const proyecto = await prisma.proyecto_docente.create({
+        data: {
+          id_asignatura: asignatura.id,
+          id_periodo: idPeriodoAnterior,
+          id_estado: await estadoPorCodigo('cerrado'),
+          grupo: 'E2E',
+        },
+      });
+      creados.proyectos.push(proyecto.id);
+      const rubrica = await prisma.rubrica.findFirstOrThrow({
+        where: { id_rap: raps.conRubrica, version: 1 },
+      });
+      const niveles = await prisma.nivel_escala.findMany({
+        where: { id_escala: idEscala },
+      });
+      const nivel = (valor: number) =>
+        niveles.find((fila) => fila.valor === valor)?.id;
+      const medicion = await prisma.medicion_rap.create({
+        data: {
+          id_proyecto_docente: proyecto.id,
+          id_rap: raps.conRubrica,
+          id_rubrica: rubrica.id,
+          tipo_valoracion: 'formativa',
+          periodo_toma: 'primer',
+          anio_toma: 2099,
+          estado: 'cerrada',
+          medicion_indicador: {
+            create: idsIndicador.map((idIndicador) => ({
+              id_indicador: idIndicador,
+            })),
+          },
+        },
+        include: { medicion_indicador: true },
+      });
+      // Cuatro estudiantes: 3 de 4 en Competente o Ejemplar en cada indicador = 75 %.
+      for (let n = 1; n <= 4; n += 1) {
+        const estudiante = await prisma.estudiante.create({
+          data: {
+            identificacion: `${prefijoDocumento}ant-${n}`,
+            nombres: `Estudiante anterior ${n}`,
+            apellidos: 'Ficticio E2E',
+          },
+        });
+        const matricula = await prisma.matricula.create({
+          data: {
+            id_proyecto_docente: proyecto.id,
+            id_estudiante: estudiante.id,
+            estado: 'matriculado',
+          },
+        });
+        await prisma.valoracion_estudiante.createMany({
+          data: medicion.medicion_indicador.map((fila) => ({
+            id_medicion_indicador: fila.id,
+            id_matricula: matricula.id,
+            id_nivel: nivel(n === 1 ? 2 : 3),
+          })),
+        });
+      }
+    });
+
+    it('presenta cada RAP con sus asignaturas, el porcentaje y los no evaluados', async () => {
+      const inicio = Date.now();
+      const { body } = await conToken(
+        'departamento',
+        http().get(consulta()),
+      ).expect(200);
+      expect(Date.now() - inicio).toBeLessThan(10_000); // RF-32, q1
+      const porId = new Map(
+        (body.raps as { id: number }[]).map((rap) => [rap.id, rap]),
+      );
+      expect(porId.get(raps.conRubrica)).toMatchObject({
+        evaluado: true,
+        porcentajeCumplimiento: 63.97,
+        porcentajeEsperado: null,
+        alcanzado: null,
+        comparacion: [
+          {
+            periodo: `E2E-RF32-ANT-${sufijo}`,
+            porcentajeCumplimiento: 75,
+            mediciones: 1,
+          },
+        ],
+        motivoSinComparacion: null,
+      });
+      const evaluado = porId.get(raps.conRubrica) as unknown as {
+        asignaturas: {
+          asignatura: string;
+          porcentajeCumplimiento: number;
+          accionesPropuestas: string;
+          indicadores: { porcentajeCumplimiento: number }[];
+        }[];
+      };
+      // Solo la medición cerrada; la formativa sigue en borrador.
+      expect(evaluado.asignaturas).toHaveLength(1);
+      expect(evaluado.asignaturas[0]).toMatchObject({
+        asignatura: 'Asignatura FCP E2E',
+        porcentajeCumplimiento: 63.97,
+        accionesPropuestas: 'Guía de casos sobre decisiones financieras',
+      });
+      expect(
+        evaluado.asignaturas[0].indicadores.map(
+          (i) => i.porcentajeCumplimiento,
+        ),
+      ).toEqual([85.29, 70.59, 50, 50]);
+      // Excepciones de p2 y p4: no evaluado, en lugar de omitirlo, y motivo sin comparación.
+      expect(porId.get(raps.sinRubrica)).toMatchObject({
+        evaluado: false,
+        asignaturas: [],
+        porcentajeCumplimiento: null,
+        comparacion: [],
+        motivoSinComparacion: MOTIVO_SIN_PERIODOS_ANTERIORES,
+      });
+      expect(body.metaDefinida).toBe(false);
+    });
+
+    it('filtra por RAP y respeta los alcances', async () => {
+      const unRap = await conToken(
+        'direccion',
+        http().get(consulta(`&idRap=${raps.sinRubrica}`)),
+      ).expect(200);
+      expect((unRap.body.raps as { id: number }[]).map((r) => r.id)).toEqual([
+        raps.sinRubrica,
+      ]);
+      // El líder solo ve el RAP que lidera.
+      const lider = await conToken('lider', http().get(consulta())).expect(200);
+      expect((lider.body.raps as { id: number }[]).map((r) => r.id)).toEqual([
+        raps.conRubrica,
+      ]);
+      await conToken(
+        'lider',
+        http().get(consulta(`&idRap=${raps.ajeno}`)),
+      ).expect(404);
+      await conToken('docente', http().get(consulta())).expect(403);
+      await conToken('estudiante', http().get(consulta())).expect(403);
+      await conToken(
+        'departamento',
+        http().get(`/api/reportes/logro-rap?idPrograma=${idPrograma}`),
+      ).expect(400);
+    });
+
+    it('ofrece los filtros según el alcance', async () => {
+      const { body } = await conToken(
+        'lider',
+        http().get('/api/reportes/logro-rap/filtros'),
+      ).expect(200);
+      const programa = (
+        body.programas as { id: number; raps: { id: number }[] }[]
+      ).find((p) => p.id === idPrograma);
+      expect(programa?.raps.map((r) => r.id)).toEqual([raps.conRubrica]);
+      expect((body.periodos as { id: number }[]).map((p) => p.id)).toEqual(
+        expect.arrayContaining([idPeriodo, idPeriodoAnterior]),
+      );
+    });
+
+    it('exporta el reporte a Excel (p5)', async () => {
+      const respuesta = await conToken(
+        'departamento',
+        http()
+          .get(consulta().replace('/logro-rap?', '/logro-rap/excel?'))
+          .buffer(true)
+          .parse((res, listo) => {
+            const partes: Buffer[] = [];
+            res.on('data', (parte: Buffer) => partes.push(parte));
+            res.on('end', () => listo(null, Buffer.concat(partes)));
+          }),
+      ).expect(200);
+      expect(respuesta.headers['content-type']).toContain('spreadsheetml');
+      expect(respuesta.headers['content-disposition']).toContain('.xlsx');
+      const libro = respuesta.body as Buffer;
+      expect(libro.subarray(0, 2).toString()).toBe('PK');
     });
   });
 });

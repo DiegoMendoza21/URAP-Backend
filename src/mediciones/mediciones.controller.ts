@@ -4,8 +4,11 @@ import {
   Get,
   Param,
   ParseIntPipe,
+  HttpCode,
+  HttpStatus,
   Post,
   Put,
+  Query,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -25,13 +28,17 @@ import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import { RespuestaErrorDto } from '../common/dto/respuesta-error.dto.js';
 import {
+  ConsultarMedicionesDto,
   IniciarMedicionDto,
+  RegistrarAnalisisDto,
   RegistrarInstrumentosDto,
   RegistrarValoracionesDto,
 } from './dto/entradas.dto.js';
 import {
+  ConsolidadoDto,
   MedicionDetalleDto,
   MedicionesDelProyectoDto,
+  PaginaMedicionesDto,
   ResultadoValoracionesDto,
 } from './dto/respuestas.dto.js';
 import { MedicionesService } from './mediciones.service.js';
@@ -50,6 +57,32 @@ import { MedicionesService } from './mediciones.service.js';
 @Controller()
 export class MedicionesController {
   constructor(private readonly mediciones: MedicionesService) {}
+
+  @Get('mediciones')
+  @Roles(ROL.docente, ROL.liderRap, ROL.departamento)
+  @ApiOperation({
+    summary:
+      'Mediciones que el usuario puede abrir, con su resultado (RF-31, p1)',
+    description:
+      'El docente ve las de sus cursos; el líder RAP, las de los RAP que lidera; el ' +
+      'departamento, las de su programa. Paginada, de la más reciente a la más antigua.',
+  })
+  @ApiOkResponse({ type: PaginaMedicionesDto })
+  @ApiBadRequestResponse({
+    type: RespuestaErrorDto,
+    description: 'Paginación o filtros inválidos',
+  })
+  @ApiForbiddenResponse({
+    type: RespuestaErrorDto,
+    description:
+      'No es Docente responsable, Líder RAP ni Departamento académico',
+  })
+  listar(
+    @UsuarioActual() usuario: UsuarioSesion,
+    @Query() consulta: ConsultarMedicionesDto,
+  ): Promise<PaginaMedicionesDto> {
+    return this.mediciones.listar(usuario, consulta);
+  }
 
   @Get('proyectos-docentes/:idProyecto/mediciones')
   @Roles(ROL.docente, ROL.liderRap, ROL.departamento)
@@ -209,5 +242,128 @@ export class MedicionesController {
     @Body() datos: RegistrarValoracionesDto,
   ): Promise<ResultadoValoracionesDto> {
     return this.mediciones.registrarValoraciones(usuario, id, datos);
+  }
+
+  @Get('mediciones/:id/consolidado')
+  @Roles(ROL.docente, ROL.liderRap, ROL.departamento)
+  @ApiOperation({
+    summary: 'Consolidado de la medición (RF-31, p2 a p4; HU-11-04 y HU-11-05)',
+    description:
+      'Conteos y porcentajes por nivel e indicador, muestra, cohorte y porcentaje en los ' +
+      'niveles de cumplimiento frente al esperado. Se calcula desde las valoraciones cada ' +
+      'vez: corregir una valoración lo actualiza.',
+  })
+  @ApiOkResponse({ type: ConsolidadoDto })
+  @ApiForbiddenResponse({
+    type: RespuestaErrorDto,
+    description:
+      'No es Docente responsable, Líder RAP ni Departamento académico',
+  })
+  @ApiNotFoundResponse({
+    type: RespuestaErrorDto,
+    description:
+      'La medición no existe o el usuario no tiene alcance sobre ella',
+  })
+  consolidado(
+    @UsuarioActual() usuario: UsuarioSesion,
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<ConsolidadoDto> {
+    return this.mediciones.consolidado(usuario, id);
+  }
+
+  @Put('mediciones/:id/analisis')
+  @Roles(ROL.docente, ROL.liderRap)
+  @ApiOperation({
+    summary:
+      'Registra acciones implementadas, resultados y acciones propuestas (RF-31, p5; HU-11-06)',
+    description:
+      'El docente asignado o el líder del RAP, con la medición en borrador. Un campo omitido ' +
+      'no cambia; uno vacío se borra.',
+  })
+  @ApiOkResponse({ type: MedicionDetalleDto })
+  @ApiBadRequestResponse({
+    type: RespuestaErrorDto,
+    description: 'Datos inválidos',
+  })
+  @ApiForbiddenResponse({
+    type: RespuestaErrorDto,
+    description: 'No es el docente asignado ni el líder del RAP',
+  })
+  @ApiNotFoundResponse({
+    type: RespuestaErrorDto,
+    description:
+      'La medición no existe o el usuario no tiene alcance sobre ella',
+  })
+  @ApiConflictResponse({
+    type: RespuestaErrorDto,
+    description: 'La medición está cerrada',
+  })
+  registrarAnalisis(
+    @UsuarioActual() usuario: UsuarioSesion,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() datos: RegistrarAnalisisDto,
+  ): Promise<MedicionDetalleDto> {
+    return this.mediciones.registrarAnalisis(usuario, id, datos);
+  }
+
+  @Post('mediciones/:id/cerrar')
+  @HttpCode(HttpStatus.OK)
+  @Roles(ROL.docente, ROL.liderRap)
+  @ApiOperation({
+    summary: 'Cierra la medición (RF-31, p6 y p7; HU-11-07)',
+    description:
+      'Registra quién y cuándo, bloquea las valoraciones y la deja disponible para el ' +
+      'reporte de logro. No cierra sin valoraciones, ni por debajo del porcentaje esperado ' +
+      'sin acciones propuestas.',
+  })
+  @ApiOkResponse({ type: MedicionDetalleDto })
+  @ApiForbiddenResponse({
+    type: RespuestaErrorDto,
+    description: 'No es el docente asignado ni el líder del RAP',
+  })
+  @ApiNotFoundResponse({
+    type: RespuestaErrorDto,
+    description:
+      'La medición no existe o el usuario no tiene alcance sobre ella',
+  })
+  @ApiConflictResponse({
+    type: RespuestaErrorDto,
+    description:
+      'Ya está cerrada, no tiene valoraciones o está por debajo de la meta sin acciones ' +
+      'propuestas',
+  })
+  cerrar(
+    @UsuarioActual() usuario: UsuarioSesion,
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<MedicionDetalleDto> {
+    return this.mediciones.cerrar(usuario, id);
+  }
+
+  @Post('mediciones/:id/reabrir')
+  @HttpCode(HttpStatus.OK)
+  @Roles(ROL.departamento)
+  @ApiOperation({
+    summary: 'Reabre una medición cerrada (RF-30, excepción de p7)',
+    description: 'Solo el departamento académico del programa del curso.',
+  })
+  @ApiOkResponse({ type: MedicionDetalleDto })
+  @ApiForbiddenResponse({
+    type: RespuestaErrorDto,
+    description: 'No es el departamento académico del programa',
+  })
+  @ApiNotFoundResponse({
+    type: RespuestaErrorDto,
+    description:
+      'La medición no existe o el usuario no tiene alcance sobre ella',
+  })
+  @ApiConflictResponse({
+    type: RespuestaErrorDto,
+    description: 'La medición no está cerrada',
+  })
+  reabrir(
+    @UsuarioActual() usuario: UsuarioSesion,
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<MedicionDetalleDto> {
+    return this.mediciones.reabrir(usuario, id);
   }
 }

@@ -20,9 +20,11 @@ import {
   ESTADOS_PROYECTO_APROBADO,
   MENSAJE_CELDA_REPETIDA,
   MENSAJE_ESTUDIANTE_NO_DEL_CURSO,
+  MENSAJE_FALTAN_ACCIONES_PROPUESTAS,
   MENSAJE_INDICADOR_NO_DE_MEDICION,
   MENSAJE_MEDICION_CERRADA,
   MENSAJE_MEDICION_EXISTENTE,
+  MENSAJE_MEDICION_NO_CERRADA,
   MENSAJE_MEDICION_NO_EXISTE,
   MENSAJE_NIVEL_INVALIDO,
   MENSAJE_PROYECTO_NO_APROBADO,
@@ -31,24 +33,37 @@ import {
   MENSAJE_SIN_ESCALA,
   MENSAJE_SIN_LISTA,
   MENSAJE_SIN_RUBRICA,
+  MENSAJE_SIN_VALORACIONES,
+  MENSAJE_SOLO_DEPARTAMENTO_REABRE,
   MENSAJE_SOLO_DOCENTE_ASIGNADO,
+  MENSAJE_SOLO_DOCENTE_O_LIDER,
   PERIODO_TOMA,
   type PeriodoToma,
   TIPO_VALORACION,
   type TipoValoracion,
 } from './constantes.js';
+import {
+  type Consolidado,
+  consolidar,
+  contarPorIndicador,
+} from './consolidado.js';
+import { ConsolidadoService } from './consolidado.service.js';
 import type {
+  ConsultarMedicionesDto,
   IniciarMedicionDto,
+  RegistrarAnalisisDto,
   RegistrarInstrumentosDto,
   RegistrarValoracionesDto,
 } from './dto/entradas.dto.js';
 import type {
+  ConsolidadoDto,
   EscalaMedicionDto,
   EstudianteMedicionDto,
   IndicadorMedicionDto,
   MedicionDetalleDto,
   MedicionesDelProyectoDto,
   MedicionResumenDto,
+  PaginaMedicionesDto,
   PeriodoTomaSugeridoDto,
   ProyectoMedicionDto,
   RapMedicionDto,
@@ -147,6 +162,9 @@ const INCLUIR_MEDICION = {
   usuario_medicion_rap_id_registrado_porTousuario: {
     select: { nombres: true, apellidos: true },
   },
+  usuario_medicion_rap_id_cerrado_porTousuario: {
+    select: { nombres: true, apellidos: true },
+  },
 } satisfies Prisma.medicion_rapInclude;
 
 type MedicionLeida = Prisma.medicion_rapGetPayload<{
@@ -166,7 +184,63 @@ export class MedicionesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly alcance: AlcanceService,
+    private readonly consolidados: ConsolidadoService,
   ) {}
+
+  /**
+   * Módulo de medición (RF-30, p1; RF-31, p1): las mediciones que el usuario puede abrir, con
+   * su resultado. El docente ve las de sus cursos; el líder RAP, las de los RAP que lidera en
+   * cada período; el departamento, las de su programa.
+   */
+  async listar(
+    usuario: UsuarioSesion,
+    { pagina, tamano, estado, idRap }: ConsultarMedicionesDto,
+  ): Promise<PaginaMedicionesDto> {
+    const visibles = await this.filtroVisibilidad(usuario);
+    if (!visibles) {
+      return { elementos: [], pagina, tamano, total: 0 };
+    }
+    const donde: Prisma.medicion_rapWhereInput = {
+      AND: [visibles, estado ? { estado } : {}, idRap ? { id_rap: idRap } : {}],
+    };
+    const [total, filas] = await Promise.all([
+      this.prisma.medicion_rap.count({ where: donde }),
+      this.prisma.medicion_rap.findMany({
+        where: donde,
+        include: {
+          rap: true,
+          rubrica: { select: { version: true } },
+          proyecto_docente: { select: SELECCION_PROYECTO },
+        },
+        orderBy: [{ updated_at: 'desc' }, { id: 'desc' }],
+        skip: (pagina - 1) * tamano,
+        take: tamano,
+      }),
+    ]);
+    const consolidados = await this.consolidados.deMediciones(
+      filas.map((fila) => fila.id),
+    );
+    return {
+      elementos: filas
+        .filter((fila) => fila.proyecto_docente !== null)
+        .map((fila) => {
+          const consolidado = consolidados.get(fila.id);
+          return {
+            ...aResumen(
+              fila,
+              fila.proyecto_docente as ProyectoLeido,
+              fila.rubrica?.version ?? null,
+            ),
+            porcentajeCumplimiento: consolidado?.porcentajeCumplimiento ?? null,
+            porcentajeEsperado: consolidado?.porcentajeEsperado ?? null,
+            alcanzado: consolidado?.alcanzado ?? null,
+          };
+        }),
+      pagina,
+      tamano,
+      total,
+    };
+  }
 
   /** RF-30, p1 y p2: precondiciones del curso, RAP medibles y mediciones registradas. */
   async delProyecto(
@@ -493,6 +567,180 @@ export class MedicionesService {
     return resultado;
   }
 
+  /**
+   * HU-11-04 y HU-11-05: tablas resumen y porcentual, muestra, cohorte y juicio frente a la
+   * meta. Se calcula desde las valoraciones cada vez (RF-31, «Comentarios»).
+   */
+  async consolidado(
+    usuario: UsuarioSesion,
+    idMedicion: number,
+  ): Promise<ConsolidadoDto> {
+    const { medicion, proyecto } = await this.exigirMedicion(
+      usuario,
+      idMedicion,
+    );
+    const [escala, totalEstudiantes] = await Promise.all([
+      this.escalaDeMedicion(
+        medicion.rubrica?.id_escala ?? null,
+        proyecto.asignatura?.id_programa ?? null,
+      ),
+      this.prisma.matricula.count({
+        where: filtroHoja(proyecto.id, medicion.id),
+      }),
+    ]);
+    if (!escala) {
+      throw new ConflictException(MENSAJE_SIN_ESCALA);
+    }
+    return armarConsolidado(medicion, escala, totalEstudiantes);
+  }
+
+  /**
+   * HU-11-06: acciones implementadas, resultados obtenidos y acciones propuestas (hoja
+   * «Evaluación»). Los registra el docente del curso o el líder del RAP, en borrador.
+   */
+  async registrarAnalisis(
+    usuario: UsuarioSesion,
+    idMedicion: number,
+    datos: RegistrarAnalisisDto,
+  ): Promise<MedicionDetalleDto> {
+    await this.exigirAnalizable(usuario, idMedicion);
+    const cambios: Prisma.medicion_rapUpdateInput = {};
+    if (datos.accionesImplementadas !== undefined) {
+      cambios.acciones_implementadas = datos.accionesImplementadas;
+    }
+    if (datos.resultadosObtenidos !== undefined) {
+      cambios.resultados_obtenidos = datos.resultadosObtenidos;
+    }
+    if (datos.accionesPropuestas !== undefined) {
+      cambios.acciones_propuestas = datos.accionesPropuestas;
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await this.bloquearBorrador(tx, idMedicion);
+      await tx.medicion_rap.update({
+        where: { id: idMedicion },
+        data: { ...cambios, updated_at: new Date() },
+      });
+    });
+    await this.auditar(usuario.id, 'registrar_analisis', idMedicion, {
+      campos: Object.keys(cambios),
+    });
+    return this.detalle(usuario, idMedicion, false);
+  }
+
+  /**
+   * HU-11-07 (RF-31, p6 y p7): cierra la medición con usuario y fecha, y desde ahí sus
+   * valoraciones quedan bloqueadas y alimenta el reporte de logro. No se cierra sin
+   * valoraciones, ni por debajo de la meta sin acciones propuestas (excepción de p6).
+   */
+  async cerrar(
+    usuario: UsuarioSesion,
+    idMedicion: number,
+  ): Promise<MedicionDetalleDto> {
+    const { medicion, proyecto } = await this.exigirAnalizable(
+      usuario,
+      idMedicion,
+    );
+    const escala = await this.escalaDeMedicion(
+      medicion.rubrica?.id_escala ?? null,
+      proyecto.asignatura?.id_programa ?? null,
+    );
+    if (!escala) {
+      throw new ConflictException(MENSAJE_SIN_ESCALA);
+    }
+
+    const resultado = await this.prisma.$transaction(async (tx) => {
+      await this.bloquearBorrador(tx, idMedicion);
+      // Con la fila bloqueada, nadie guarda valoraciones: se lee el estado definitivo.
+      const [actual, valoraciones] = await Promise.all([
+        tx.medicion_rap.findUniqueOrThrow({
+          where: { id: idMedicion },
+          select: { acciones_propuestas: true },
+        }),
+        tx.valoracion_estudiante.findMany({
+          where: { medicion_indicador: { is: { id_medicion: idMedicion } } },
+          select: {
+            medicion_indicador: { select: { id_indicador: true } },
+            nivel_escala: { select: { valor: true } },
+          },
+        }),
+      ]);
+      const conteos = contarPorIndicador(
+        valoraciones.flatMap((fila) =>
+          fila.medicion_indicador?.id_indicador != null &&
+          fila.nivel_escala?.valor != null
+            ? [
+                {
+                  idIndicador: fila.medicion_indicador.id_indicador,
+                  valor: fila.nivel_escala.valor,
+                },
+              ]
+            : [],
+        ),
+      );
+      const consolidado = armarConsolidado(medicion, escala, null, conteos);
+      if (consolidado.tamanoMuestra === 0) {
+        throw new ConflictException(MENSAJE_SIN_VALORACIONES);
+      }
+      if (consolidado.alcanzado === false && !actual.acciones_propuestas) {
+        throw new ConflictException(MENSAJE_FALTAN_ACCIONES_PROPUESTAS);
+      }
+      await tx.medicion_rap.update({
+        where: { id: idMedicion },
+        data: {
+          estado: ESTADO_MEDICION.cerrada,
+          id_cerrado_por: usuario.id,
+          fecha_cierre: new Date(),
+        },
+      });
+      return consolidado;
+    });
+
+    await this.auditar(usuario.id, 'cerrar_medicion', idMedicion, {
+      porcentajeCumplimiento: resultado.porcentajeCumplimiento,
+      porcentajeEsperado: resultado.porcentajeEsperado,
+    });
+    return this.detalle(usuario, idMedicion, false);
+  }
+
+  /** RF-30, excepción de p7: solo el departamento académico del programa la reabre. */
+  async reabrir(
+    usuario: UsuarioSesion,
+    idMedicion: number,
+  ): Promise<MedicionDetalleDto> {
+    const { acceso } = await this.exigirMedicion(usuario, idMedicion);
+    if (!acceso.departamento) {
+      throw new ForbiddenException(MENSAJE_SOLO_DEPARTAMENTO_REABRE);
+    }
+    const anterior = await this.prisma.$transaction(async (tx) => {
+      const filas = await tx.$queryRaw<
+        { estado: string | null; id_cerrado_por: number | null }[]
+      >`SELECT estado, id_cerrado_por FROM medicion_rap WHERE id = ${idMedicion} FOR UPDATE`;
+      if (aEstado(filas[0]?.estado ?? null) !== ESTADO_MEDICION.cerrada) {
+        throw new ConflictException(MENSAJE_MEDICION_NO_CERRADA);
+      }
+      await tx.medicion_rap.update({
+        where: { id: idMedicion },
+        data: {
+          estado: ESTADO_MEDICION.borrador,
+          id_cerrado_por: null,
+          fecha_cierre: null,
+        },
+      });
+      return filas[0];
+    });
+    await this.auditar(
+      usuario.id,
+      'reabrir_medicion',
+      idMedicion,
+      { estado: ESTADO_MEDICION.borrador },
+      {
+        estado: ESTADO_MEDICION.cerrada,
+        idCerradoPor: anterior.id_cerrado_por,
+      },
+    );
+    return this.detalle(usuario, idMedicion, false);
+  }
+
   // ---------------------------------------------------------------------------------------
   // Lectura y acceso
   // ---------------------------------------------------------------------------------------
@@ -512,17 +760,7 @@ export class MedicionesService {
         proyecto.asignatura?.id_programa ?? null,
       ),
       this.prisma.matricula.findMany({
-        where: {
-          id_proyecto_docente: proyecto.id,
-          OR: [
-            { estado: ESTADO_MATRICULA.matriculado },
-            {
-              valoracion_estudiante: {
-                some: { medicion_indicador: { id_medicion: medicion.id } },
-              },
-            },
-          ],
-        },
+        where: filtroHoja(proyecto.id, medicion.id),
         select: {
           id: true,
           estado: true,
@@ -563,6 +801,17 @@ export class MedicionesService {
       ),
       puedeEditar:
         acceso.docenteAsignado && estado === ESTADO_MEDICION.borrador,
+      consolidado: armarConsolidado(medicion, escala, matriculas.length),
+      accionesImplementadas: medicion.acciones_implementadas,
+      resultadosObtenidos: medicion.resultados_obtenidos,
+      accionesPropuestas: medicion.acciones_propuestas,
+      cerradoPor: nombreCompleto(
+        medicion.usuario_medicion_rap_id_cerrado_porTousuario,
+      ),
+      fechaCierre: medicion.fecha_cierre?.toISOString() ?? null,
+      puedeAnalizar:
+        estado === ESTADO_MEDICION.borrador && puedeAnalizar(acceso, medicion),
+      puedeReabrir: estado === ESTADO_MEDICION.cerrada && acceso.departamento,
     };
   }
 
@@ -628,6 +877,73 @@ export class MedicionesService {
       throw new ConflictException(MENSAJE_MEDICION_CERRADA);
     }
     return encontrada;
+  }
+
+  /** Para el análisis y el cierre: docente asignado o líder del RAP, en borrador. */
+  private async exigirAnalizable(
+    usuario: UsuarioSesion,
+    idMedicion: number,
+  ): Promise<ProyectoConAcceso & { medicion: MedicionLeida }> {
+    const encontrada = await this.exigirMedicion(usuario, idMedicion);
+    if (!puedeAnalizar(encontrada.acceso, encontrada.medicion)) {
+      throw new ForbiddenException(MENSAJE_SOLO_DOCENTE_O_LIDER);
+    }
+    if (aEstado(encontrada.medicion.estado) !== ESTADO_MEDICION.borrador) {
+      throw new ConflictException(MENSAJE_MEDICION_CERRADA);
+    }
+    return encontrada;
+  }
+
+  /**
+   * Mediciones que un usuario puede abrir, como filtro de Prisma; nulo si ninguna. Mismos
+   * alcances que la hoja: docente asignado, líder del RAP en el período del curso y
+   * departamento del programa.
+   */
+  private async filtroVisibilidad(
+    usuario: UsuarioSesion,
+  ): Promise<Prisma.medicion_rapWhereInput | null> {
+    const condiciones: Prisma.medicion_rapWhereInput[] = [];
+    if (usuario.roles.includes(ROL.docente)) {
+      condiciones.push({
+        proyecto_docente: {
+          is: {
+            proyecto_docente_docente: { some: { id_usuario: usuario.id } },
+          },
+        },
+      });
+    }
+    if (usuario.roles.includes(ROL.departamento)) {
+      const { global, programas } = await this.alcance.alcance(usuario.id, [
+        ROL.departamento,
+      ]);
+      if (global) {
+        return {};
+      }
+      if (programas.length > 0) {
+        condiciones.push({
+          proyecto_docente: {
+            is: { asignatura: { is: { id_programa: { in: programas } } } },
+          },
+        });
+      }
+    }
+    if (usuario.roles.includes(ROL.liderRap)) {
+      const liderados = await this.prisma.lider_rap.findMany({
+        where: { id_usuario: usuario.id, activo: true, id_rap: { not: null } },
+        select: { id_rap: true, id_periodo: true },
+      });
+      for (const { id_rap: idRap, id_periodo: idPeriodo } of liderados) {
+        condiciones.push(
+          idPeriodo === null
+            ? { id_rap: idRap }
+            : {
+                id_rap: idRap,
+                proyecto_docente: { is: { id_periodo: idPeriodo } },
+              },
+        );
+      }
+    }
+    return condiciones.length > 0 ? { OR: condiciones } : null;
   }
 
   /**
@@ -825,6 +1141,7 @@ export class MedicionesService {
     accion: string,
     idMedicion: number,
     valorNuevo: Prisma.InputJsonValue,
+    valorAnterior?: Prisma.InputJsonValue,
   ): Promise<void> {
     try {
       await this.prisma.auditoria.create({
@@ -833,6 +1150,7 @@ export class MedicionesService {
           accion,
           tabla_afectada: 'medicion_rap',
           id_registro: idMedicion,
+          valor_anterior: valorAnterior,
           valor_nuevo: valorNuevo,
           fecha: new Date(),
         },
@@ -1027,4 +1345,81 @@ function nombreCompleto(
   return (
     [persona?.nombres, persona?.apellidos].filter(Boolean).join(' ') || null
   );
+}
+
+function puedeAnalizar(acceso: Acceso, medicion: { id_rap: number | null }) {
+  return (
+    acceso.docenteAsignado ||
+    (medicion.id_rap !== null && acceso.rapsLiderados.has(medicion.id_rap))
+  );
+}
+
+/** Estudiantes de la hoja: los matriculados y los retirados que ya tenían valoraciones. */
+function filtroHoja(
+  idProyecto: number,
+  idMedicion: number,
+): Prisma.matriculaWhereInput {
+  return {
+    id_proyecto_docente: idProyecto,
+    OR: [
+      { estado: ESTADO_MATRICULA.matriculado },
+      {
+        valoracion_estudiante: {
+          some: { medicion_indicador: { id_medicion: idMedicion } },
+        },
+      },
+    ],
+  };
+}
+
+/**
+ * Consolidado de la medición con los datos ya leídos (RF-31). Si no se dan los conteos, se
+ * toman de las valoraciones de la medición.
+ */
+function armarConsolidado(
+  medicion: MedicionLeida,
+  escala: {
+    umbral_cumplimiento: number | null;
+    nivel_escala: { valor: number | null; etiqueta: string | null }[];
+  },
+  totalEstudiantes: number | null,
+  conteos?: Map<number, Map<number, number>>,
+): Consolidado {
+  const porIndicador =
+    conteos ??
+    contarPorIndicador(
+      medicion.medicion_indicador.flatMap((fila) =>
+        fila.id_indicador === null
+          ? []
+          : fila.valoracion_estudiante.flatMap((valoracion) =>
+              valoracion.nivel_escala?.valor == null
+                ? []
+                : [
+                    {
+                      idIndicador: fila.id_indicador as number,
+                      valor: valoracion.nivel_escala.valor,
+                    },
+                  ],
+            ),
+      ),
+    );
+  return consolidar({
+    niveles: escala.nivel_escala
+      .filter((nivel) => nivel.valor !== null)
+      .map((nivel) => ({
+        valor: nivel.valor as number,
+        etiqueta: nivel.etiqueta ?? `Nivel ${nivel.valor}`,
+      })),
+    umbralCumplimiento: escala.umbral_cumplimiento as number,
+    porcentajeEsperado:
+      medicion.porcentaje_esperado === null
+        ? null
+        : Number(medicion.porcentaje_esperado),
+    tamanoCohorte: medicion.tamano_cohorte,
+    totalEstudiantes,
+    indicadores: aIndicadores(medicion).map((indicador) => ({
+      ...indicador,
+      conteos: porIndicador.get(indicador.idIndicador) ?? new Map(),
+    })),
+  });
 }

@@ -9,6 +9,7 @@ import { MedicionesModule } from './mediciones/mediciones.module.js';
 import { PrismaModule } from './common/prisma/prisma.module.js';
 import { crearPipeValidacion } from './common/validacion/pipe-validacion.js';
 import { ProyectosDocentesModule } from './proyectos-docentes/proyectos-docentes.module.js';
+import { ReportesModule } from './reportes/reportes.module.js';
 import { SaludModule } from './salud/salud.module.js';
 
 @Module({
@@ -24,6 +25,7 @@ import { SaludModule } from './salud/salud.module.js';
     ProyectosDocentesModule,
     EstudiantesModule,
     MedicionesModule,
+    ReportesModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: FiltroExcepciones },

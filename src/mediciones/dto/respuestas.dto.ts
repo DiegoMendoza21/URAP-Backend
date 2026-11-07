@@ -280,6 +280,136 @@ export class EstudianteMedicionDto {
   valoraciones: ValoracionRegistradaDto[];
 }
 
+/* Consolidado de la medición (RF-31; hoja «Evaluación» del formato FO-DO/PC-023). Se calcula
+   desde las valoraciones cada vez: no se guarda. */
+
+export class ConteoNivelDto {
+  @ApiProperty({ example: 3 })
+  valor: number;
+
+  @ApiProperty({ example: 'Competente' })
+  etiqueta: string;
+
+  @ApiProperty({ example: 29, description: 'Estudiantes en este nivel' })
+  cantidad: number;
+
+  @ApiProperty({
+    example: 85.29,
+    description: 'Sobre la muestra del indicador, con dos decimales',
+  })
+  porcentaje: number;
+}
+
+export class IndicadorConsolidadoDto {
+  @ApiProperty({ example: 7 })
+  idIndicador: number;
+
+  @ApiProperty({ example: 1, nullable: true, type: Number })
+  numero: number | null;
+
+  @ApiProperty({ nullable: true, type: String })
+  descripcion: string | null;
+
+  @ApiProperty({ nullable: true, type: String })
+  instrumento: string | null;
+
+  @ApiProperty({ nullable: true, type: String })
+  descripcionInstrumento: string | null;
+
+  @ApiProperty({
+    type: [ConteoNivelDto],
+    description: 'Tabla resumen y tabla porcentual del indicador',
+  })
+  conteos: ConteoNivelDto[];
+
+  @ApiProperty({
+    example: 34,
+    description: 'Estudiantes valorados en el indicador',
+  })
+  muestra: number;
+
+  @ApiProperty({
+    example: 0,
+    description:
+      'Estudiantes de la hoja sin valorar en el indicador: fuera de la muestra',
+  })
+  sinValorar: number;
+
+  @ApiProperty({
+    example: 85.29,
+    nullable: true,
+    type: Number,
+    description:
+      'Porcentaje en los niveles de cumplimiento (desde el umbral de la escala); nulo si ' +
+      'nadie fue valorado',
+  })
+  porcentajeCumplimiento: number | null;
+
+  @ApiProperty({
+    example: null,
+    nullable: true,
+    type: Boolean,
+    description: 'Si alcanzó el porcentaje esperado; nulo sin meta definida',
+  })
+  alcanzado: boolean | null;
+}
+
+export class ConsolidadoDto {
+  @ApiProperty({ type: [IndicadorConsolidadoDto] })
+  indicadores: IndicadorConsolidadoDto[];
+
+  @ApiProperty({ example: 3 })
+  umbralCumplimiento: number;
+
+  @ApiProperty({ type: [String], example: ['Competente', 'Ejemplar'] })
+  nivelesCumplimiento: string[];
+
+  @ApiProperty({
+    example: 34,
+    description: 'Tamaño de la muestra: el mayor de los indicadores',
+  })
+  tamanoMuestra: number;
+
+  @ApiProperty({
+    example: 34,
+    description: 'Tamaño de la cohorte; si no se registró, el de la muestra',
+  })
+  tamanoCohorte: number;
+
+  @ApiProperty({ example: false })
+  cohorteRegistrada: boolean;
+
+  @ApiProperty({
+    example: 63.97,
+    nullable: true,
+    type: Number,
+    description:
+      'Resultado de la medición: promedio de los porcentajes de cumplimiento de sus ' +
+      'indicadores con muestra',
+  })
+  porcentajeCumplimiento: number | null;
+
+  @ApiProperty({ example: null, nullable: true, type: Number })
+  porcentajeEsperado: number | null;
+
+  @ApiProperty({
+    example: false,
+    description:
+      'Falso: el programa no ha definido la meta (RF-31, excepción de p4)',
+  })
+  metaDefinida: boolean;
+
+  @ApiProperty({ example: null, nullable: true, type: Boolean })
+  alcanzado: boolean | null;
+
+  @ApiProperty({
+    type: [String],
+    description:
+      'Avisos para mostrar con el resultado (cohorte, meta, sin valorar)',
+  })
+  advertencias: string[];
+}
+
 /** Hoja «Valoración» del formato FO-DO/PC-023 (RF-30). */
 export class MedicionDetalleDto extends MedicionResumenDto {
   @ApiProperty({
@@ -319,6 +449,72 @@ export class MedicionDetalleDto extends MedicionResumenDto {
       'curso y la medición está en borrador',
   })
   puedeEditar: boolean;
+
+  @ApiProperty({ type: ConsolidadoDto })
+  consolidado: ConsolidadoDto;
+
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    description: 'Hoja «Evaluación»: acciones implementadas (RF-31, p5)',
+  })
+  accionesImplementadas: string | null;
+
+  @ApiProperty({ nullable: true, type: String })
+  resultadosObtenidos: string | null;
+
+  @ApiProperty({ nullable: true, type: String })
+  accionesPropuestas: string | null;
+
+  @ApiProperty({ example: 'Docente Líder Demo', nullable: true, type: String })
+  cerradoPor: string | null;
+
+  @ApiProperty({
+    example: '2026-11-20T15:30:00.000Z',
+    nullable: true,
+    type: String,
+  })
+  fechaCierre: string | null;
+
+  @ApiProperty({
+    example: true,
+    description:
+      'Puede registrar el análisis y cerrar: docente asignado o líder del RAP, medición en ' +
+      'borrador',
+  })
+  puedeAnalizar: boolean;
+
+  @ApiProperty({
+    example: false,
+    description: 'Puede reabrirla: departamento del programa, medición cerrada',
+  })
+  puedeReabrir: boolean;
+}
+
+/** Una medición en la lista del módulo de medición, con su resultado. */
+export class MedicionListadaDto extends MedicionResumenDto {
+  @ApiProperty({ example: 63.97, nullable: true, type: Number })
+  porcentajeCumplimiento: number | null;
+
+  @ApiProperty({ example: null, nullable: true, type: Number })
+  porcentajeEsperado: number | null;
+
+  @ApiProperty({ example: null, nullable: true, type: Boolean })
+  alcanzado: boolean | null;
+}
+
+export class PaginaMedicionesDto {
+  @ApiProperty({ type: [MedicionListadaDto] })
+  elementos: MedicionListadaDto[];
+
+  @ApiProperty({ example: 1 })
+  pagina: number;
+
+  @ApiProperty({ example: 20 })
+  tamano: number;
+
+  @ApiProperty({ example: 3 })
+  total: number;
 }
 
 export class ResultadoValoracionesDto {
