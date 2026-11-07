@@ -8,6 +8,7 @@ import { validarVariablesEntorno } from './common/configuracion/variables-entorn
 import { FiltroExcepciones } from './common/filtros/filtro-excepciones.js';
 import { PrismaModule } from './common/prisma/prisma.module.js';
 import { crearPipeValidacion } from './common/validacion/pipe-validacion.js';
+import { ProyectosDocentesModule } from './proyectos-docentes/proyectos-docentes.module.js';
 import { SaludModule } from './salud/salud.module.js';
 import { UsuariosModule } from './usuarios/usuarios.module.js';
 
@@ -24,6 +25,7 @@ import { UsuariosModule } from './usuarios/usuarios.module.js';
     AuthModule,
     SaludModule,
     UsuariosModule,
+    ProyectosDocentesModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: FiltroExcepciones },

@@ -831,7 +831,11 @@ Ref: proyecto_docente_docente.id_usuario > usuario.id
 Ref: proyecto_docente_rap.id_proyecto_docente > proyecto_docente.id
 Ref: proyecto_docente_rap.id_rap > rap.id
 Ref: proyecto_docente_rap.id_rubrica > rubrica.id
-Ref: plan_curso.id_proyecto_docente - proyecto_docente.id
+// La clave foránea va en plan_curso: el plan existe solo si existe su proyecto. Se escribe
+// como muchos a uno porque la exportación a SQL de la relación uno a uno la dejó al revés,
+// en proyecto_docente.id, e impedía crear proyectos (corregido en la migración
+// 20261106120000_corregir_clave_plan_curso). La unicidad la da [unique] en id_proyecto_docente.
+Ref: plan_curso.id_proyecto_docente > proyecto_docente.id
 
 // Planeacion academica
 Ref: rac.id_proyecto_docente > proyecto_docente.id
