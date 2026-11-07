@@ -38,7 +38,8 @@ export class ResumenCumplimientoDto {
 
   @ApiProperty({
     type: [CantidadPorEstadoDto],
-    description: 'Proyectos por estado, en el orden del ciclo del proyecto',
+    description:
+      'Proyectos por estado, en el orden del ciclo del proyecto; al final, los que no tienen estado (sin_estado)',
   })
   porEstado: CantidadPorEstadoDto[];
 

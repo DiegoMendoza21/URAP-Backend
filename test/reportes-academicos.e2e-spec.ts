@@ -6,7 +6,10 @@ import { ContrasenasService } from '../src/auth/contrasenas.service.js';
 import { ROL } from '../src/auth/roles.js';
 import { PrismaService } from '../src/common/prisma/prisma.service.js';
 import { configurarAplicacion } from '../src/configurar-aplicacion.js';
-import { TIPO_REPORTE } from '../src/reportes/academicos.service.js';
+import {
+  SIN_ESTADO,
+  TIPO_REPORTE,
+} from '../src/reportes/academicos.service.js';
 
 // Requiere el .env configurado y la base local levantada (npm run db:levantar). Crea sus
 // propios datos ficticios y los borra al terminar. Funciona con o sin el seed.
@@ -367,6 +370,40 @@ describe('Reportes académicos (e2e) · RF-28, HU-12-03 y HU-12-05', () => {
       ).expect(200);
       expect(ninguno.body.proyectos).toEqual([]);
       expect(ninguno.body.resumen.proyectos).toBe(0);
+    });
+
+    it('cuenta aparte los proyectos sin estado, para que el resumen sume el total', async () => {
+      const { id_estado: original } =
+        await prisma.proyecto_docente.findUniqueOrThrow({
+          where: { id: proyectos.diligenciamiento },
+          select: { id_estado: true },
+        });
+      await prisma.proyecto_docente.update({
+        where: { id: proyectos.diligenciamiento },
+        data: { id_estado: null },
+      });
+      try {
+        const { body } = await pedir(
+          'departamento',
+          conPeriodo('cumplimiento'),
+        ).expect(200);
+        const porEstado = body.resumen.porEstado as {
+          codigo: string;
+          cantidad: number;
+        }[];
+        expect(porEstado.at(-1)).toMatchObject({
+          codigo: SIN_ESTADO.codigo,
+          cantidad: 1,
+        });
+        expect(
+          porEstado.reduce((total, fila) => total + fila.cantidad, 0),
+        ).toBe(body.resumen.proyectos);
+      } finally {
+        await prisma.proyecto_docente.update({
+          where: { id: proyectos.diligenciamiento },
+          data: { id_estado: original },
+        });
+      }
     });
 
     it('registra cada generación con el usuario y la fecha (p6) y exporta a Excel (p5)', async () => {

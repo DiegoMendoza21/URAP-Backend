@@ -25,13 +25,21 @@ import {
 } from './excel.js';
 import { ReportesService, ROLES_PROGRAMA } from './reportes.service.js';
 import {
-  conPendientes,
+  contarPendientes,
   ETIQUETA_COLOR,
   nombreCompleto,
   SeguimientoService,
 } from './seguimiento.service.js';
 
-export const MENSAJE_RAP_NO_EXISTE = 'El RAP no existe o no tiene acceso a él.';
+/** El líder RAP puede haber liderado el RAP en otro período: por eso se nombra el período. */
+export const MENSAJE_RAP_NO_EXISTE =
+  'El RAP no existe o no tiene acceso a él en el período seleccionado.';
+
+/** Grupo del resumen por estado para los proyectos que todavía no tienen estado. */
+export const SIN_ESTADO = {
+  codigo: 'sin_estado',
+  nombre: 'Sin estado',
+} as const;
 
 /** `reporte_academico.tipo` de cada reporte (RF-28, p6). */
 export const TIPO_REPORTE = {
@@ -181,7 +189,7 @@ export class ReportesAcademicosService {
             { width: 12 },
             { width: 12 },
             { width: 10 },
-            { width: 12 },
+            { width: 28 },
           ],
         },
       ]),
@@ -442,16 +450,19 @@ export class ReportesAcademicosService {
       filas,
       (fila) => fila.sesiones.programadas,
     );
+    // Los proyectos sin estado van en su propio grupo, para que la suma dé el total.
     return {
       proyectos: filas.length,
-      porEstado: estados
-        .filter((estado) => estado.codigo)
-        .map((estado) => ({
-          codigo: estado.codigo as string,
-          nombre: estado.nombre ?? (estado.codigo as string),
-          cantidad: contar(estado.codigo),
-        }))
-        .filter((estado) => estado.cantidad > 0),
+      porEstado: [
+        ...estados
+          .filter((estado) => estado.codigo)
+          .map((estado) => ({
+            codigo: estado.codigo as string,
+            nombre: estado.nombre ?? (estado.codigo as string),
+            cantidad: contar(estado.codigo),
+          })),
+        { ...SIN_ESTADO, cantidad: contar(null) },
+      ].filter((estado) => estado.cantidad > 0),
       seccionesCompletas,
       seccionesTotales,
       porcentajeSecciones:
@@ -464,7 +475,7 @@ export class ReportesAcademicosService {
         sesionesProgramadas === 0
           ? null
           : porcentaje(sesionesRegistradas, sesionesProgramadas),
-      conPendientes: conPendientes(filas).length,
+      conPendientes: contarPendientes(filas),
     };
   }
 

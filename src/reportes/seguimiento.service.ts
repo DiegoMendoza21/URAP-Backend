@@ -301,7 +301,7 @@ export class SeguimientoService {
         sheet: soloPendientes ? 'Pendientes' : 'Tablero',
         data: datos,
         columns: [
-          { width: 10 },
+          { width: 28 },
           { width: 36 },
           { width: 34 },
           { width: 8 },
@@ -487,10 +487,11 @@ export class SeguimientoService {
   }
 }
 
+/** Color en las exportaciones, con la misma palabra que muestra la pantalla. */
 export const ETIQUETA_COLOR: Record<ProyectoSeguimientoDto['color'], string> = {
-  rojo: 'Rojo',
-  amarillo: 'Amarillo',
-  verde: 'Verde',
+  rojo: 'Rojo (atrasado)',
+  amarillo: 'Amarillo (requiere atención)',
+  verde: 'Verde (al día)',
 };
 
 type ProyectoLeido = Prisma.proyecto_docenteGetPayload<{
@@ -590,15 +591,24 @@ export function conPendientes(
   filas: readonly ProyectoSeguimientoDto[],
 ): ProyectoSeguimientoDto[] {
   return filas
-    .filter((fila) =>
-      tienePendientes({
-        seccionesIncompletas: fila.secciones.incompletas.length,
-        vencidas: fila.sesiones.vencidas,
-        incumplidas: fila.sesiones.incumplidas,
-        porVencer: fila.sesiones.porVencer,
-      }),
-    )
+    .filter(filaConPendientes)
     .sort((a, b) => compararGravedad(aGravedad(a), aGravedad(b)));
+}
+
+/** Cuántos proyectos tienen pendientes, sin ordenarlos. */
+export function contarPendientes(
+  filas: readonly ProyectoSeguimientoDto[],
+): number {
+  return filas.filter(filaConPendientes).length;
+}
+
+function filaConPendientes(fila: ProyectoSeguimientoDto): boolean {
+  return tienePendientes({
+    seccionesIncompletas: fila.secciones.incompletas.length,
+    vencidas: fila.sesiones.vencidas,
+    incumplidas: fila.sesiones.incumplidas,
+    porVencer: fila.sesiones.porVencer,
+  });
 }
 
 function aGravedad(fila: ProyectoSeguimientoDto) {
@@ -622,7 +632,7 @@ export function resumir(
     rojo: filas.filter((fila) => fila.color === 'rojo').length,
     amarillo: filas.filter((fila) => fila.color === 'amarillo').length,
     verde: filas.filter((fila) => fila.color === 'verde').length,
-    conPendientes: conPendientes(filas).length,
+    conPendientes: contarPendientes(filas),
   };
 }
 
