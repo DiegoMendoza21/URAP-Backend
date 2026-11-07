@@ -125,13 +125,28 @@ const CAMPOS_ALERTA = {
 } as const satisfies Prisma.sesion_claseSelect;
 
 const INCLUIR_PROYECTO = {
-  asignatura: { select: { id_programa: true } },
+  asignatura: { select: { id_programa: true, nombre: true } },
   periodo_academico: true,
+  estado_proyecto: { select: { codigo: true, nombre: true } },
   horario_curso: { orderBy: { dia_semana: 'asc' } },
 } as const satisfies Prisma.proyecto_docenteInclude;
 
-type ProyectoConHorario = Prisma.proyecto_docenteGetPayload<{
+export type ProyectoConHorario = Prisma.proyecto_docenteGetPayload<{
   include: typeof INCLUIR_PROYECTO;
+}>;
+
+/**
+ * Lo que necesita una sesión del calendario: su tipo, su festivo y cuántos temas e
+ * inasistencias tiene registrados (RF-20 y RF-22).
+ */
+export const INCLUIR_SESION = {
+  tipo_sesion: true,
+  dia_festivo: true,
+  _count: { select: { sesion_tema: true, inasistencia: true } },
+} as const satisfies Prisma.sesion_claseInclude;
+
+export type SesionConDetalle = Prisma.sesion_claseGetPayload<{
+  include: typeof INCLUIR_SESION;
 }>;
 
 type Transaccion = Prisma.TransactionClient;
@@ -251,7 +266,7 @@ export class SesionesService {
     const [todas, puedeEditar, umbralDias, diasSinClase] = await Promise.all([
       this.prisma.sesion_clase.findMany({
         where: donde,
-        include: { tipo_sesion: true, dia_festivo: true },
+        include: INCLUIR_SESION,
         orderBy: [{ fecha: 'asc' }, { id: 'asc' }],
       }),
       this.puedeEditar(usuario, proyecto),
@@ -262,15 +277,8 @@ export class SesionesService {
     ]);
     const total = todas.length;
     const sesiones = todas.slice((pagina - 1) * tamano, pagina * tamano);
-    const hoy = fechaDeHoy();
-    const contexto: ContextoAlerta = {
-      hoy,
-      umbralDias,
-      periodoCerrado: periodo?.cerrado ?? false,
-      fechaFinPeriodo: periodo?.fecha_fin
-        ? aTextoFecha(periodo.fecha_fin)
-        : null,
-    };
+    const contexto = contextoDeAlerta(periodo, umbralDias);
+    const { hoy } = contexto;
     const recesos =
       periodo?.fecha_inicio && periodo.fecha_fin
         ? semanasDeReceso(periodo.fecha_inicio, periodo.fecha_fin, diasSinClase)
@@ -283,12 +291,7 @@ export class SesionesService {
             )
           ).map(mensajeSinFestivos)
         : [];
-    const horas = new Map(
-      proyecto.horario_curso.map((bloque) => [
-        bloque.dia_semana,
-        aBloque(bloque),
-      ]),
-    );
+    const horas = horasDelHorario(proyecto.horario_curso);
     return {
       elementos: sesiones.map((sesion) => aSesion(sesion, horas, contexto)),
       pagina,
@@ -653,9 +656,10 @@ export class SesionesService {
 
   /**
    * Proyecto que el usuario puede ver, con el mismo filtro de la bandeja de proyectos (RF-08).
-   * Si no lo ve, 404, igual que si no existiera: no revela proyectos ajenos.
+   * Si no lo ve, 404, igual que si no existiera: no revela proyectos ajenos. Lo usa también el
+   * registro de clase (RF-20).
    */
-  private async proyectoVisible(
+  async proyectoVisible(
     usuario: UsuarioSesion,
     idProyecto: number,
   ): Promise<ProyectoConHorario> {
@@ -700,8 +704,12 @@ export class SesionesService {
     );
   }
 
-  /** Matriz de permisos, «Registro de clases»: R/E propios para el Docente, ADM para el Administrador. */
-  private async tienePermisoEdicion(
+  /**
+   * Matriz de permisos, «Registro de clases»: R/E propios para el Docente, ADM para el
+   * Administrador. Es también quien ve los datos personales de la sesión (ausentes y
+   * observaciones), con el mismo criterio de la lista de matriculados (RF-22).
+   */
+  async tienePermisoEdicion(
     usuario: UsuarioSesion,
     proyecto: ProyectoConHorario,
   ): Promise<boolean> {
@@ -892,6 +900,26 @@ function aniosEntre(inicio: Date, fin: Date): number[] {
   return anios;
 }
 
+/** Horas de clase por día de la semana, del horario vigente del curso. */
+export function horasDelHorario(
+  horario: Parameters<typeof aBloque>[0][],
+): Map<number | null, BloqueHorarioDto> {
+  return new Map(horario.map((bloque) => [bloque.dia_semana, aBloque(bloque)]));
+}
+
+/** Contexto de la regla de alertas de RF-23 para un período: hoy, el umbral y el cierre. */
+export function contextoDeAlerta(
+  periodo: { cerrado: boolean | null; fecha_fin: Date | null } | null,
+  umbralDias: number | null,
+): ContextoAlerta {
+  return {
+    hoy: fechaDeHoy(),
+    umbralDias,
+    periodoCerrado: periodo?.cerrado ?? false,
+    fechaFinPeriodo: periodo?.fecha_fin ? aTextoFecha(periodo.fecha_fin) : null,
+  };
+}
+
 function aBloque(bloque: {
   dia_semana: number | null;
   hora_inicio: Date | null;
@@ -926,10 +954,8 @@ function alertaDeFila(
   );
 }
 
-function aSesion(
-  sesion: Prisma.sesion_claseGetPayload<{
-    include: { tipo_sesion: true; dia_festivo: true };
-  }>,
+export function aSesion(
+  sesion: SesionConDetalle,
   horas: Map<number | null, BloqueHorarioDto>,
   contexto: ContextoAlerta,
 ): SesionCalendarioDto {
@@ -952,5 +978,7 @@ function aSesion(
     estado: sesion.estado,
     festivo: sesion.dia_festivo?.nombre ?? null,
     diligenciada: esDiligenciada(sesion),
+    numeroTemas: sesion._count.sesion_tema,
+    numeroAusentes: sesion._count.inasistencia,
   };
 }

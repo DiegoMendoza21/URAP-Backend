@@ -5,7 +5,10 @@
  *
  * Las fechas son textos `YYYY-MM-DD`, como las devuelve `aTextoFecha` de una columna `date`.
  */
-import type { RangoEntero } from '../common/parametros/parametros.service.js';
+import {
+  PARAMETRO,
+  type RangoEntero,
+} from '../common/parametros/parametros.service.js';
 import { aFechaColumna, aTextoFecha, MILISEGUNDOS_DIA } from './calendario.js';
 
 /**
@@ -15,7 +18,7 @@ import { aFechaColumna, aTextoFecha, MILISEGUNDOS_DIA } from './calendario.js';
 export const ZONA_HORARIA = 'America/Bogota';
 
 /** Clave en `parametro_sistema` del umbral de «Por vencer», en días (RF-23, HU-08-08). */
-export const PARAMETRO_UMBRAL_ALERTA = 'alerta_dias_anticipacion';
+export const PARAMETRO_UMBRAL_ALERTA = PARAMETRO.alertaDiasAnticipacion;
 /**
  * Valores aceptados del umbral. Es solo un control de cordura del parámetro: el umbral lo fija el
  * programa en `parametro_sistema` (valor inicial, 2 días).
