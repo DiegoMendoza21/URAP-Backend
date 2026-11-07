@@ -43,13 +43,16 @@ nombre de un festivo), hay que corregirlo también en las bases ya sembradas.
 - **Catálogos:** roles, módulos y permisos, estados del proyecto docente, tipos de sesión, tipos
   de notificación, parámetros del sistema y festivos de 2026.
 - **Programa:** Facultad de Ciencias Económicas, Administración Industrial, escala de cuatro
-  niveles y RAP 1 a 7.
+  niveles, los RAP 1 a 7 con su texto oficial y el plan de estudios: 69 asignaturas con su
+  semestre y sus 73 vínculos con los RAP. El código SMA, los créditos y las horas de cada
+  asignatura quedan vacíos hasta que el programa los entregue.
+
+Los datos del programa y sus fuentes están en `docs/datos-institucionales.md`.
 
 `npm run db:sembrar:demo` carga además los **datos de demostración**. Se niega a correr con
 `NODE_ENV=production`, porque crea un Administrador con una contraseña compartida:
 
 - el período 2026-2, con fechas de demostración;
-- cuatro asignaturas `DEMO-0x` con su mapeo a los RAP;
 - un usuario ficticio por rol, todos con la contraseña de `CONTRASENA_USUARIOS_DEMO`:
 
 | Correo | Roles |
@@ -61,8 +64,22 @@ nombre de un festivo), hay que corregirlo también en las bases ya sembradas.
 | `direccion.demo@urap.local` | Dirección del programa |
 | `estudiante.demo@urap.local` | Estudiante |
 
-Faltan datos reales del programa: los textos de los RAP, el porcentaje esperado de la escala,
-el plan de estudios, el calendario académico y la matriz de permisos por rol.
+Faltan datos reales del programa: el porcentaje esperado de la escala, el calendario académico,
+y el código SMA, los créditos y las horas de cada asignatura (lista completa en
+`docs/datos-institucionales.md`, apartado 6).
+
+### Bases locales sembradas antes del plan de estudios real
+
+El seed solo crea lo que falta, así que una base sembrada antes de este cambio conserva los RAP
+con el texto «Pendiente» y las asignaturas `DEMO-01` a `DEMO-04`. Hay que reiniciarla, lo que
+**borra todos sus datos**, y volver a sembrarla:
+
+```bash
+npx prisma migrate reset --force
+npm run db:sembrar:demo
+```
+
+`migrate reset` vuelve a aplicar las migraciones; en Prisma 7 ya no siembra por su cuenta.
 
 ## Pruebas y calidad
 
