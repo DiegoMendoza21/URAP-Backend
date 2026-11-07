@@ -1,3 +1,4 @@
+import { StreamableFile } from '@nestjs/common';
 import writeXlsxFile, { type Row } from 'write-excel-file/node';
 
 /* Piezas comunes de las exportaciones a Excel de los reportes (RF-25, RF-28 y RF-32). */
@@ -57,4 +58,16 @@ export interface HojaExcel {
 
 export function libro(hojas: HojaExcel[]): Promise<Buffer> {
   return writeXlsxFile(hojas).toBuffer();
+}
+
+/** Descarga de un libro de Excel con su nombre de archivo. */
+export function aDescarga({
+  nombreArchivo,
+  contenido,
+}: ArchivoExcel): StreamableFile {
+  return new StreamableFile(contenido, {
+    type: TIPO_EXCEL,
+    disposition: `attachment; filename="${nombreArchivo}"`,
+    length: contenido.length,
+  });
 }

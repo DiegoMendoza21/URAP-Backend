@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { ParametrosModule } from '../common/parametros/parametros.module.js';
 import { MedicionesModule } from '../mediciones/mediciones.module.js';
 import { ProyectosDocentesModule } from '../proyectos-docentes/proyectos-docentes.module.js';
+import { ReportesAcademicosController } from './academicos.controller.js';
+import { ReportesAcademicosService } from './academicos.service.js';
 import { ReportesController } from './reportes.controller.js';
 import { ReportesService } from './reportes.service.js';
 import { SeguimientoController } from './seguimiento.controller.js';
@@ -13,7 +15,11 @@ import { SeguimientoService } from './seguimiento.service.js';
  */
 @Module({
   imports: [MedicionesModule, ParametrosModule, ProyectosDocentesModule],
-  controllers: [ReportesController, SeguimientoController],
-  providers: [ReportesService, SeguimientoService],
+  controllers: [
+    ReportesController,
+    ReportesAcademicosController,
+    SeguimientoController,
+  ],
+  providers: [ReportesService, ReportesAcademicosService, SeguimientoService],
 })
 export class ReportesModule {}

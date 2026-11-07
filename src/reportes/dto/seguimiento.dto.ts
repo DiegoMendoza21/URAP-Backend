@@ -95,6 +95,12 @@ export class FiltrosSeguimientoDto {
     description: 'Docentes asignados a proyectos de los programas del usuario',
   })
   docentes: OpcionDto[];
+
+  @ApiProperty({
+    type: () => [EstadoProyectoSeguimientoDto],
+    description: 'Estados del proyecto docente, en el orden del ciclo (RF-28)',
+  })
+  estados: EstadoProyectoSeguimientoDto[];
 }
 
 export class EstadoProyectoSeguimientoDto {
