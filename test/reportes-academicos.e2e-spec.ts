@@ -415,6 +415,19 @@ describe('Reportes académicos (e2e) · RF-28, HU-12-03 y HU-12-05', () => {
       });
       expect(registros.length).toBeGreaterThanOrEqual(3);
       expect(registros[0].fecha_generacion).not.toBeNull();
+      // La creación de cada registro queda en auditoría con el usuario y la IP (RF-29).
+      const auditada = await prisma.auditoria.findFirst({
+        where: {
+          id_usuario: usuarios.departamento,
+          accion: 'crear',
+          tabla_afectada: 'reporte_academico',
+          id_registro: registros[0].id,
+        },
+      });
+      expect(auditada?.ip).toBeTruthy();
+      expect(auditada?.valor_nuevo).toMatchObject({
+        tipo: TIPO_REPORTE.cumplimiento,
+      });
       const libro = await binario(
         pedir('departamento', conPeriodo('cumplimiento/excel')),
       ).expect(200);

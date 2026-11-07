@@ -55,15 +55,39 @@ export class VariablesEntorno {
   JWT_EXPIRACION_MINUTOS: number;
 
   /**
-   * Cuántos proxies hay delante de la API (por ejemplo, el balanceador de carga del
-   * despliegue). Con 0, Express toma la IP de la conexión directa. Con N, toma la IP del
-   * cliente del encabezado X-Forwarded-For después de saltar N proxies. Un valor mayor que
-   * los proxies reales permite falsificar la IP que queda en la sesión.
+   * Cuántos balanceadores hay delante del servidor de Next.js del frontend, que reenvía cada
+   * petición sin agregar su propia entrada a X-Forwarded-For. Con 0, Express toma la IP de la
+   * conexión directa: en local es la del usuario, pero en el despliegue sería la de Next.js
+   * para todos. Con N, toma la IP del cliente de X-Forwarded-For después de saltar N
+   * proxies. Un valor mayor que los balanceadores reales permite falsificar la IP que queda
+   * en la sesión y en la auditoría, y saltarse el límite de intentos por IP.
    */
   @IsInt({ message: 'PROXIES_CONFIABLES debe ser un número entero' })
   @Min(0, { message: 'PROXIES_CONFIABLES no puede ser negativo' })
   @Max(10, { message: 'PROXIES_CONFIABLES no puede ser mayor que 10' })
   PROXIES_CONFIABLES: number = 0;
+
+  /**
+   * Límite de peticiones de inicio de sesión por IP dentro de la ventana (HU-01-04). Frena las
+   * ráfagas con correos inventados, que el bloqueo por cuenta no alcanza. Es un ajuste del
+   * despliegue, no un parámetro de negocio: por eso va aquí y no en parametro_sistema.
+   */
+  @IsInt({ message: 'INICIO_SESION_LIMITE_POR_IP debe ser un número entero' })
+  @Min(1, { message: 'INICIO_SESION_LIMITE_POR_IP debe ser mayor que cero' })
+  @Max(1000, {
+    message: 'INICIO_SESION_LIMITE_POR_IP no puede ser mayor que 1000',
+  })
+  INICIO_SESION_LIMITE_POR_IP: number = 10;
+
+  /** Ventana, en segundos, del límite de peticiones de inicio de sesión por IP. */
+  @IsInt({
+    message: 'INICIO_SESION_VENTANA_SEGUNDOS debe ser un número entero',
+  })
+  @Min(1, { message: 'INICIO_SESION_VENTANA_SEGUNDOS debe ser mayor que cero' })
+  @Max(3600, {
+    message: 'INICIO_SESION_VENTANA_SEGUNDOS no puede ser mayor que 3600',
+  })
+  INICIO_SESION_VENTANA_SEGUNDOS: number = 60;
 
   /** Orígenes autorizados por CORS (NFR-006). En el .env van separados por coma. */
   @Transform(({ value }: { value: unknown }) =>

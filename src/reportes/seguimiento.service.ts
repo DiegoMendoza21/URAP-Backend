@@ -1,12 +1,14 @@
 import {
   Injectable,
-  Logger,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
-import { ParametrosService } from '../common/parametros/parametros.service.js';
+import {
+  ParametrosService,
+  type RangoEntero,
+} from '../common/parametros/parametros.service.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { porcentaje } from '../mediciones/consolidado.js';
@@ -62,6 +64,15 @@ export const ROLES_SEGUIMIENTO = [
 
 /** Clave en `parametro_sistema` del máximo de filas de una exportación (RF-25, p5). */
 export const PARAMETRO_EXPORTACION_MAXIMA = 'reporte_exportacion_filas_maxima';
+
+/** Valores admitidos del máximo de filas; fuera de ellos no se aplica tope y queda el error. */
+export const RANGO_EXPORTACION_MAXIMA: RangoEntero = {
+  minimo: 1,
+  maximo: 1_000_000,
+};
+
+/** Días de anticipación admitidos para el umbral de alerta de RF-23. */
+export const RANGO_UMBRAL_ALERTA: RangoEntero = { minimo: 0, maximo: 365 };
 
 export const MENSAJE_PERIODO_NO_EXISTE = 'El período académico no existe.';
 
@@ -128,8 +139,6 @@ export interface ConsultaSeguimiento {
  */
 @Injectable()
 export class SeguimientoService {
-  private readonly logger = new Logger(SeguimientoService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly alcance: AlcanceService,
@@ -315,15 +324,6 @@ export class SeguimientoService {
         ],
       },
     ]);
-    await this.auditar(
-      usuario.id,
-      soloPendientes ? 'exportar_pendientes' : 'exportar_tablero',
-      {
-        ...filtros,
-        idPeriodo: periodo?.id ?? null,
-        filas: filas.length,
-      },
-    );
     return {
       nombreArchivo: `${soloPendientes ? 'pendientes' : 'tablero'}-${nombreSeguro(periodo?.codigo ?? 'sin-periodo')}.xlsx`,
       contenido,
@@ -387,7 +387,7 @@ export class SeguimientoService {
             where: { id_proyecto_docente: { in: ids } },
             _count: { _all: true },
           }),
-      this.parametros.entero(PARAMETRO_UMBRAL_ALERTA),
+      this.parametros.leerEntero(PARAMETRO_UMBRAL_ALERTA, RANGO_UMBRAL_ALERTA),
     ]);
 
     const sesionesPor = agrupar(
@@ -454,34 +454,13 @@ export class SeguimientoService {
 
   /** RF-25, excepción de p5: por encima del máximo se piden filtros más estrechos. */
   async exigirTamanoExportable(filas: number): Promise<void> {
-    const maximo = await this.parametros.entero(PARAMETRO_EXPORTACION_MAXIMA);
+    const maximo = await this.parametros.leerEntero(
+      PARAMETRO_EXPORTACION_MAXIMA,
+      RANGO_EXPORTACION_MAXIMA,
+    );
     if (maximo !== null && filas > maximo) {
       throw new UnprocessableEntityException(
         mensajeExportacionGrande(filas, maximo),
-      );
-    }
-  }
-
-  /** Un fallo al auditar no impide la exportación (CLAUDE.md, «Auditoría»). */
-  private async auditar(
-    idUsuario: number,
-    accion: string,
-    valorNuevo: Prisma.InputJsonValue,
-  ): Promise<void> {
-    try {
-      await this.prisma.auditoria.create({
-        data: {
-          id_usuario: idUsuario,
-          accion,
-          tabla_afectada: 'proyecto_docente',
-          valor_nuevo: valorNuevo,
-          fecha: new Date(),
-        },
-      });
-    } catch (error) {
-      this.logger.error(
-        `No se pudo auditar «${accion}».`,
-        error instanceof Error ? error.stack : String(error),
       );
     }
   }

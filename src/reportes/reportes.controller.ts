@@ -10,6 +10,7 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { AuditarConsulta } from '../auditoria/auditar-consulta.decorator.js';
 import { Roles } from '../auth/decoradores/roles.decorator.js';
 import { UsuarioActual } from '../auth/decoradores/usuario-actual.decorator.js';
 import { ROL } from '../auth/roles.js';
@@ -56,6 +57,7 @@ export class ReportesController {
 
   @Get()
   @Roles(ROL.administrador, ROL.departamento, ROL.direccion, ROL.liderRap)
+  @AuditarConsulta('programa')
   @ApiOperation({
     summary: 'Reporte de logro de los RAP del programa (RF-32, HU-11-08)',
     description:
@@ -82,6 +84,7 @@ export class ReportesController {
 
   @Get('excel')
   @Roles(ROL.administrador, ROL.departamento, ROL.direccion, ROL.liderRap)
+  @AuditarConsulta('programa')
   @ApiOperation({
     summary: 'Exporta el reporte de logro a Excel (RF-32, p5)',
     description:

@@ -3,10 +3,10 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
-  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/client';
+import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
@@ -194,12 +194,11 @@ type MedicionEnEdicion = Prisma.medicion_rapGetPayload<{
  */
 @Injectable()
 export class MedicionesService {
-  private readonly logger = new Logger(MedicionesService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly alcance: AlcanceService,
     private readonly consolidados: ConsolidadoService,
+    private readonly auditoria: AuditoriaService,
   ) {}
 
   /**
@@ -406,23 +405,31 @@ export class MedicionesService {
       throw error;
     }
 
-    await this.auditar(usuario.id, 'iniciar_medicion', idMedicion, {
-      idProyecto: proyecto.id,
-      idRap: datos.idRap,
-      idRubrica: rubrica.id,
-      tipoValoracion: datos.tipoValoracion,
-      periodoToma: datos.periodoToma,
-      anioToma: datos.anioToma,
+    await this.auditoria.registrar({
+      accion: 'crear',
+      tablaAfectada: 'medicion_rap',
+      idRegistro: idMedicion,
+      valorNuevo: {
+        idProyecto: proyecto.id,
+        idRap: datos.idRap,
+        idRubrica: rubrica.id,
+        tipoValoracion: datos.tipoValoracion,
+        periodoToma: datos.periodoToma,
+        anioToma: datos.anioToma,
+      },
     });
-    return this.detalle(usuario, idMedicion, false, { proyecto, acceso });
+    return this.detalle(usuario, idMedicion, { proyecto, acceso });
   }
 
-  /** Hoja de valoración de la medición. Consulta de datos personales: queda en auditoría. */
+  /**
+   * Hoja de valoración de la medición. Es una consulta de datos personales: la audita
+   * `@AuditarConsulta('medicion_rap')` en el controlador.
+   */
   obtener(
     usuario: UsuarioSesion,
     idMedicion: number,
   ): Promise<MedicionDetalleDto> {
-    return this.detalle(usuario, idMedicion, true);
+    return this.detalle(usuario, idMedicion);
   }
 
   /** HU-11-02: instrumento y descripción por indicador. Solo cambia los que se envían. */
@@ -466,13 +473,18 @@ export class MedicionesService {
       { timeout: TIEMPO_MAXIMO_GUARDADO_MS },
     );
 
-    await this.auditar(usuario.id, 'registrar_instrumentos', idMedicion, {
-      indicadores: indicadores.map(({ idIndicador, instrumento }) => ({
-        idIndicador,
-        instrumento,
-      })),
+    await this.auditoria.registrar({
+      accion: 'actualizar',
+      tablaAfectada: 'medicion_rap',
+      idRegistro: idMedicion,
+      valorNuevo: {
+        instrumentos: indicadores.map(({ idIndicador, instrumento }) => ({
+          idIndicador,
+          instrumento,
+        })),
+      },
     });
-    return this.detalle(usuario, idMedicion, false, contexto);
+    return this.detalle(usuario, idMedicion, contexto);
   }
 
   /**
@@ -586,13 +598,13 @@ export class MedicionesService {
       registradas: nuevas.length,
       borradas: valoraciones.length - nuevas.length,
     };
-    // Solo conteos: la auditoría no repite los niveles de cada estudiante.
-    await this.auditar(
-      usuario.id,
-      'registrar_valoraciones',
-      idMedicion,
-      resultado,
-    );
+    // Solo conteos: la auditoría no repite los niveles de cada estudiante (Ley 1581).
+    await this.auditoria.registrar({
+      accion: 'actualizar',
+      tablaAfectada: 'medicion_rap',
+      idRegistro: idMedicion,
+      valorNuevo: { valoraciones: resultado },
+    });
     return resultado;
   }
 
@@ -653,10 +665,14 @@ export class MedicionesService {
         data: { ...cambios, updated_at: new Date() },
       });
     });
-    await this.auditar(usuario.id, 'registrar_analisis', idMedicion, {
-      campos: Object.keys(cambios),
+    // Solo los campos del análisis que se enviaron, con su texto nuevo.
+    await this.auditoria.registrar({
+      accion: 'actualizar',
+      tablaAfectada: 'medicion_rap',
+      idRegistro: idMedicion,
+      valorNuevo: cambios as Prisma.InputJsonValue,
     });
-    return this.detalle(usuario, idMedicion, false, { proyecto, acceso });
+    return this.detalle(usuario, idMedicion, { proyecto, acceso });
   }
 
   /**
@@ -727,11 +743,18 @@ export class MedicionesService {
       return consolidado;
     });
 
-    await this.auditar(usuario.id, 'cerrar_medicion', idMedicion, {
-      porcentajeCumplimiento: resultado.porcentajeCumplimiento,
-      porcentajeEsperado: resultado.porcentajeEsperado,
+    await this.auditoria.registrar({
+      accion: 'actualizar',
+      tablaAfectada: 'medicion_rap',
+      idRegistro: idMedicion,
+      valorAnterior: { estado: ESTADO_MEDICION.borrador },
+      valorNuevo: {
+        estado: ESTADO_MEDICION.cerrada,
+        porcentajeCumplimiento: resultado.porcentajeCumplimiento,
+        porcentajeEsperado: resultado.porcentajeEsperado,
+      },
     });
-    return this.detalle(usuario, idMedicion, false, { proyecto, acceso });
+    return this.detalle(usuario, idMedicion, { proyecto, acceso });
   }
 
   /** RF-30, excepción de p7: solo el departamento académico del programa la reabre. */
@@ -760,17 +783,17 @@ export class MedicionesService {
       });
       return filas[0];
     });
-    await this.auditar(
-      usuario.id,
-      'reabrir_medicion',
-      idMedicion,
-      { estado: ESTADO_MEDICION.borrador },
-      {
+    await this.auditoria.registrar({
+      accion: 'actualizar',
+      tablaAfectada: 'medicion_rap',
+      idRegistro: idMedicion,
+      valorAnterior: {
         estado: ESTADO_MEDICION.cerrada,
         idCerradoPor: anterior.id_cerrado_por,
       },
-    );
-    return this.detalle(usuario, idMedicion, false, { proyecto, acceso });
+      valorNuevo: { estado: ESTADO_MEDICION.borrador },
+    });
+    return this.detalle(usuario, idMedicion, { proyecto, acceso });
   }
 
   // ---------------------------------------------------------------------------------------
@@ -784,7 +807,6 @@ export class MedicionesService {
   private async detalle(
     usuario: UsuarioSesion,
     idMedicion: number,
-    auditarConsulta: boolean,
     contexto?: ProyectoConAcceso,
   ): Promise<MedicionDetalleDto> {
     const { medicion, proyecto, acceso } = contexto
@@ -820,11 +842,6 @@ export class MedicionesService {
 
     if (!escala) {
       throw new ConflictException(MENSAJE_SIN_ESCALA);
-    }
-    if (auditarConsulta) {
-      await this.auditar(usuario.id, 'consultar_medicion', medicion.id, {
-        idProyecto: proyecto.id,
-      });
     }
 
     const estado = aEstado(medicion.estado);
@@ -1193,37 +1210,6 @@ export class MedicionesService {
       escala.umbral_cumplimiento !== null
       ? escala
       : null;
-  }
-
-  /**
-   * Registra la acción en `auditoria` (RF-29). Un fallo al auditar no deshace la operación:
-   * queda en el registro técnico y la operación sigue (CLAUDE.md, «Auditoría»).
-   */
-  private async auditar(
-    idUsuario: number,
-    accion: string,
-    idMedicion: number,
-    valorNuevo: Prisma.InputJsonValue,
-    valorAnterior?: Prisma.InputJsonValue,
-  ): Promise<void> {
-    try {
-      await this.prisma.auditoria.create({
-        data: {
-          id_usuario: idUsuario,
-          accion,
-          tabla_afectada: 'medicion_rap',
-          id_registro: idMedicion,
-          valor_anterior: valorAnterior,
-          valor_nuevo: valorNuevo,
-          fecha: new Date(),
-        },
-      });
-    } catch (error) {
-      this.logger.error(
-        `No se pudo auditar «${accion}» de la medición ${idMedicion}.`,
-        error instanceof Error ? error.stack : String(error),
-      );
-    }
   }
 }
 

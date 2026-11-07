@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
@@ -68,6 +69,7 @@ export class ReportesAcademicosService {
     private readonly alcance: AlcanceService,
     private readonly seguimiento: SeguimientoService,
     private readonly reportes: ReportesService,
+    private readonly auditoria: AuditoriaService,
   ) {}
 
   /** HU-12-03: proyectos, estados y diligenciamiento del período. */
@@ -481,7 +483,8 @@ export class ReportesAcademicosService {
 
   /**
    * RF-28, p6: registra la generación del reporte, con el usuario y la fecha, en
-   * `reporte_academico` y en la auditoría. Un fallo al registrar no impide entregar el reporte.
+   * `reporte_academico`, y la creación de esa fila en la auditoría (AuditoriaService, con la IP).
+   * Un fallo al registrar no impide entregar el reporte.
    */
   private async registrar(
     idUsuario: number,
@@ -494,6 +497,7 @@ export class ReportesAcademicosService {
       fecha: Date;
     },
   ): Promise<void> {
+    let idReporte: number;
     try {
       const reporte = await this.prisma.reporte_academico.create({
         data: {
@@ -507,22 +511,21 @@ export class ReportesAcademicosService {
         },
         select: { id: true },
       });
-      await this.prisma.auditoria.create({
-        data: {
-          id_usuario: idUsuario,
-          accion: 'generar_reporte',
-          tabla_afectada: 'reporte_academico',
-          id_registro: reporte.id,
-          valor_nuevo: { tipo: datos.tipo, parametros: datos.parametros },
-          fecha: datos.fecha,
-        },
-      });
+      idReporte = reporte.id;
     } catch (error) {
       this.logger.error(
         `No se pudo registrar la generación del reporte «${datos.tipo}».`,
         error instanceof Error ? error.stack : String(error),
       );
+      return;
     }
+    // Después de confirmar la fila; AuditoriaService nunca lanza (RF-29, excepción de p3).
+    await this.auditoria.registrar({
+      accion: 'crear',
+      tablaAfectada: 'reporte_academico',
+      idRegistro: idReporte,
+      valorNuevo: { tipo: datos.tipo, parametros: datos.parametros },
+    });
   }
 }
 

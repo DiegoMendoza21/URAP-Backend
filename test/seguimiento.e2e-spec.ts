@@ -482,6 +482,15 @@ describe('Tablero de seguimiento (e2e) · RF-25, HU-12-01 y HU-12-02', () => {
       .expect(200);
     expect(libro.headers['content-type']).toContain('spreadsheetml');
     expect((libro.body as Buffer).subarray(0, 2).toString()).toBe('PK');
+    // La exportación queda en auditoría con el usuario y la IP (RF-29).
+    const auditada = await prisma.auditoria.findFirst({
+      where: {
+        id_usuario: usuarios.departamento,
+        accion: 'consulta_sensible',
+        tabla_afectada: 'proyecto_docente',
+      },
+    });
+    expect(auditada?.ip).toBeTruthy();
 
     const actual = await prisma.parametro_sistema.findUnique({
       where: { clave: PARAMETRO_EXPORTACION_MAXIMA },
