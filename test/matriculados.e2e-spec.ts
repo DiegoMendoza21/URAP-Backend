@@ -303,18 +303,47 @@ describe('Estudiantes matriculados (e2e) · RF-22, HU-09-01', () => {
           Math.floor(antes / 1000) * 1000,
         );
       }
+      // RF-29: con AuditoriaService, la fila lleva usuario e IP y solo los conteos.
       const auditoria = await prisma.auditoria.findFirst({
         where: {
           id_usuario: usuarios.administrador,
-          accion: 'cargar_lista',
+          accion: 'actualizar',
+          tabla_afectada: 'matricula',
           id_registro: idProyecto,
         },
       });
-      expect(auditoria?.valor_nuevo).toMatchObject({ nuevos: 3 });
+      expect(auditoria?.valor_nuevo).toEqual({
+        matriculados: 3,
+        nuevos: 3,
+        reincorporados: 0,
+        retirados: 0,
+        actualizados: 0,
+      });
+      expect(auditoria?.ip).toBeTruthy();
     });
 
     it('el docente asignado ve la lista ordenada por apellidos', async () => {
+      const antes = await prisma.auditoria.count({
+        where: {
+          id_usuario: usuarios.docenteAsignado,
+          accion: 'consulta_sensible',
+          tabla_afectada: 'matricula',
+          id_registro: idProyecto,
+        },
+      });
       const { body } = await consultar('docenteAsignado').expect(200);
+      // Ley 1581: cada consulta de la lista queda en auditoría (@AuditarConsulta).
+      expect(
+        await prisma.auditoria.count({
+          where: {
+            id_usuario: usuarios.docenteAsignado,
+            accion: 'consulta_sensible',
+            tabla_afectada: 'matricula',
+            id_registro: idProyecto,
+            ip: { not: null },
+          },
+        }),
+      ).toBe(antes + 1);
       expect(body).toMatchObject({
         total: 3,
         totalMatriculados: 3,
