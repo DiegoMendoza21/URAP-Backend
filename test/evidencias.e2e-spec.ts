@@ -678,6 +678,27 @@ describe('Evidencias (e2e) · RF-24, HU-10-01', () => {
       ).toBe(1);
     });
 
+    it('si el archivo ya no está, responde 404 sin dejar la versión en caché', async () => {
+      const fila = await prisma.evidencia_rap.findUniqueOrThrow({
+        where: { id: idEvidenciaRap1 },
+      });
+      const rutaArchivo = path.join(carpeta, ...(fila.url ?? '').split('/'));
+      const original = await readFile(rutaArchivo);
+      await rm(rutaArchivo);
+      try {
+        const respuesta = await http()
+          .get(ruta(proyecto, `/${idEvidenciaRap1}/archivo`))
+          .set('Authorization', autorizar('docente'))
+          .expect(404);
+        // Express puede poner el ETag del cuerpo JSON, nunca el de la versión de la foto.
+        expect(respuesta.headers.etag ?? '').not.toContain('evidencia-');
+        expect(respuesta.headers['cache-control']).toBe('no-store');
+        expect(respuesta.headers['content-disposition']).toBeUndefined();
+      } finally {
+        await almacenamiento.guardar(fila.url ?? '', original);
+      }
+    });
+
     it('el Departamento y la Dirección consultan la galería', async () => {
       for (const quien of ['departamento', 'direccion']) {
         const { body } = await http()

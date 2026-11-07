@@ -38,6 +38,7 @@ import { UsuarioActual } from '../auth/decoradores/usuario-actual.decorator.js';
 import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import { RespuestaErrorDto } from '../common/dto/respuesta-error.dto.js';
+import type { ArchivoAbierto } from './almacenamiento/almacenamiento-documental.js';
 import { ArchivosEvidenciaInterceptor } from './archivos-evidencia.interceptor.js';
 import {
   CargarEvidenciasDto,
@@ -229,21 +230,30 @@ export class EvidenciasController {
     respuesta.set({
       'Cache-Control': 'private, no-cache',
       ETag: `"evidencia-${evidencia.id}-${evidencia.tamanoBytes}"`,
-      'X-Content-Type-Options': 'nosniff',
-      'Content-Disposition': disposicionEnLinea(evidencia.nombreOriginal),
     });
     if (peticion.fresh) {
       respuesta.status(304).end();
       return;
     }
 
-    const contenido = await this.evidencias.abrirArchivo(usuario, evidencia);
+    let archivo: ArchivoAbierto;
+    try {
+      archivo = await this.evidencias.abrirArchivo(usuario, evidencia);
+    } catch (error) {
+      // El error no puede quedar en caché con la versión de la foto: el navegador lo
+      // revalidaría con un 304 y seguiría mostrándolo aunque el archivo vuelva a estar.
+      respuesta.removeHeader('ETag');
+      respuesta.set('Cache-Control', 'no-store');
+      throw error;
+    }
     respuesta.status(200).set({
       'Content-Type': evidencia.tipo,
-      'Content-Length': String(evidencia.tamanoBytes),
+      'Content-Length': String(archivo.tamanoBytes),
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Disposition': disposicionEnLinea(evidencia.nombreOriginal),
     });
     try {
-      await pipeline(contenido, respuesta);
+      await pipeline(archivo.contenido, respuesta);
     } catch (error) {
       // El navegador cerró la conexión a mitad de la descarga: no hay a quién responder.
       this.logger.warn(

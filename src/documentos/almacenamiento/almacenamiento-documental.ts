@@ -15,10 +15,17 @@ export interface AlmacenamientoDocumental {
    * vienen del usuario.
    */
   guardar(clave: string, contenido: Buffer): Promise<void>;
-  /** Abre el archivo para leerlo. Lanza `ArchivoNoEncontrado` si no existe. */
-  abrir(clave: string): Promise<Readable>;
+  /**
+   * Abre el archivo para leerlo, con su tamaño real. Lanza `ArchivoNoEncontrado` si no existe.
+   */
+  abrir(clave: string): Promise<ArchivoAbierto>;
   /** Elimina el archivo. No falla si ya no existe. */
   eliminar(clave: string): Promise<void>;
+}
+
+export interface ArchivoAbierto {
+  contenido: Readable;
+  tamanoBytes: number;
 }
 
 /** Token de inyección del adaptador de almacenamiento. */

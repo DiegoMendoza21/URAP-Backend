@@ -9,20 +9,13 @@ import {
 import type { Request, Response } from 'express';
 import multer, { MulterError } from 'multer';
 import type { Observable } from 'rxjs';
+import type { PeticionAutenticada } from '../auth/autenticacion.guard.js';
 import {
   PARAMETRO,
   ParametrosService,
 } from '../common/parametros/parametros.service.js';
-
-/** Campo del formulario multipart que trae los archivos. */
-export const CAMPO_ARCHIVOS = 'archivos';
-
-/**
- * Archivos por cada carga. No es un dato de negocio sino un tope técnico: los archivos se
- * reciben en memoria antes de validarlos, y RF-24 espera de dos a diez evidencias por RAP en
- * todo el período. Para cargar más, se repite la carga.
- */
-export const MAXIMO_ARCHIVOS_POR_CARGA = 5;
+import { EvidenciasService } from './evidencias.service.js';
+import { CAMPO_ARCHIVOS, MAXIMO_ARCHIVOS_POR_CARGA } from './limites-carga.js';
 
 /** Campos de texto del formulario: idRap, descripcion, fecha e idSesion, con holgura. */
 const MAXIMO_CAMPOS = 10;
@@ -43,20 +36,31 @@ export function mensajeTamanoExcedido(tamanoMaximoMb: number): string {
  * petición, para que el parámetro se pueda cambiar sin desplegar. Si un archivo lo supera,
  * multer deja de leer y la carga completa se rechaza con el límite en el mensaje (p4).
  *
- * El tipo de cada archivo no se valida aquí, sino en el servicio, con su contenido.
+ * Antes de recibir nada comprueba que el usuario pueda cargar en el proyecto: así nadie hace
+ * que el servidor guarde en memoria archivos para un proyecto ajeno. El tipo de cada archivo no
+ * se valida aquí, sino en el servicio, con su contenido.
  */
 @Injectable()
 export class ArchivosEvidenciaInterceptor implements NestInterceptor {
-  constructor(private readonly parametros: ParametrosService) {}
+  constructor(
+    private readonly parametros: ParametrosService,
+    private readonly evidencias: EvidenciasService,
+  ) {}
 
   async intercept(
     contexto: ExecutionContext,
     siguiente: CallHandler,
   ): Promise<Observable<unknown>> {
+    const http = contexto.switchToHttp();
+    const peticion = http.getRequest<PeticionAutenticada>();
+    const idProyecto = Number(peticion.params.id);
+    // Un id que no es un número lo rechaza después ParseIntPipe.
+    if (Number.isInteger(idProyecto) && idProyecto > 0) {
+      await this.evidencias.exigirPermisoDeCarga(peticion.usuario, idProyecto);
+    }
     const tamanoMaximoMb = await this.parametros.enteroPositivo(
       PARAMETRO.archivoTamanoMaximoMb,
     );
-    const http = contexto.switchToHttp();
     const recibir = multer({
       storage: multer.memoryStorage(),
       // Los navegadores envían el nombre del archivo en UTF-8: «fotografía.jpg» llega bien.

@@ -2,9 +2,9 @@ import { randomUUID } from 'node:crypto';
 import { constants, createReadStream } from 'node:fs';
 import { access, mkdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { Readable } from 'node:stream';
 import {
   type AlmacenamientoDocumental,
+  type ArchivoAbierto,
   ArchivoNoEncontrado,
 } from './almacenamiento-documental.js';
 
@@ -47,17 +47,18 @@ export class AlmacenamientoLocal implements AlmacenamientoDocumental {
     }
   }
 
-  async abrir(clave: string): Promise<Readable> {
+  async abrir(clave: string): Promise<ArchivoAbierto> {
     const origen = this.ruta(clave);
+    let tamanoBytes: number;
     try {
-      await stat(origen);
+      tamanoBytes = (await stat(origen)).size;
     } catch (error) {
       if (esNoExiste(error)) {
         throw new ArchivoNoEncontrado(clave);
       }
       throw error;
     }
-    return createReadStream(origen);
+    return { contenido: createReadStream(origen), tamanoBytes };
   }
 
   async eliminar(clave: string): Promise<void> {

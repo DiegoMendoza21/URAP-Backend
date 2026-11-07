@@ -11,7 +11,6 @@ import {
   UnsupportedMediaTypeException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import type { Readable } from 'node:stream';
 import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import {
@@ -28,9 +27,10 @@ import {
 import {
   ALMACENAMIENTO_DOCUMENTAL,
   type AlmacenamientoDocumental,
+  type ArchivoAbierto,
   ArchivoNoEncontrado,
 } from './almacenamiento/almacenamiento-documental.js';
-import { MAXIMO_ARCHIVOS_POR_CARGA } from './archivos-evidencia.interceptor.js';
+import { MAXIMO_ARCHIVOS_POR_CARGA } from './limites-carga.js';
 import type { CargarEvidenciasDto } from './dto/cargar-evidencias.dto.js';
 import type { ConsultarEvidenciasDto } from './dto/consultar-evidencias.dto.js';
 import type {
@@ -252,16 +252,7 @@ export class EvidenciasService {
     datos: CargarEvidenciasDto,
     archivos: readonly Express.Multer.File[],
   ): Promise<CargaEvidenciasDto> {
-    const acceso = await this.acceso(usuario, idProyecto);
-    if (!acceso.esDocenteDelProyecto) {
-      throw new ForbiddenException(MENSAJE_SOLO_DOCENTES_DEL_PROYECTO);
-    }
-    if (acceso.periodoCerrado) {
-      throw new ConflictException(MENSAJE_PERIODO_CERRADO);
-    }
-    if (acceso.raps.length === 0) {
-      throw new ConflictException(MENSAJE_PROYECTO_SIN_RAP);
-    }
+    const acceso = await this.exigirPermisoDeCarga(usuario, idProyecto);
     if (!acceso.raps.some((rap) => rap.id === datos.idRap)) {
       throw new BadRequestException(MENSAJE_RAP_AJENO);
     }
@@ -367,6 +358,28 @@ export class EvidenciasService {
     return { evidencias: creadas.map(aEvidencia) };
   }
 
+  /**
+   * Que el usuario pueda cargar en el proyecto: lo ve (si no, 404), es uno de sus docentes, el
+   * período no está cerrado y el proyecto tiene RAP. El interceptor lo comprueba antes de
+   * recibir los archivos y `cargar` lo vuelve a comprobar.
+   */
+  async exigirPermisoDeCarga(
+    usuario: UsuarioSesion,
+    idProyecto: number,
+  ): Promise<Acceso> {
+    const acceso = await this.acceso(usuario, idProyecto);
+    if (!acceso.esDocenteDelProyecto) {
+      throw new ForbiddenException(MENSAJE_SOLO_DOCENTES_DEL_PROYECTO);
+    }
+    if (acceso.periodoCerrado) {
+      throw new ConflictException(MENSAJE_PERIODO_CERRADO);
+    }
+    if (acceso.raps.length === 0) {
+      throw new ConflictException(MENSAJE_PROYECTO_SIN_RAP);
+    }
+    return acceso;
+  }
+
   /** Evidencia que el usuario puede descargar. No abre el archivo ni audita. */
   async evidenciaParaDescarga(
     usuario: UsuarioSesion,
@@ -407,10 +420,10 @@ export class EvidenciasService {
   async abrirArchivo(
     usuario: UsuarioSesion,
     evidencia: ArchivoEvidencia,
-  ): Promise<Readable> {
-    let contenido: Readable;
+  ): Promise<ArchivoAbierto> {
+    let archivo: ArchivoAbierto;
     try {
-      contenido = await this.almacenamiento.abrir(evidencia.clave);
+      archivo = await this.almacenamiento.abrir(evidencia.clave);
     } catch (error) {
       if (error instanceof ArchivoNoEncontrado) {
         this.logger.error(
@@ -425,7 +438,7 @@ export class EvidenciasService {
       throw new ServiceUnavailableException(MENSAJE_FALLA_LECTURA);
     }
     await this.auditar(usuario.id, 'consultar', evidencia.id);
-    return contenido;
+    return archivo;
   }
 
   /**

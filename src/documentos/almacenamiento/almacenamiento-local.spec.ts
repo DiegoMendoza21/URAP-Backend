@@ -29,7 +29,9 @@ describe('AlmacenamientoLocal', () => {
         'utf8',
       ),
     ).toBe('contenido');
-    expect(await text(await almacenamiento.abrir(clave))).toBe('contenido');
+    const abierto = await almacenamiento.abrir(clave);
+    expect(abierto.tamanoBytes).toBe('contenido'.length);
+    expect(await text(abierto.contenido)).toBe('contenido');
 
     await almacenamiento.eliminar(clave);
     await expect(almacenamiento.abrir(clave)).rejects.toBeInstanceOf(

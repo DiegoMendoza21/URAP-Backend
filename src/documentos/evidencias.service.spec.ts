@@ -468,7 +468,7 @@ describe('EvidenciasService', () => {
 
     it('abre el archivo y audita la consulta', async () => {
       const contenido = Readable.from(['x']);
-      almacenamiento.abrir.mockResolvedValue(contenido);
+      almacenamiento.abrir.mockResolvedValue({ contenido, tamanoBytes: 9 });
 
       await expect(
         servicio.abrirArchivo(docente, {
@@ -478,7 +478,7 @@ describe('EvidenciasService', () => {
           tipo: 'image/png',
           tamanoBytes: 9,
         }),
-      ).resolves.toBe(contenido);
+      ).resolves.toEqual({ contenido, tamanoBytes: 9 });
       expect(prisma.auditoria.create.mock.calls[0][0].data).toMatchObject({
         accion: 'consultar',
         tabla_afectada: 'evidencia_rap',
