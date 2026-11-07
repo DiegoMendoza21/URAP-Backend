@@ -21,9 +21,8 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { Roles } from '../auth/decoradores/roles.decorator.js';
+import { Permiso } from '../auth/decoradores/permiso.decorator.js';
 import { UsuarioActual } from '../auth/decoradores/usuario-actual.decorator.js';
-import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import { RespuestaErrorDto } from '../common/dto/respuesta-error.dto.js';
 import { ConsultarCalendarioDto } from './dto/consultas.dto.js';
@@ -57,13 +56,7 @@ export class SesionesController {
   constructor(private readonly sesiones: SesionesService) {}
 
   @Get('horario')
-  @Roles(
-    ROL.administrador,
-    ROL.departamento,
-    ROL.direccion,
-    ROL.liderRap,
-    ROL.docente,
-  )
+  @Permiso('clases', 'leer')
   @ApiOperation({
     summary: 'Días y horas de clase del curso (HU-08-02)',
     description: 'Lo consultan quienes ven el proyecto docente.',
@@ -82,7 +75,7 @@ export class SesionesController {
   }
 
   @Put('horario')
-  @Roles(ROL.docente, ROL.administrador)
+  @Permiso('clases', 'actualizar')
   @ApiOperation({
     summary: 'Define los días y horas de clase del curso (HU-08-02)',
     description:
@@ -110,13 +103,7 @@ export class SesionesController {
   }
 
   @Get('calendario')
-  @Roles(
-    ROL.administrador,
-    ROL.departamento,
-    ROL.direccion,
-    ROL.liderRap,
-    ROL.docente,
-  )
+  @Permiso('clases', 'leer')
   @ApiOperation({
     summary: 'Calendario de sesiones del curso (RF-19, p5)',
     description:
@@ -143,7 +130,7 @@ export class SesionesController {
 
   @Post('calendario')
   @HttpCode(HttpStatus.OK)
-  @Roles(ROL.docente, ROL.administrador)
+  @Permiso('clases', 'actualizar')
   @ApiOperation({
     summary: 'Genera o recalcula el calendario de sesiones (HU-08-03)',
     description:

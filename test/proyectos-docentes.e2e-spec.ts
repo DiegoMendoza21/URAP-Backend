@@ -3,9 +3,16 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
 import { ContrasenasService } from '../src/auth/contrasenas.service.js';
-import { ROL } from '../src/auth/roles.js';
+import { type NombreRol, ROL } from '../src/auth/roles.js';
 import { PrismaService } from '../src/common/prisma/prisma.service.js';
 import { configurarAplicacion } from '../src/configurar-aplicacion.js';
+import {
+  asegurarCatalogoDePermisos,
+  asegurarPermisosDeRol,
+  borrarCatalogoDePrueba,
+  borrarMatrizDePrueba,
+  matrizDePrueba,
+} from './utilidades/permisos.js';
 
 // Requiere el .env configurado y la base local levantada (npm run db:levantar). Crea sus
 // propios datos ficticios (dos programas, asignaturas, RAP y usuarios) y los borra al terminar.
@@ -18,6 +25,7 @@ describe('Proyectos docentes (e2e) · RF-08, HU-05-01 a HU-05-03', () => {
   let prisma: PrismaService;
   let hash: string;
 
+  const matriz = matrizDePrueba();
   const creados = {
     roles: [] as number[],
     estados: [] as number[],
@@ -51,14 +59,17 @@ describe('Proyectos docentes (e2e) · RF-08, HU-05-01 a HU-05-03', () => {
         .send(cuerpo),
   });
 
+  /** El rol del sistema con sus permisos de la Tabla 17: la autorización los exige (HU-01-03). */
   async function rolPorNombre(nombre: string): Promise<number> {
     const existente = await prisma.rol.findUnique({ where: { nombre } });
-    if (existente) {
-      return existente.id;
+    const id =
+      existente?.id ??
+      (await prisma.rol.create({ data: { nombre, activo: true } })).id;
+    if (!existente) {
+      creados.roles.push(id);
     }
-    const rol = await prisma.rol.create({ data: { nombre, activo: true } });
-    creados.roles.push(rol.id);
-    return rol.id;
+    await asegurarPermisosDeRol(prisma, matriz, id, nombre as NombreRol);
+    return id;
   }
 
   async function crearUsuario(
@@ -133,6 +144,7 @@ describe('Proyectos docentes (e2e) · RF-08, HU-05-01 a HU-05-03', () => {
     configurarAplicacion(app);
     await app.init();
     prisma = app.get(PrismaService);
+    await asegurarCatalogoDePermisos(prisma, matriz);
     hash = await app.get(ContrasenasService).hashear(contrasena);
 
     if (
@@ -275,7 +287,9 @@ describe('Proyectos docentes (e2e) · RF-08, HU-05-01 a HU-05-03', () => {
       await prisma.estado_proyecto.deleteMany({
         where: { id: { in: creados.estados } },
       });
+      await borrarMatrizDePrueba(prisma, matriz);
       await prisma.rol.deleteMany({ where: { id: { in: creados.roles } } });
+      await borrarCatalogoDePrueba(prisma, matriz);
     }
     await app?.close();
   });
@@ -612,8 +626,19 @@ describe('Proyectos docentes (e2e) · RF-08, HU-05-01 a HU-05-03', () => {
       });
     });
 
-    it('el Estudiante no consulta la bandeja', async () => {
-      await como('estudiante').get('/proyectos-docentes').expect(403);
+    it('el Estudiante entra a la bandeja pero no ve proyectos: solo verá los publicados (RF-27)', async () => {
+      // Tabla 17: el Estudiante tiene «C publicados» en proyectos docentes (HU-01-03). La
+      // publicación todavía no existe, así que el alcance del servicio no le muestra ninguno.
+      const { body } = await como('estudiante')
+        .get('/proyectos-docentes')
+        .expect(200);
+      expect(body).toMatchObject({ total: 0, elementos: [] });
+    });
+
+    it('el Estudiante no abre la ficha de un proyecto (404, sin revelar que existe)', async () => {
+      await como('estudiante')
+        .get(`/proyectos-docentes/${creados.proyectos[0]}`)
+        .expect(404);
     });
 
     it('valida la paginación', async () => {
