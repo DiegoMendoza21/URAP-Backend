@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
+import type { AuditoriaService } from '../auditoria/auditoria.service.js';
 import type { ParametrosService } from '../common/parametros/parametros.service.js';
 import type { PrismaService } from '../common/prisma/prisma.service.js';
 import type { AlcanceService } from '../proyectos-docentes/alcance.service.js';
@@ -120,7 +121,6 @@ describe('SesionesService', () => {
     tipo_notificacion: { findUnique: vi.fn() },
     usuario: { findMany: vi.fn() },
     notificacion: { findMany: vi.fn(), createMany: vi.fn() },
-    auditoria: { create: vi.fn() },
     $transaction: vi.fn(
       (trabajo: (cliente: typeof tx) => unknown, _opciones?: unknown) =>
         trabajo(tx),
@@ -129,11 +129,13 @@ describe('SesionesService', () => {
   const alcance = { alcanzaPrograma: vi.fn() };
   const proyectos = { filtroVisibilidad: vi.fn() };
   const parametros = { leerEntero: vi.fn() };
+  const auditoria = { registrar: vi.fn() };
   const servicio = new SesionesService(
     prisma as unknown as PrismaService,
     alcance as unknown as AlcanceService,
     proyectos as unknown as ProyectosDocentesService,
     parametros as unknown as ParametrosService,
+    auditoria as unknown as AuditoriaService,
   );
 
   beforeEach(() => {
@@ -155,7 +157,7 @@ describe('SesionesService', () => {
         nombre: 'Festivo de prueba',
       },
     ]);
-    prisma.auditoria.create.mockResolvedValue({});
+    auditoria.registrar.mockResolvedValue(undefined);
     tx.sesion_clase.findMany.mockResolvedValue([]);
     tx.sesion_clase.count.mockResolvedValue(3);
     // El horario vigente que la generación lee después del bloqueo: solo lunes.
@@ -179,12 +181,15 @@ describe('SesionesService', () => {
         data.map((fila: { dia_semana: number }) => fila.dia_semana),
       ).toEqual([1, 3]);
       expect(data[0].hora_inicio).toEqual(aHoraColumna('07:00'));
-      expect(prisma.auditoria.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          accion: 'actualizar',
-          tabla_afectada: 'horario_curso',
-          id_registro: 99,
-        }),
+      // RF-29 con AuditoriaService: después de confirmar y solo con lo que cambió.
+      expect(auditoria.registrar).toHaveBeenCalledWith({
+        accion: 'actualizar',
+        tablaAfectada: 'proyecto_docente',
+        idRegistro: 99,
+        valorAnterior: {
+          horario: [{ diaSemana: 1, horaInicio: '07:00', horaFin: '09:00' }],
+        },
+        valorNuevo: { horario: expect.any(Array) },
       });
     });
 
@@ -479,6 +484,40 @@ describe('SesionesService', () => {
 
       expect(resultado.creadas).toBe(2);
       expect(resultado.advertencias).toEqual([mensajeSemanasDeMas(3, 2)]);
+    });
+
+    it('audita la generación con lo que cambió en el calendario', async () => {
+      await servicio.generarCalendario(docente, 99);
+
+      expect(auditoria.registrar).toHaveBeenCalledWith({
+        accion: 'actualizar',
+        tablaAfectada: 'proyecto_docente',
+        idRegistro: 99,
+        valorNuevo: {
+          calendario: { creadas: 3, actualizadas: 0, retiradas: 0 },
+        },
+      });
+    });
+
+    it('no audita si el calendario quedó igual', async () => {
+      tx.sesion_clase.findMany.mockResolvedValue([
+        sesion(1, '2026-08-03'),
+        sesion(2, '2026-08-10', {
+          semana: 2,
+          id_tipo_sesion: TIPO_FESTIVO.id,
+          id_dia_festivo: 50,
+        }),
+        sesion(3, '2026-08-17', { semana: 3 }),
+      ]);
+
+      const resultado = await servicio.generarCalendario(docente, 99);
+
+      expect(resultado).toMatchObject({
+        creadas: 0,
+        actualizadas: 0,
+        retiradas: 0,
+      });
+      expect(auditoria.registrar).not.toHaveBeenCalled();
     });
 
     it('exige el horario del curso (precondición)', async () => {

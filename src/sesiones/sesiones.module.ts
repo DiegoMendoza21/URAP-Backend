@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { ParametrosModule } from '../common/parametros/parametros.module.js';
 import { ProyectosDocentesModule } from '../proyectos-docentes/proyectos-docentes.module.js';
 import { PendientesController } from './pendientes.controller.js';
 import { SesionesController } from './sesiones.controller.js';
@@ -12,7 +11,7 @@ import { SesionesService } from './sesiones.service.js';
  * calendarios cuando cambie la tabla.
  */
 @Module({
-  imports: [ProyectosDocentesModule, ParametrosModule],
+  imports: [ProyectosDocentesModule],
   controllers: [SesionesController, PendientesController],
   providers: [SesionesService],
   exports: [SesionesService],

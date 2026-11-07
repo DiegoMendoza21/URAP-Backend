@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
+import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { ParametrosService } from '../common/parametros/parametros.service.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
@@ -151,6 +152,7 @@ export class SesionesService {
     private readonly alcance: AlcanceService,
     private readonly proyectos: ProyectosDocentesService,
     private readonly parametros: ParametrosService,
+    private readonly auditoria: AuditoriaService,
   ) {}
 
   async obtenerHorario(
@@ -203,15 +205,20 @@ export class SesionesService {
     });
 
     const nuevos = guardados.map(aBloque);
-    await this.auditar(usuario.id, {
-      accion: 'actualizar',
-      tabla_afectada: 'horario_curso',
-      id_registro: proyecto.id,
-      valor_anterior: proyecto.horario_curso.map(
-        aBloque,
-      ) as unknown as Prisma.InputJsonValue,
-      valor_nuevo: nuevos as unknown as Prisma.InputJsonValue,
-    });
+    // RF-29: después de confirmar y solo si el horario cambió; el usuario y la IP salen del
+    // contexto de la petición.
+    const anteriores = proyecto.horario_curso.map(aBloque);
+    if (JSON.stringify(anteriores) !== JSON.stringify(nuevos)) {
+      await this.auditoria.registrar({
+        accion: 'actualizar',
+        tablaAfectada: 'proyecto_docente',
+        idRegistro: proyecto.id,
+        valorAnterior: {
+          horario: anteriores,
+        } as unknown as Prisma.InputJsonValue,
+        valorNuevo: { horario: nuevos } as unknown as Prisma.InputJsonValue,
+      });
+    }
     return {
       idProyectoDocente: proyecto.id,
       bloques: nuevos,
@@ -620,12 +627,16 @@ export class SesionesService {
         mensajeSemanasDeMas(semanasEntreFechas, periodo.numero_semanas),
       );
     }
-    await this.auditar(usuario.id, {
-      accion: 'generar',
-      tabla_afectada: 'sesion_clase',
-      id_registro: proyecto.id,
-      valor_nuevo: { ...resultado, aniosSinFestivos },
-    });
+    // RF-29: después de confirmar y solo si el calendario cambió, con lo que cambió.
+    const { creadas, actualizadas, retiradas } = resultado;
+    if (creadas + actualizadas + retiradas > 0) {
+      await this.auditoria.registrar({
+        accion: 'actualizar',
+        tablaAfectada: 'proyecto_docente',
+        idRegistro: proyecto.id,
+        valorNuevo: { calendario: { creadas, actualizadas, retiradas } },
+      });
+    }
     if (aniosSinFestivos.length > 0) {
       await this.avisarAdministradores(aniosSinFestivos, proyecto.id);
     }
@@ -819,23 +830,6 @@ export class SesionesService {
     } catch (error) {
       this.logger.error(
         `No se pudo avisar a los administradores de los festivos faltantes (${anios.join(', ')}).`,
-        error instanceof Error ? error.stack : String(error),
-      );
-    }
-  }
-
-  /** RF-29. Un fallo al auditar no deshace la operación (CLAUDE.md, «Auditoría»). */
-  private async auditar(
-    idUsuario: number,
-    datos: Omit<Prisma.auditoriaUncheckedCreateInput, 'id_usuario' | 'fecha'>,
-  ): Promise<void> {
-    try {
-      await this.prisma.auditoria.create({
-        data: { ...datos, id_usuario: idUsuario, fecha: new Date() },
-      });
-    } catch (error) {
-      this.logger.error(
-        `No se pudo auditar «${datos.accion}» en ${datos.tabla_afectada} ${datos.id_registro}.`,
         error instanceof Error ? error.stack : String(error),
       );
     }
