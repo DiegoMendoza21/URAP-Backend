@@ -118,13 +118,14 @@ describe('Calendario de sesiones (e2e) · RF-19, HU-08-02 y HU-08-03', () => {
     inicio: string,
     fin: string,
     cerrado = false,
+    numeroSemanas: number | null = 4,
   ): Promise<number> {
     const periodo = await prisma.periodo_academico.create({
       data: {
         codigo: `E2E-${creados.periodos.length}-${sufijo}`,
         fecha_inicio: new Date(inicio),
         fecha_fin: new Date(fin),
-        numero_semanas: 4,
+        numero_semanas: numeroSemanas,
         activo: false,
         cerrado,
       },
@@ -388,6 +389,82 @@ describe('Calendario de sesiones (e2e) · RF-19, HU-08-02 y HU-08-03', () => {
 
       expect(respuesta.status).toBe(409);
       expect(respuesta.body.mensaje).toBe(MENSAJE_PERIODO_CERRADO);
+    });
+  });
+
+  describe('calendario con receso institucional (Acuerdo 46 de 2026)', () => {
+    // Período propio en 2033, con sus propios festivos, para no depender del seed: seis
+    // semanas calendario, un festivo de ley el lunes 8 de agosto y una semana de receso del 22
+    // al 27 de agosto (de lunes a sábado), con 5 semanas de clase.
+    let proyectoReceso: number;
+
+    beforeAll(async () => {
+      const periodo = await crearPeriodo('2033-08-01', '2033-09-10', false, 5);
+      const festivos = [
+        { fecha: '2033-08-08', nombre: 'Festivo de ley E2E', origen: 'ley' },
+        ...[22, 23, 24, 25, 26, 27].map((dia) => ({
+          fecha: `2033-08-${dia}`,
+          nombre: 'Receso E2E',
+          origen: 'institucional',
+        })),
+      ];
+      for (const festivo of festivos) {
+        const creado = await prisma.dia_festivo.create({
+          data: {
+            fecha: new Date(festivo.fecha),
+            nombre: festivo.nombre,
+            anio: 2033,
+            origen: festivo.origen,
+          },
+        });
+        creados.festivos.push(creado.id);
+      }
+      proyectoReceso = await crearProyecto(periodo, 'REC');
+      await como('docente')
+        .put(`/proyectos-docentes/${proyectoReceso}/horario`, {
+          bloques: [lunesYMiercoles.bloques[0]],
+        })
+        .expect(200);
+    });
+
+    it('no genera sesiones en el receso ni lo cuenta, y marca el festivo suelto', async () => {
+      const generar = await como('docente').post(
+        `/proyectos-docentes/${proyectoReceso}/calendario`,
+      );
+
+      expect(generar.status).toBe(200);
+      expect(generar.body).toMatchObject({
+        creadas: 5,
+        festivos: 1,
+        total: 5,
+        advertencias: [],
+      });
+      const calendario = await como('docente').get(
+        `/proyectos-docentes/${proyectoReceso}/calendario`,
+      );
+      const sesiones = calendario.body.elementos as Array<{
+        fecha: string;
+        semana: number;
+        tipo: { codigo: string } | null;
+        festivo: string | null;
+      }>;
+      expect(
+        sesiones.map((sesion) => [
+          sesion.fecha,
+          sesion.semana,
+          sesion.tipo?.codigo,
+        ]),
+      ).toEqual([
+        ['2033-08-01', 1, 'clase'],
+        ['2033-08-08', 2, 'festivo'],
+        ['2033-08-15', 3, 'clase'],
+        ['2033-08-29', 4, 'clase'],
+        ['2033-09-05', 5, 'clase'],
+      ]);
+      expect(sesiones[1].festivo).toBe('Festivo de ley E2E');
+      expect(calendario.body.recesos).toEqual([
+        { desde: '2033-08-22', hasta: '2033-08-27' },
+      ]);
     });
   });
 

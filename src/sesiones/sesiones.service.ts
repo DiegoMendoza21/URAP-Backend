@@ -22,8 +22,11 @@ import {
   aniosDe,
   aTextoFecha,
   aTextoHora,
+  lunesDe,
   NOMBRES_DIA_SEMANA,
   planificarSesiones,
+  sabadoDe,
+  semanasDeReceso,
 } from './calendario.js';
 import type { ConsultarCalendarioDto } from './dto/consultas.dto.js';
 import type { GuardarHorarioDto } from './dto/horario.dto.js';
@@ -199,6 +202,14 @@ export class SesionesService {
       this.puedeEditar(usuario, proyecto),
     ]);
     const periodo = proyecto.periodo_academico;
+    const recesos =
+      periodo?.fecha_inicio && periodo.fecha_fin
+        ? semanasDeReceso(
+            periodo.fecha_inicio,
+            periodo.fecha_fin,
+            await this.diasSinClase(periodo.fecha_inicio, periodo.fecha_fin),
+          )
+        : [];
     const advertencias =
       total > 0 && periodo?.fecha_inicio && periodo.fecha_fin
         ? (
@@ -229,6 +240,7 @@ export class SesionesService {
       },
       puedeEditar,
       advertencias,
+      recesos,
     };
   }
 
@@ -251,8 +263,11 @@ export class SesionesService {
     const fechaInicio = periodo.fecha_inicio;
     const fechaFin = periodo.fecha_fin;
     const [festivos, tipos] = await Promise.all([
+      // De lunes a sábado de las semanas que toca el período, para reconocer las de receso.
       this.prisma.dia_festivo.findMany({
-        where: { fecha: { gte: fechaInicio, lte: fechaFin } },
+        where: {
+          fecha: { gte: lunesDe(fechaInicio), lte: sabadoDe(fechaFin) },
+        },
       }),
       this.prisma.tipo_sesion.findMany({
         where: { codigo: { in: [TIPO_CLASE, TIPO_FESTIVO] } },
@@ -271,6 +286,7 @@ export class SesionesService {
         .filter((festivo) => festivo.fecha)
         .map((festivo) => [aTextoFecha(festivo.fecha as Date), festivo]),
     );
+    const diasSinClase = new Set(festivoPorFecha.keys());
     const tiposRecalculables = new Set([tipoClase.id, tipoFestivo.id]);
     /** RF-19, p4: el tipo y la marca de festivo que le tocan a una fecha. */
     const marcaDe = (fecha: string, idTipoActual: number | null) => {
@@ -308,6 +324,7 @@ export class SesionesService {
           fechaFin,
           numeroSemanas: periodo.numero_semanas,
           diasClase: dias,
+          diasSinClase,
         });
         const planPorFecha = new Map(
           plan.map((sesion) => [sesion.fecha, sesion]),
@@ -522,6 +539,23 @@ export class SesionesService {
     idProyecto: number,
   ): Promise<void> {
     await tx.$queryRaw`SELECT id FROM proyecto_docente WHERE id = ${idProyecto} FOR UPDATE`;
+  }
+
+  /**
+   * Fechas sin clase (`dia_festivo`, de ley o institucionales) de lunes a sábado en las semanas
+   * que toca el período: con ellas se reconocen las semanas de receso.
+   */
+  private async diasSinClase(inicio: Date, fin: Date): Promise<Set<string>> {
+    const festivos = await this.prisma.dia_festivo.findMany({
+      where: { fecha: { gte: lunesDe(inicio), lte: sabadoDe(fin) } },
+      select: { fecha: true },
+    });
+    return new Set(
+      festivos
+        .map((festivo) => festivo.fecha)
+        .filter((fecha): fecha is Date => fecha !== null)
+        .map(aTextoFecha),
+    );
   }
 
   /**

@@ -21,15 +21,17 @@ import {
   SesionesService,
 } from './sesiones.service.js';
 
-// Datos ficticios: nunca datos reales de personas en las pruebas.
-const docente: UsuarioSesion = {
+// Datos ficticios: nunca datos reales de personas en las pruebas. `idSesion` llega con
+// HU-01-04 (#6); con la aserción, el objeto sirve antes y después de integrarla.
+const docente = {
   id: 20,
   nombres: 'Docente',
   apellidos: 'De Prueba',
   correo: 'docente.prueba@urap.local',
   roles: [ROL.docente],
   jti: 'jti-20',
-};
+  idSesion: 20,
+} as UsuarioSesion;
 const departamento: UsuarioSesion = {
   ...docente,
   id: 1,
@@ -420,6 +422,39 @@ describe('SesionesService', () => {
       expect(
         data.map((fila: { dia_semana: number }) => fila.dia_semana),
       ).toEqual([2, 2, 2]);
+    });
+
+    it('salta la semana de receso y la siguiente toma su número (Acuerdo 46)', async () => {
+      // Del 10 al 15 de agosto, de lunes a sábado, todo en la tabla de festivos.
+      const receso = [10, 11, 12, 13, 14, 15].map((dia) => ({
+        id: 60 + dia,
+        fecha: aFechaColumna(`2026-08-${dia}`),
+        nombre: 'Receso de prueba',
+      }));
+      prisma.dia_festivo.findMany.mockResolvedValue(receso);
+
+      const resultado = await servicio.generarCalendario(docente, 99);
+
+      const { data } = tx.sesion_clase.createMany.mock.calls[0][0];
+      expect(
+        data.map((fila: { fecha: Date; semana: number }) => [
+          fila.fecha,
+          fila.semana,
+        ]),
+      ).toEqual([
+        [aFechaColumna('2026-08-03'), 1],
+        [aFechaColumna('2026-08-17'), 2],
+      ]);
+      expect(resultado.creadas).toBe(2);
+      // Los festivos se buscan de lunes a sábado de las semanas que toca el período.
+      expect(prisma.dia_festivo.findMany).toHaveBeenCalledWith({
+        where: {
+          fecha: {
+            gte: aFechaColumna('2026-08-03'),
+            lte: aFechaColumna('2026-08-22'),
+          },
+        },
+      });
     });
 
     it('exige el horario del curso (precondición)', async () => {
