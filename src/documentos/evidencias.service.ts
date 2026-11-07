@@ -11,6 +11,7 @@ import {
   UnsupportedMediaTypeException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import {
@@ -146,6 +147,7 @@ export class EvidenciasService {
     private readonly alcance: AlcanceService,
     private readonly proyectos: ProyectosDocentesService,
     private readonly parametros: ParametrosService,
+    private readonly auditoria: AuditoriaService,
     @Inject(ALMACENAMIENTO_DOCUMENTAL)
     private readonly almacenamiento: AlmacenamientoDocumental,
   ) {}
@@ -345,14 +347,19 @@ export class EvidenciasService {
     }
 
     for (const evidencia of creadas) {
-      await this.auditar(usuario.id, 'crear', evidencia.id, {
-        idProyectoDocente: idProyecto,
-        idRap: evidencia.id_rap,
-        idSesion: evidencia.id_sesion,
-        nombreOriginal: evidencia.nombre_original,
-        tipo: evidencia.tipo,
-        tamanoBytes: evidencia.tamano_bytes,
-        clave: evidencia.url,
+      await this.auditoria.registrar({
+        accion: 'crear',
+        tablaAfectada: 'evidencia_rap',
+        idRegistro: evidencia.id,
+        valorNuevo: {
+          idProyectoDocente: idProyecto,
+          idRap: evidencia.id_rap,
+          idSesion: evidencia.id_sesion,
+          nombreOriginal: evidencia.nombre_original,
+          tipo: evidencia.tipo,
+          tamanoBytes: evidencia.tamano_bytes,
+          clave: evidencia.url,
+        },
       });
     }
     return { evidencias: creadas.map(aEvidencia) };
@@ -414,8 +421,8 @@ export class EvidenciasService {
   }
 
   /**
-   * Abre el archivo de una evidencia ya autorizada por `evidenciaParaDescarga` y registra la
-   * consulta: son datos personales (NFR-020).
+   * Abre el archivo de una evidencia ya autorizada por `evidenciaParaDescarga`. La consulta la
+   * registra el controlador: son datos personales (NFR-020).
    */
   async abrirArchivo(
     usuario: UsuarioSesion,
@@ -437,7 +444,7 @@ export class EvidenciasService {
       );
       throw new ServiceUnavailableException(MENSAJE_FALLA_LECTURA);
     }
-    await this.auditar(usuario.id, 'consultar', evidencia.id);
+    // La descarga la audita @AuditarConsulta en el controlador, con usuario e IP (RF-29).
     return archivo;
   }
 
@@ -549,35 +556,6 @@ export class EvidenciasService {
           error instanceof Error ? error.stack : String(error),
         );
       }
-    }
-  }
-
-  /**
-   * Registra la acción en `auditoria` (RF-29). Un fallo al auditar no deshace la operación:
-   * queda en el registro técnico y la operación sigue (CLAUDE.md, «Auditoría»).
-   */
-  private async auditar(
-    idUsuario: number,
-    accion: 'crear' | 'consultar',
-    idEvidencia: number,
-    valorNuevo?: Prisma.InputJsonValue,
-  ): Promise<void> {
-    try {
-      await this.prisma.auditoria.create({
-        data: {
-          id_usuario: idUsuario,
-          accion,
-          tabla_afectada: 'evidencia_rap',
-          id_registro: idEvidencia,
-          valor_nuevo: valorNuevo,
-          fecha: new Date(),
-        },
-      });
-    } catch (error) {
-      this.logger.error(
-        `No se pudo auditar la acción «${accion}» sobre la evidencia ${idEvidencia}.`,
-        error instanceof Error ? error.stack : String(error),
-      );
     }
   }
 }

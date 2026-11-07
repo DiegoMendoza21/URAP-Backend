@@ -8,6 +8,7 @@ import {
   UnsupportedMediaTypeException,
 } from '@nestjs/common';
 import { Readable } from 'node:stream';
+import type { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import type { ParametrosService } from '../common/parametros/parametros.service.js';
@@ -52,6 +53,7 @@ function usuario(id: number, ...roles: string[]): UsuarioSesion {
     correo: `usuario${id}@urap.local`,
     roles,
     jti: `jti-${id}`,
+    idSesion: id,
   };
 }
 
@@ -93,7 +95,6 @@ describe('EvidenciasService', () => {
       findMany: vi.fn(),
       findFirst: vi.fn(),
     },
-    auditoria: { create: vi.fn() },
     $transaction: vi.fn((trabajo: (cliente: typeof tx) => unknown) =>
       trabajo(tx),
     ),
@@ -101,6 +102,7 @@ describe('EvidenciasService', () => {
   const proyectos = { filtroVisibilidad: vi.fn() };
   const alcance = { alcanzaPrograma: vi.fn() };
   const parametros = { enteroPositivo: vi.fn(), lista: vi.fn() };
+  const auditoria = { registrar: vi.fn() };
   const almacenamiento = {
     guardar: vi.fn(),
     abrir: vi.fn(),
@@ -111,6 +113,7 @@ describe('EvidenciasService', () => {
     alcance as unknown as AlcanceService,
     proyectos as unknown as ProyectosDocentesService,
     parametros as unknown as ParametrosService,
+    auditoria as unknown as AuditoriaService,
     almacenamiento as unknown as AlmacenamientoDocumental,
   );
 
@@ -144,7 +147,7 @@ describe('EvidenciasService', () => {
     prisma.evidencia_rap.groupBy.mockResolvedValue([]);
     prisma.evidencia_rap.count.mockResolvedValue(0);
     prisma.evidencia_rap.findMany.mockResolvedValue([]);
-    prisma.auditoria.create.mockResolvedValue({});
+    auditoria.registrar.mockResolvedValue(undefined);
     almacenamiento.guardar.mockResolvedValue(undefined);
     almacenamiento.eliminar.mockResolvedValue(undefined);
     let siguienteId = 500;
@@ -192,11 +195,12 @@ describe('EvidenciasService', () => {
         'image/png',
         'application/pdf',
       ]);
-      expect(prisma.auditoria.create).toHaveBeenCalledTimes(2);
-      expect(prisma.auditoria.create.mock.calls[0][0].data).toMatchObject({
+      // RF-29: AuditoriaService toma el usuario y la IP del contexto de la petición.
+      expect(auditoria.registrar).toHaveBeenCalledTimes(2);
+      expect(auditoria.registrar.mock.calls[0][0]).toMatchObject({
         accion: 'crear',
-        tabla_afectada: 'evidencia_rap',
-        id_usuario: docente.id,
+        tablaAfectada: 'evidencia_rap',
+        idRegistro: resultado.evidencias[0].id,
       });
     });
 
@@ -334,11 +338,12 @@ describe('EvidenciasService', () => {
       ).toEqual(almacenamiento.guardar.mock.calls.map(([clave]) => clave));
     });
 
-    it('un fallo al auditar no deshace la carga', async () => {
-      prisma.auditoria.create.mockRejectedValue(new Error('auditoría caída'));
+    it('audita después de confirmar: una carga que falla no deja auditoría', async () => {
+      prisma.$transaction.mockRejectedValueOnce(new Error('sin base'));
       await expect(
         servicio.cargar(docente, ID_PROYECTO, datos(), [archivo('a.png', PNG)]),
-      ).resolves.toMatchObject({ evidencias: [{ nombreOriginal: 'a.png' }] });
+      ).rejects.toThrow('sin base');
+      expect(auditoria.registrar).not.toHaveBeenCalled();
     });
   });
 
@@ -479,11 +484,8 @@ describe('EvidenciasService', () => {
           tamanoBytes: 9,
         }),
       ).resolves.toEqual({ contenido, tamanoBytes: 9 });
-      expect(prisma.auditoria.create.mock.calls[0][0].data).toMatchObject({
-        accion: 'consultar',
-        tabla_afectada: 'evidencia_rap',
-        id_registro: 500,
-      });
+      // La descarga la audita @AuditarConsulta en el controlador, con la IP.
+      expect(auditoria.registrar).not.toHaveBeenCalled();
     });
 
     it.each([
@@ -506,7 +508,7 @@ describe('EvidenciasService', () => {
           tamanoBytes: 9,
         }),
       ).rejects.toThrow(esperado);
-      expect(prisma.auditoria.create).not.toHaveBeenCalled();
+      expect(auditoria.registrar).not.toHaveBeenCalled();
     });
   });
 
