@@ -38,8 +38,9 @@ import { RacService } from './rac.service.js';
     ContenidosService,
     BibliografiaService,
   ],
-  // El calendario de sesiones (RF-19) y las evidencias (RF-24) reutilizan la visibilidad y el
-  // alcance del proyecto.
-  exports: [AlcanceService, ProyectosDocentesService],
+  // La lista de matriculados (EstudiantesModule) usa el mismo alcance por programa, el
+  // calendario de sesiones (RF-19) y las evidencias (RF-24) la visibilidad del proyecto, y el
+  // tablero (RF-25) el resumen de diligenciamiento.
+  exports: [AlcanceService, ProyectosDocentesService, DiligenciamientoService],
 })
 export class ProyectosDocentesModule {}

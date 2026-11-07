@@ -225,6 +225,13 @@ export const PARAMETROS = [
     descripcion:
       'Extensiones permitidas para las evidencias fotográficas de los RAP, separadas por coma (RF-24). Por validar.',
   },
+  {
+    clave: 'reporte_exportacion_filas_maxima',
+    valor: '5000',
+    tipo_dato: 'entero',
+    descripcion:
+      'Filas máximas de una exportación del tablero o de los reportes; por encima se pide restringir los filtros (RF-25, excepción de p5). Valor propuesto, por validar.',
+  },
 ];
 
 /**
