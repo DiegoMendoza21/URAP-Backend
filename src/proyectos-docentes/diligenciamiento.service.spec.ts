@@ -9,7 +9,10 @@ import {
   LONGITUD_DESCRIPCION_RESPALDO,
   mensajeDescripcionLarga,
 } from './diligenciamiento.service.js';
-import { GuardarDescripcionDto } from './dto/diligenciamiento.dto.js';
+import {
+  DESCRIPCION_TOPE_TECNICO,
+  GuardarDescripcionDto,
+} from './dto/diligenciamiento.dto.js';
 import type { EdicionProyectoService } from './edicion-proyecto.service.js';
 
 // Datos ficticios: nunca datos reales de personas en las pruebas.
@@ -114,6 +117,12 @@ describe('DiligenciamientoService', () => {
       });
       expect(respuesta.texto).toBeNull();
     });
+  });
+
+  it('no promete más que el tope técnico del DTO', async () => {
+    expect(await crear('999999').servicio.longitudMaxima()).toBe(
+      DESCRIPCION_TOPE_TECNICO,
+    );
   });
 
   it('usa el valor de respaldo si el parámetro falta o es inválido', async () => {

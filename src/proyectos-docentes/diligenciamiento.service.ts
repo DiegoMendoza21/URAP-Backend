@@ -1,10 +1,11 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
-import type {
-  DescripcionDto,
-  DiligenciamientoDto,
-  GuardarDescripcionDto,
+import {
+  DESCRIPCION_TOPE_TECNICO,
+  type DescripcionDto,
+  type DiligenciamientoDto,
+  type GuardarDescripcionDto,
 } from './dto/diligenciamiento.dto.js';
 import { EdicionProyectoService } from './edicion-proyecto.service.js';
 import { type DatosCompletitud, SECCIONES } from './entities/secciones.js';
@@ -152,7 +153,8 @@ export class DiligenciamientoService {
     });
     const valor = Number(parametro?.valor);
     if (Number.isInteger(valor) && valor > 0) {
-      return valor;
+      // El DTO no deja pasar más que el tope técnico: un parámetro mayor no puede prometerlo.
+      return Math.min(valor, DESCRIPCION_TOPE_TECNICO);
     }
     this.logger.warn(
       `El parámetro «${PARAMETRO_LONGITUD_DESCRIPCION}» falta o no es un entero positivo; ` +
