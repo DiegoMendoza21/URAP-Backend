@@ -313,6 +313,9 @@ describe('Diligenciamiento del proyecto docente (e2e) · RF-11, RF-12, HU-06-01 
         },
       });
       expect(auditoria).not.toBeNull();
+      // RF-29: con AuditoriaService la fila lleva la IP y solo el campo que cambió.
+      expect(auditoria?.ip).toBeTruthy();
+      expect(auditoria?.valor_nuevo).toEqual({ descripcion: texto });
     });
 
     it('cualquier docente asignado puede diligenciarlo, no solo el responsable', async () => {

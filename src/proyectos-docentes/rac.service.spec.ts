@@ -27,6 +27,7 @@ const docente: UsuarioSesion = {
   correo: 'docente.prueba@urap.local',
   roles: [ROL.docente],
   jti: 'jti-20',
+  idSesion: 1,
 };
 
 const rap = (id: number) => ({
@@ -208,6 +209,41 @@ describe('RacService', () => {
         where: { id_rac: 50 },
       });
       expect(tx.rac.update).toHaveBeenCalled();
+    });
+
+    it('audita solo los campos del RAC que cambian (RF-29)', async () => {
+      const { servicio, tx, auditorias } = crear();
+      tx.rac.findFirst
+        .mockResolvedValueOnce(racGuardado) // racDelProyecto
+        .mockResolvedValueOnce(null); // código repetido
+      tx.rac.update.mockResolvedValue({
+        ...racGuardado,
+        descripcion: 'Enunciado corregido',
+      });
+      await servicio.actualizar(
+        docente,
+        7,
+        50,
+        datos({ enunciado: 'Enunciado corregido' }),
+      );
+      expect(auditorias).toEqual([
+        {
+          accion: 'actualizar',
+          tabla: 'rac',
+          idRegistro: 50,
+          anterior: { enunciado: 'Enunciado' },
+          nuevo: { enunciado: 'Enunciado corregido' },
+        },
+      ]);
+    });
+
+    it('guardar el RAC sin cambios no se audita', async () => {
+      const { servicio, tx, auditorias } = crear();
+      tx.rac.findFirst
+        .mockResolvedValueOnce(racGuardado)
+        .mockResolvedValueOnce(null);
+      await servicio.actualizar(docente, 7, 50, datos());
+      expect(auditorias).toEqual([null]);
     });
 
     it('responde 404 si el RAC no es de este proyecto', async () => {
