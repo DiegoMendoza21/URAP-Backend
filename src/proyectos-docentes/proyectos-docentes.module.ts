@@ -28,5 +28,7 @@ import { RacService } from './rac.service.js';
     DiligenciamientoService,
     RacService,
   ],
+  // El calendario de sesiones (RF-19) reutiliza la visibilidad y el alcance del proyecto.
+  exports: [AlcanceService, ProyectosDocentesService],
 })
 export class ProyectosDocentesModule {}
