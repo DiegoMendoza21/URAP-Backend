@@ -46,8 +46,13 @@ export const MENSAJE_SOLO_QUIEN_REGISTRA =
   'Solo un docente asignado al proyecto o el administrador registran la clase.';
 export const MENSAJE_PERIODO_CERRADO_REGISTRO =
   'El período académico está cerrado: ya no se registran clases.';
+/**
+ * RF-20, precondición (decisión de la coordinación, opción A): la regla se aplica como está
+ * escrita. Si la aprobación (RF-18) no está integrada para la demo, se relaja cambiando
+ * `ESTADOS_QUE_PERMITEN_REGISTRO`.
+ */
 export const MENSAJE_PROYECTO_NO_APROBADO =
-  'Las clases se registran cuando el proyecto docente está aprobado o en ejecución.';
+  'Podrá registrar clases cuando el Departamento apruebe el proyecto docente.';
 export const MENSAJE_FECHA_FUTURA =
   'No se puede registrar una sesión de una fecha futura: regístrela el día de la clase o después.';
 export const MENSAJE_SIN_CONTENIDO =
