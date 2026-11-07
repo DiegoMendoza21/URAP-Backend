@@ -4,7 +4,6 @@ import {
   ALMACENAMIENTO_DIRECTORIO_DESARROLLO,
   type VariablesEntorno,
 } from '../common/configuracion/variables-entorno.js';
-import { ParametrosModule } from '../common/parametros/parametros.module.js';
 import { ProyectosDocentesModule } from '../proyectos-docentes/proyectos-docentes.module.js';
 import { ALMACENAMIENTO_DOCUMENTAL } from './almacenamiento/almacenamiento-documental.js';
 import { AlmacenamientoLocal } from './almacenamiento/almacenamiento-local.js';
@@ -18,7 +17,8 @@ import { EvidenciasService } from './evidencias.service.js';
  * adaptador de `AlmacenamientoDocumental`.
  */
 @Module({
-  imports: [ParametrosModule, ProyectosDocentesModule],
+  // ParametrosModule y AuditoriaModule son globales.
+  imports: [ProyectosDocentesModule],
   controllers: [EvidenciasController],
   providers: [
     EvidenciasService,
