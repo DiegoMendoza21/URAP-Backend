@@ -28,7 +28,8 @@ export interface PeticionAutenticada extends Request {
  * - una petición con un JWT válido cuya sesión siga vigente en la tabla `sesion` (NFR-003),
  *   hacia un endpoint que declaró quién puede usarlo (ver `acceso.decorator.ts`).
  *
- * La autorización por rol y permiso (HU-01-03) se apoya en `peticion.usuario.roles`.
+ * La autorización por permiso (HU-01-03, `@Permiso()`) se apoya en `peticion.usuario.permisos`,
+ * que este guard carga de la base en cada petición.
  */
 @Injectable()
 export class AutenticacionGuard implements CanActivate {

@@ -23,7 +23,13 @@ import {
 import type { IniciarSesionDto } from './dto/iniciar-sesion.dto.js';
 import type { SesionIniciadaDto } from './dto/sesion-iniciada.dto.js';
 import type { UsuarioAutenticadoDto } from './dto/usuario-autenticado.dto.js';
-import type { CargaToken, OrigenPeticion, UsuarioSesion } from './tipos.js';
+import { clavePermiso } from './permisos.js';
+import type {
+  Asignacion,
+  CargaToken,
+  OrigenPeticion,
+  UsuarioSesion,
+} from './tipos.js';
 
 export const MENSAJE_CREDENCIALES_INVALIDAS =
   'El correo o la contraseña no son correctos.';
@@ -55,7 +61,22 @@ const SELECCION_USUARIO = {
   activo: true,
   usuario_rol_usuario_rol_id_usuarioTousuario: {
     where: FILTRO_ROLES_VIGENTES,
-    select: { rol: { select: { nombre: true } } },
+    select: {
+      id_programa: true,
+      rol: {
+        select: {
+          nombre: true,
+          // HU-01-03: los permisos de la matriz (HU-02-06) llegan con la sesión. Se leen en cada
+          // petición, así que un cambio en la matriz rige desde la siguiente (RF-03, q1).
+          rol_permiso: {
+            select: {
+              modulo: { select: { codigo: true } },
+              permiso: { select: { codigo: true } },
+            },
+          },
+        },
+      },
+    },
   },
 } as const;
 
@@ -378,6 +399,7 @@ export class AuthService {
 
     return {
       ...aDto(sesion.usuario, nombresDeRoles(sesion.usuario)),
+      asignaciones: asignacionesDe(sesion.usuario),
       jti: carga.jti,
       idSesion: sesion.id,
     };
@@ -420,8 +442,8 @@ export class AuthService {
    * token: el frontend llama esto en cada recarga y no hace falta una segunda consulta.
    */
   obtenerUsuario(usuario: UsuarioSesion): UsuarioAutenticadoDto {
-    const { id, nombres, apellidos, correo, roles } = usuario;
-    return { id, nombres, apellidos, correo, roles };
+    const { id, nombres, apellidos, correo, roles, permisos } = usuario;
+    return { id, nombres, apellidos, correo, roles, permisos };
   }
 }
 
@@ -444,8 +466,41 @@ interface UsuarioConRoles {
   apellidos: string | null;
   email: string | null;
   usuario_rol_usuario_rol_id_usuarioTousuario: {
-    rol: { nombre: string | null } | null;
+    id_programa: number | null;
+    rol: {
+      nombre: string | null;
+      rol_permiso: {
+        modulo: { codigo: string | null } | null;
+        permiso: { codigo: string | null } | null;
+      }[];
+    } | null;
   }[];
+}
+
+/** Cada rol vigente con su programa (`null`: todos los programas), como lo decidió URAP-34. */
+function asignacionesDe(usuario: UsuarioConRoles): Asignacion[] {
+  return usuario.usuario_rol_usuario_rol_id_usuarioTousuario
+    .filter((asignacion) => Boolean(asignacion.rol?.nombre))
+    .map((asignacion) => ({
+      rol: asignacion.rol?.nombre ?? '',
+      idPrograma: asignacion.id_programa,
+    }));
+}
+
+/**
+ * HU-01-03: la unión de los permisos de todos los roles vigentes del usuario, como
+ * `modulo.permiso` y sin repetir. Un usuario con dos roles tiene los permisos de ambos.
+ */
+function permisosDe(usuario: UsuarioConRoles): string[] {
+  const permisos = usuario.usuario_rol_usuario_rol_id_usuarioTousuario.flatMap(
+    (asignacion) =>
+      (asignacion.rol?.rol_permiso ?? [])
+        .filter((fila) => fila.modulo?.codigo && fila.permiso?.codigo)
+        .map((fila) =>
+          clavePermiso(fila.modulo?.codigo ?? '', fila.permiso?.codigo ?? ''),
+        ),
+  );
+  return [...new Set(permisos)].sort();
 }
 
 /** Un usuario puede tener el mismo rol en varios programas: se listan sin repetir. */
@@ -466,6 +521,7 @@ function aDto(
     apellidos: usuario.apellidos,
     correo: usuario.email ?? '',
     roles,
+    permisos: permisosDe(usuario),
   };
 }
 

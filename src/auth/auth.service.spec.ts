@@ -31,7 +31,28 @@ const SECRETO = 'secreto-de-pruebas-con-al-menos-32-caracteres';
 const MINUTOS = 480;
 
 function roles(...nombres: string[]) {
-  return nombres.map((nombre) => ({ rol: { nombre } }));
+  return nombres.map((nombre) => ({
+    id_programa: null,
+    rol: { nombre, rol_permiso: [] },
+  }));
+}
+
+/** Un rol vigente con su programa y sus permisos de la matriz, como los trae la consulta. */
+function rolCon(
+  nombre: string,
+  idPrograma: number | null,
+  ...permisos: [string, string][]
+) {
+  return {
+    id_programa: idPrograma,
+    rol: {
+      nombre,
+      rol_permiso: permisos.map(([modulo, permiso]) => ({
+        modulo: { codigo: modulo },
+        permiso: { codigo: permiso },
+      })),
+    },
+  };
 }
 
 function usuarioFicticio(cambios: Record<string, unknown> = {}) {
@@ -54,6 +75,8 @@ function usuarioDeSesion(): UsuarioSesion {
     apellidos: 'De Prueba',
     correo: 'usuaria.prueba@unicartagena.edu.co',
     roles: ['Docente'],
+    asignaciones: [{ rol: 'Docente', idPrograma: 10 }],
+    permisos: ['proyectos.leer'],
     jti: 'jti-1',
     idSesion: 99,
   };
@@ -140,6 +163,7 @@ describe('AuthService', () => {
         apellidos: 'De Prueba',
         correo: 'usuaria.prueba@unicartagena.edu.co',
         roles: ['Docente', 'Líder RAP'],
+        permisos: [],
       });
       expect(Date.parse(resultado.expiraEn) - antes).toBeGreaterThanOrEqual(
         MINUTOS * 60_000 - 1000,
@@ -516,9 +540,50 @@ describe('AuthService', () => {
         apellidos: 'De Prueba',
         correo: 'usuaria.prueba@unicartagena.edu.co',
         roles: ['Docente', 'Líder RAP'],
+        asignaciones: [
+          { rol: 'Docente', idPrograma: null },
+          { rol: 'Líder RAP', idPrograma: null },
+        ],
+        permisos: [],
         jti: 'jti-1',
         idSesion: 99,
       });
+    });
+
+    it('carga la unión de los permisos de todos los roles y el programa de cada uno (HU-01-03)', async () => {
+      prisma.sesion.findUnique.mockResolvedValue(
+        sesionVigente({
+          usuario: usuarioFicticio({
+            usuario_rol_usuario_rol_id_usuarioTousuario: [
+              rolCon(
+                'Docente responsable',
+                10,
+                ['proyectos', 'leer'],
+                ['proyectos', 'actualizar'],
+              ),
+              rolCon(
+                'Líder RAP',
+                10,
+                ['proyectos', 'leer'],
+                ['reportes', 'leer'],
+              ),
+            ],
+          }),
+        }),
+      );
+
+      const usuario = await servicio.validarToken(await tokenDe(carga));
+
+      // Sin repetir el permiso que comparten los dos roles.
+      expect(usuario.permisos).toEqual([
+        'proyectos.actualizar',
+        'proyectos.leer',
+        'reportes.leer',
+      ]);
+      expect(usuario.asignaciones).toEqual([
+        { rol: 'Docente responsable', idPrograma: 10 },
+        { rol: 'Líder RAP', idPrograma: 10 },
+      ]);
     });
 
     it.each([
@@ -601,6 +666,7 @@ describe('AuthService', () => {
         apellidos: 'De Prueba',
         correo: 'usuaria.prueba@unicartagena.edu.co',
         roles: ['Docente'],
+        permisos: ['proyectos.leer'],
       });
       expect(prisma.usuario.findUnique).not.toHaveBeenCalled();
       expect(prisma.sesion.findUnique).not.toHaveBeenCalled();

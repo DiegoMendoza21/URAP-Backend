@@ -3,7 +3,7 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
 import { ContrasenasService } from '../src/auth/contrasenas.service.js';
-import { ROL } from '../src/auth/roles.js';
+import { type NombreRol, ROL } from '../src/auth/roles.js';
 import { PrismaService } from '../src/common/prisma/prisma.service.js';
 import { configurarAplicacion } from '../src/configurar-aplicacion.js';
 import {
@@ -19,6 +19,13 @@ import {
   mensajeSinFestivos,
   NOTIFICACION_FESTIVOS_FALTANTES,
 } from '../src/sesiones/sesiones.service.js';
+import {
+  asegurarCatalogoDePermisos,
+  asegurarPermisosDeRol,
+  borrarCatalogoDePrueba,
+  borrarMatrizDePrueba,
+  matrizDePrueba,
+} from './utilidades/permisos.js';
 
 // Requiere el .env configurado y la base local levantada (npm run db:levantar). Crea sus
 // propios datos ficticios y los borra al terminar. Funciona con o sin el seed: usa períodos
@@ -35,6 +42,7 @@ describe('Calendario de sesiones (e2e) · RF-19, HU-08-02 y HU-08-03', () => {
   let prisma: PrismaService;
   let hash: string;
 
+  const matriz = matrizDePrueba();
   const creados = {
     roles: [] as number[],
     tiposSesion: [] as number[],
@@ -81,14 +89,17 @@ describe('Calendario de sesiones (e2e) · RF-19, HU-08-02 y HU-08-03', () => {
     ],
   };
 
+  /** El rol del sistema con sus permisos de la Tabla 17: la autorización los exige (HU-01-03). */
   async function rolPorNombre(nombre: string): Promise<number> {
     const existente = await prisma.rol.findUnique({ where: { nombre } });
-    if (existente) {
-      return existente.id;
+    const id =
+      existente?.id ??
+      (await prisma.rol.create({ data: { nombre, activo: true } })).id;
+    if (!existente) {
+      creados.roles.push(id);
     }
-    const rol = await prisma.rol.create({ data: { nombre, activo: true } });
-    creados.roles.push(rol.id);
-    return rol.id;
+    await asegurarPermisosDeRol(prisma, matriz, id, nombre as NombreRol);
+    return id;
   }
 
   async function crearUsuario(
@@ -180,6 +191,7 @@ describe('Calendario de sesiones (e2e) · RF-19, HU-08-02 y HU-08-03', () => {
     configurarAplicacion(app);
     await app.init();
     prisma = app.get(PrismaService);
+    await asegurarCatalogoDePermisos(prisma, matriz);
     hash = await app.get(ContrasenasService).hashear(contrasena);
 
     for (const tipo of [
@@ -310,7 +322,9 @@ describe('Calendario de sesiones (e2e) · RF-19, HU-08-02 y HU-08-03', () => {
       await prisma.tipo_sesion.deleteMany({
         where: { id: { in: creados.tiposSesion } },
       });
+      await borrarMatrizDePrueba(prisma, matriz);
       await prisma.rol.deleteMany({ where: { id: { in: creados.roles } } });
+      await borrarCatalogoDePrueba(prisma, matriz);
     }
     await app?.close();
   });

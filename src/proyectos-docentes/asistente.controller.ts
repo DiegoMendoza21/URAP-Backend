@@ -8,9 +8,8 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { Roles } from '../auth/decoradores/roles.decorator.js';
+import { Permiso } from '../auth/decoradores/permiso.decorator.js';
 import { UsuarioActual } from '../auth/decoradores/usuario-actual.decorator.js';
-import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import { RespuestaErrorDto } from '../common/dto/respuesta-error.dto.js';
 import { AsistenteService } from './asistente.service.js';
@@ -39,7 +38,7 @@ const SIN_PERMISO = {
 @ApiUnauthorizedResponse(SIN_SESION)
 @ApiForbiddenResponse(SIN_PERMISO)
 @Controller('proyectos-docentes/asistente')
-@Roles(ROL.departamento)
+@Permiso('proyectos', 'crear')
 export class AsistenteController {
   constructor(private readonly asistente: AsistenteService) {}
 
