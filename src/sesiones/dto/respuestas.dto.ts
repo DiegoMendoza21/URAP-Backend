@@ -72,7 +72,7 @@ export class SesionCalendarioDto {
     example: 'programada',
     nullable: true,
     type: String,
-    description: 'programada | registrada (RF-20)',
+    description: 'programada | registrada (RF-20). Las retiradas no se listan.',
   })
   estado: string | null;
 
@@ -149,7 +149,7 @@ export class CalendarioSesionesDto {
 }
 
 export class ResultadoGeneracionDto {
-  @ApiProperty({ example: 48, description: 'Sesiones nuevas' })
+  @ApiProperty({ example: 48, description: 'Sesiones nuevas o reactivadas' })
   creadas: number;
 
   @ApiProperty({
@@ -162,13 +162,15 @@ export class ResultadoGeneracionDto {
   @ApiProperty({
     example: 0,
     description:
-      'Sesiones sin diligenciar que ya no caen en el horario: nunca tuvieron datos, se retiran',
+      'Sesiones sin diligenciar que ya no caen en el horario: se inactivan (estado «retirada») y ' +
+      'salen del calendario',
   })
   retiradas: number;
 
   @ApiProperty({
     example: 0,
-    description: 'Sesiones diligenciadas, que se dejan intactas',
+    description:
+      'Sesiones diligenciadas o con datos del docente, que se dejan intactas',
   })
   conservadas: number;
 

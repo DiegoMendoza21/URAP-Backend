@@ -227,8 +227,9 @@ export class ProyectosDocentesService {
    * Matriz de permisos (`URAP-34`): el Docente ve solo los proyectos donde está asignado
    * (`proyecto_docente_docente`); Departamento, Dirección y Líder RAP, los de su programa; el
    * Administrador, todos. Un usuario con varios roles ve la unión. Nulo: no ve ninguno.
+   * Lo usa también el calendario de sesiones (RF-19), con el mismo criterio.
    */
-  private async filtroVisibilidad(
+  async filtroVisibilidad(
     usuario: UsuarioSesion,
   ): Promise<Prisma.proyecto_docenteWhereInput | null> {
     const { global, programas } = await this.alcance.alcance(

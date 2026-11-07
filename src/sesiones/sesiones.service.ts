@@ -38,11 +38,21 @@ import type {
 /** Estados de `sesion_clase` (DBML). «Vencida» lo calcula RF-23; no se guarda aquí. */
 export const ESTADO_PROGRAMADA = 'programada';
 export const ESTADO_REGISTRADA = 'registrada';
+/**
+ * Sesión sin diligenciar que dejó de caer en el horario. Se inactiva, no se borra (borrado
+ * lógico, NFR-017), y vuelve a «programada» si el horario la incluye otra vez.
+ */
+export const ESTADO_RETIRADA = 'retirada';
 /** Códigos de `tipo_sesion` (RF-21) que maneja la generación. */
 export const TIPO_CLASE = 'clase';
 export const TIPO_FESTIVO = 'festivo';
 /** Tipo de notificación con que se avisa al administrador (RF-19, excepción p3). */
 export const NOTIFICACION_FESTIVOS_FALTANTES = 'festivos_no_parametrizados';
+/**
+ * Margen de la transacción de generación. Prisma corta a los 5 s por defecto, lo mismo que la
+ * meta de RF-19 (q1): con la base lejos (RDS) una recalculación grande podría abortarse.
+ */
+const TIEMPO_TRANSACCION_MS = 15_000;
 
 export const MENSAJE_SOLO_DOCENTE_ASIGNADO =
   'Solo un docente asignado al proyecto o el administrador pueden cambiar su horario y su calendario.';
@@ -68,6 +78,11 @@ export function mensajeSinSesiones(dias: readonly number[]): string {
   const nombres = dias.map((dia) => NOMBRES_DIA_SEMANA[dia]).join(', ');
   return `El horario (${nombres}) no produce ninguna sesión entre las fechas del período.`;
 }
+
+/** Sesiones que forman el calendario: todas menos las retiradas. */
+export const SESION_VIGENTE = {
+  OR: [{ estado: null }, { estado: { not: ESTADO_RETIRADA } }],
+} as const satisfies Prisma.sesion_claseWhereInput;
 
 const INCLUIR_PROYECTO = {
   asignatura: { select: { id_programa: true } },
@@ -122,6 +137,7 @@ export class SesionesService {
     ) {
       throw new BadRequestException(MENSAJE_DIA_REPETIDO);
     }
+    // Las horas llegan validadas como HH:mm: compararlas como texto es compararlas como horas.
     if (bloques.some((bloque) => bloque.horaInicio >= bloque.horaFin)) {
       throw new BadRequestException(MENSAJE_HORAS_INVERTIDAS);
     }
@@ -170,7 +186,7 @@ export class SesionesService {
     { pagina, tamano }: ConsultarCalendarioDto,
   ): Promise<CalendarioSesionesDto> {
     const proyecto = await this.proyectoVisible(usuario, idProyecto);
-    const donde = { id_proyecto_docente: proyecto.id };
+    const donde = { id_proyecto_docente: proyecto.id, ...SESION_VIGENTE };
     const [total, sesiones, puedeEditar] = await Promise.all([
       this.prisma.sesion_clase.count({ where: donde }),
       this.prisma.sesion_clase.findMany({
@@ -219,8 +235,9 @@ export class SesionesService {
   /**
    * HU-08-03 (RF-19, p1 a p4): genera el calendario a partir del período y del horario. Si
    * ya existe, lo recalcula: crea las sesiones que falten, actualiza la semana y el festivo de
-   * las que no se han diligenciado y retira las sin diligenciar que ya no caen en el horario.
-   * Las sesiones diligenciadas no se tocan (comentarios de RF-19).
+   * las que no se han diligenciado y retira (inactiva) las sin diligenciar que ya no caen en
+   * el horario. Las sesiones diligenciadas, o con cualquier dato del docente, no se tocan
+   * (comentarios de RF-19).
    */
   async generarCalendario(
     usuario: UsuarioSesion,
@@ -231,27 +248,15 @@ export class SesionesService {
     if (!periodo?.fecha_inicio || !periodo.fecha_fin) {
       throw new ConflictException(MENSAJE_PERIODO_SIN_FECHAS);
     }
-    const dias = proyecto.horario_curso
-      .map((bloque) => bloque.dia_semana)
-      .filter((dia): dia is number => dia !== null);
-    if (dias.length === 0) {
-      throw new ConflictException(MENSAJE_SIN_HORARIO);
-    }
-
-    const plan = planificarSesiones({
-      fechaInicio: periodo.fecha_inicio,
-      fechaFin: periodo.fecha_fin,
-      numeroSemanas: periodo.numero_semanas,
-      diasClase: dias,
-    });
-    const [festivos, tipos, aniosSinFestivos] = await Promise.all([
+    const fechaInicio = periodo.fecha_inicio;
+    const fechaFin = periodo.fecha_fin;
+    const [festivos, tipos] = await Promise.all([
       this.prisma.dia_festivo.findMany({
-        where: { fecha: { gte: periodo.fecha_inicio, lte: periodo.fecha_fin } },
+        where: { fecha: { gte: fechaInicio, lte: fechaFin } },
       }),
       this.prisma.tipo_sesion.findMany({
         where: { codigo: { in: [TIPO_CLASE, TIPO_FESTIVO] } },
       }),
-      this.aniosSinFestivos(aniosDe(plan)),
     ]);
     const tipoClase = tipos.find((tipo) => tipo.codigo === TIPO_CLASE);
     const tipoFestivo = tipos.find((tipo) => tipo.codigo === TIPO_FESTIVO);
@@ -267,119 +272,162 @@ export class SesionesService {
         .map((festivo) => [aTextoFecha(festivo.fecha as Date), festivo]),
     );
     const tiposRecalculables = new Set([tipoClase.id, tipoFestivo.id]);
+    /** RF-19, p4: el tipo y la marca de festivo que le tocan a una fecha. */
+    const marcaDe = (fecha: string, idTipoActual: number | null) => {
+      const festivo = festivoPorFecha.get(fecha) ?? null;
+      // Un tipo que eligió el docente (parcial, actividad) se respeta; solo se marca el festivo.
+      const recalculable =
+        idTipoActual === null || tiposRecalculables.has(idTipoActual);
+      return {
+        id_dia_festivo: festivo?.id ?? null,
+        id_tipo_sesion: recalculable
+          ? festivo
+            ? tipoFestivo.id
+            : tipoClase.id
+          : idTipoActual,
+      };
+    };
 
-    const resultado = await this.prisma.$transaction(async (tx) => {
-      // Dos generaciones a la vez (un doble clic) se atienden de a una.
-      await this.bloquearProyecto(tx, proyecto.id);
-      const existentes = await tx.sesion_clase.findMany({
-        where: { id_proyecto_docente: proyecto.id },
-        include: {
-          _count: {
-            select: {
-              sesion_tema: true,
-              inasistencia: true,
-              evidencia_rap: true,
+    const { plan, dias, ...resultado } = await this.prisma.$transaction(
+      async (tx) => {
+        // Dos generaciones a la vez (un doble clic), o una generación y un cambio de horario,
+        // se atienden de a una. El horario se lee después del bloqueo, para usar el vigente.
+        await this.bloquearProyecto(tx, proyecto.id);
+        const horario = await tx.horario_curso.findMany({
+          where: { id_proyecto_docente: proyecto.id },
+          select: { dia_semana: true },
+        });
+        const dias = horario
+          .map((bloque) => bloque.dia_semana)
+          .filter((dia): dia is number => dia !== null);
+        if (dias.length === 0) {
+          throw new ConflictException(MENSAJE_SIN_HORARIO);
+        }
+        const plan = planificarSesiones({
+          fechaInicio,
+          fechaFin,
+          numeroSemanas: periodo.numero_semanas,
+          diasClase: dias,
+        });
+        const planPorFecha = new Map(
+          plan.map((sesion) => [sesion.fecha, sesion]),
+        );
+
+        const existentes = await tx.sesion_clase.findMany({
+          where: { id_proyecto_docente: proyecto.id },
+          include: {
+            _count: {
+              select: {
+                sesion_tema: true,
+                inasistencia: true,
+                evidencia_rap: true,
+              },
             },
           },
-        },
-      });
-      const planPorFecha = new Map(
-        plan.map((sesion) => [sesion.fecha, sesion]),
-      );
-      const fechasExistentes = new Set<string>();
-      let actualizadas = 0;
-      let conservadas = 0;
-      const retirar: number[] = [];
+        });
+        const fechasExistentes = new Set<string>();
+        let reactivadas = 0;
+        let actualizadas = 0;
+        let conservadas = 0;
+        const retirar: number[] = [];
 
-      for (const sesion of existentes) {
-        const fecha = sesion.fecha ? aTextoFecha(sesion.fecha) : null;
-        if (fecha) {
-          fechasExistentes.add(fecha);
+        for (const sesion of existentes) {
+          const fecha = sesion.fecha ? aTextoFecha(sesion.fecha) : null;
+          if (fecha) {
+            // El índice único (proyecto, fecha) impide otra sesión en esa fecha.
+            fechasExistentes.add(fecha);
+          }
+          const planeada = fecha ? planPorFecha.get(fecha) : undefined;
+
+          if (sesion.estado === ESTADO_RETIRADA) {
+            if (planeada && fecha) {
+              await tx.sesion_clase.update({
+                where: { id: sesion.id },
+                data: {
+                  estado: ESTADO_PROGRAMADA,
+                  semana: planeada.semana,
+                  dia_semana: planeada.diaSemana,
+                  ...marcaDe(fecha, sesion.id_tipo_sesion),
+                },
+              });
+              reactivadas++;
+            }
+            continue;
+          }
+          if (!fecha || tieneDatosDelDocente(sesion)) {
+            conservadas++;
+            continue;
+          }
+          if (!planeada) {
+            retirar.push(sesion.id);
+            continue;
+          }
+          const cambios = {
+            semana: planeada.semana,
+            dia_semana: planeada.diaSemana,
+            ...marcaDe(fecha, sesion.id_tipo_sesion),
+          };
+          const igual =
+            sesion.semana === cambios.semana &&
+            sesion.dia_semana === cambios.dia_semana &&
+            sesion.id_dia_festivo === cambios.id_dia_festivo &&
+            sesion.id_tipo_sesion === cambios.id_tipo_sesion;
+          if (!igual) {
+            await tx.sesion_clase.update({
+              where: { id: sesion.id },
+              data: cambios,
+            });
+            actualizadas++;
+          }
         }
-        const conDatos =
-          sesion._count.sesion_tema +
-            sesion._count.inasistencia +
-            sesion._count.evidencia_rap >
-          0;
-        if (esDiligenciada(sesion) || conDatos || !fecha) {
-          conservadas++;
-          continue;
-        }
-        const planeada = planPorFecha.get(fecha);
-        if (!planeada) {
-          retirar.push(sesion.id);
-          continue;
-        }
-        const festivo = festivoPorFecha.get(fecha) ?? null;
-        const idTipo =
-          sesion.id_tipo_sesion === null ||
-          tiposRecalculables.has(sesion.id_tipo_sesion)
-            ? festivo
-              ? tipoFestivo.id
-              : tipoClase.id
-            : sesion.id_tipo_sesion;
-        const cambios = {
-          semana: planeada.semana,
-          dia_semana: planeada.diaSemana,
-          id_dia_festivo: festivo?.id ?? null,
-          id_tipo_sesion: idTipo,
-        };
-        const igual =
-          sesion.semana === cambios.semana &&
-          sesion.dia_semana === cambios.dia_semana &&
-          sesion.id_dia_festivo === cambios.id_dia_festivo &&
-          sesion.id_tipo_sesion === cambios.id_tipo_sesion;
-        if (!igual) {
-          await tx.sesion_clase.update({
-            where: { id: sesion.id },
-            data: cambios,
+
+        if (retirar.length > 0) {
+          // Borrado lógico (NFR-017): la sesión queda en la base, fuera del calendario.
+          await tx.sesion_clase.updateMany({
+            where: { id: { in: retirar } },
+            data: { estado: ESTADO_RETIRADA },
           });
-          actualizadas++;
         }
-      }
-
-      if (retirar.length > 0) {
-        // Solo sesiones que nunca tuvieron datos: no hay historia que conservar (NFR-017).
-        await tx.sesion_clase.deleteMany({ where: { id: { in: retirar } } });
-      }
-      const nuevas = plan.filter(
-        (sesion) => !fechasExistentes.has(sesion.fecha),
-      );
-      if (nuevas.length > 0) {
-        await tx.sesion_clase.createMany({
-          data: nuevas.map((sesion) => {
-            const festivo = festivoPorFecha.get(sesion.fecha) ?? null;
-            return {
+        const nuevas = plan.filter(
+          (sesion) => !fechasExistentes.has(sesion.fecha),
+        );
+        if (nuevas.length > 0) {
+          await tx.sesion_clase.createMany({
+            data: nuevas.map((sesion) => ({
               id_proyecto_docente: proyecto.id,
-              id_tipo_sesion: festivo ? tipoFestivo.id : tipoClase.id,
               semana: sesion.semana,
               fecha: aFechaColumna(sesion.fecha),
               dia_semana: sesion.diaSemana,
               estado: ESTADO_PROGRAMADA,
-              id_dia_festivo: festivo?.id ?? null,
-            };
+              ...marcaDe(sesion.fecha, null),
+            })),
+          });
+        }
+        const vigentes = {
+          id_proyecto_docente: proyecto.id,
+          ...SESION_VIGENTE,
+        };
+        const [total, marcadas] = await Promise.all([
+          tx.sesion_clase.count({ where: vigentes }),
+          tx.sesion_clase.count({
+            where: { ...vigentes, id_dia_festivo: { not: null } },
           }),
-        });
-      }
-      const [total, marcadas] = await Promise.all([
-        tx.sesion_clase.count({ where: { id_proyecto_docente: proyecto.id } }),
-        tx.sesion_clase.count({
-          where: {
-            id_proyecto_docente: proyecto.id,
-            id_dia_festivo: { not: null },
-          },
-        }),
-      ]);
-      return {
-        creadas: nuevas.length,
-        actualizadas,
-        retiradas: retirar.length,
-        conservadas,
-        festivos: marcadas,
-        total,
-      };
-    });
+        ]);
+        return {
+          plan,
+          dias,
+          creadas: nuevas.length + reactivadas,
+          actualizadas,
+          retiradas: retirar.length,
+          conservadas,
+          festivos: marcadas,
+          total,
+        };
+      },
+      { timeout: TIEMPO_TRANSACCION_MS },
+    );
 
+    const aniosSinFestivos = await this.aniosSinFestivos(aniosDe(plan));
     const advertencias = aniosSinFestivos.map(mensajeSinFestivos);
     if (plan.length === 0) {
       advertencias.push(mensajeSinSesiones(dias));
@@ -396,16 +444,21 @@ export class SesionesService {
     return { ...resultado, advertencias };
   }
 
-  /** Proyecto que el usuario puede ver; si no, 404 igual que la ficha del proyecto. */
+  /**
+   * Proyecto que el usuario puede ver, con el mismo filtro de la bandeja de proyectos (RF-08).
+   * Si no lo ve, 404, igual que si no existiera: no revela proyectos ajenos.
+   */
   private async proyectoVisible(
     usuario: UsuarioSesion,
     idProyecto: number,
   ): Promise<ProyectoConHorario> {
-    await this.proyectos.obtener(usuario, idProyecto);
-    const proyecto = await this.prisma.proyecto_docente.findUnique({
-      where: { id: idProyecto },
-      include: INCLUIR_PROYECTO,
-    });
+    const visibles = await this.proyectos.filtroVisibilidad(usuario);
+    const proyecto = visibles
+      ? await this.prisma.proyecto_docente.findFirst({
+          where: { AND: [{ id: idProyecto }, visibles] },
+          include: INCLUIR_PROYECTO,
+        })
+      : null;
     if (!proyecto) {
       throw new NotFoundException(MENSAJE_PROYECTO_NO_EXISTE);
     }
@@ -471,17 +524,26 @@ export class SesionesService {
     await tx.$queryRaw`SELECT id FROM proyecto_docente WHERE id = ${idProyecto} FOR UPDATE`;
   }
 
-  /** RF-19, p3: años del calendario sin ningún festivo en la tabla. */
+  /**
+   * RF-19, p3: años del calendario sin ningún festivo. Se mira la fecha, igual que al marcar,
+   * y no la columna `anio`, para que el aviso y las marcas no se contradigan.
+   */
   private async aniosSinFestivos(anios: number[]): Promise<number[]> {
     if (anios.length === 0) {
       return [];
     }
-    const conFestivos = await this.prisma.dia_festivo.findMany({
-      where: { anio: { in: anios } },
-      distinct: ['anio'],
-      select: { anio: true },
+    const festivos = await this.prisma.dia_festivo.findMany({
+      where: {
+        fecha: {
+          gte: aFechaColumna(`${Math.min(...anios)}-01-01`),
+          lte: aFechaColumna(`${Math.max(...anios)}-12-31`),
+        },
+      },
+      select: { fecha: true },
     });
-    const presentes = new Set(conFestivos.map((fila) => fila.anio));
+    const presentes = new Set(
+      festivos.map((festivo) => festivo.fecha?.getUTCFullYear()),
+    );
     return anios.filter((anio) => !presentes.has(anio));
   }
 
@@ -584,6 +646,29 @@ function esDiligenciada(sesion: {
     sesion.estado === ESTADO_REGISTRADA ||
     sesion.fecha_registro !== null ||
     sesion.id_registrado_por !== null
+  );
+}
+
+/**
+ * Una sesión con algo que puso el docente no se recalcula: diligenciada (RF-20), con
+ * descripción u observaciones (RF-21), o con temas, inasistencias o evidencias.
+ */
+function tieneDatosDelDocente(sesion: {
+  estado: string | null;
+  fecha_registro: Date | null;
+  id_registrado_por: number | null;
+  descripcion: string | null;
+  observaciones: string | null;
+  _count: { sesion_tema: number; inasistencia: number; evidencia_rap: number };
+}): boolean {
+  return (
+    esDiligenciada(sesion) ||
+    Boolean(sesion.descripcion?.trim()) ||
+    Boolean(sesion.observaciones?.trim()) ||
+    sesion._count.sesion_tema +
+      sesion._count.inasistencia +
+      sesion._count.evidencia_rap >
+      0
   );
 }
 

@@ -84,6 +84,8 @@ function sesion(
     id_dia_festivo: null,
     fecha_registro: null,
     id_registrado_por: null,
+    descripcion: null,
+    observaciones: null,
     _count: { sesion_tema: 0, inasistencia: 0, evidencia_rap: 0 },
     ...cambios,
   };
@@ -100,13 +102,13 @@ describe('SesionesService', () => {
     sesion_clase: {
       findMany: vi.fn(),
       update: vi.fn(),
-      deleteMany: vi.fn(),
+      updateMany: vi.fn(),
       createMany: vi.fn(),
       count: vi.fn(),
     },
   };
   const prisma = {
-    proyecto_docente: { findUnique: vi.fn() },
+    proyecto_docente: { findFirst: vi.fn() },
     proyecto_docente_docente: { findFirst: vi.fn() },
     dia_festivo: { findMany: vi.fn() },
     tipo_sesion: { findMany: vi.fn() },
@@ -114,12 +116,13 @@ describe('SesionesService', () => {
     usuario: { findMany: vi.fn() },
     notificacion: { findMany: vi.fn(), createMany: vi.fn() },
     auditoria: { create: vi.fn() },
-    $transaction: vi.fn((trabajo: (cliente: typeof tx) => unknown) =>
-      trabajo(tx),
+    $transaction: vi.fn(
+      (trabajo: (cliente: typeof tx) => unknown, _opciones?: unknown) =>
+        trabajo(tx),
     ),
   };
   const alcance = { alcanzaPrograma: vi.fn() };
-  const proyectos = { obtener: vi.fn() };
+  const proyectos = { filtroVisibilidad: vi.fn() };
   const servicio = new SesionesService(
     prisma as unknown as PrismaService,
     alcance as unknown as AlcanceService,
@@ -128,32 +131,26 @@ describe('SesionesService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    proyectos.obtener.mockResolvedValue({});
-    prisma.proyecto_docente.findUnique.mockResolvedValue(proyecto());
+    proyectos.filtroVisibilidad.mockResolvedValue({});
+    prisma.proyecto_docente.findFirst.mockResolvedValue(proyecto());
     prisma.proyecto_docente_docente.findFirst.mockResolvedValue({
       id_usuario: docente.id,
     });
     alcance.alcanzaPrograma.mockResolvedValue(false);
     prisma.tipo_sesion.findMany.mockResolvedValue([TIPO_CLASE, TIPO_FESTIVO]);
     // El 2026 tiene festivos; el 10 de agosto no lo es, pero se simula como tal.
-    prisma.dia_festivo.findMany.mockImplementation(
-      ({ distinct }: { distinct?: unknown }) =>
-        Promise.resolve(
-          distinct
-            ? [{ anio: 2026 }]
-            : [
-                {
-                  id: 50,
-                  fecha: aFechaColumna('2026-08-10'),
-                  nombre: 'Festivo de prueba',
-                },
-              ],
-        ),
-    );
+    prisma.dia_festivo.findMany.mockResolvedValue([
+      {
+        id: 50,
+        fecha: aFechaColumna('2026-08-10'),
+        nombre: 'Festivo de prueba',
+      },
+    ]);
     prisma.auditoria.create.mockResolvedValue({});
     tx.sesion_clase.findMany.mockResolvedValue([]);
     tx.sesion_clase.count.mockResolvedValue(3);
-    tx.horario_curso.findMany.mockResolvedValue([]);
+    // El horario vigente que la generación lee después del bloqueo: solo lunes.
+    tx.horario_curso.findMany.mockResolvedValue([{ dia_semana: 1 }]);
   });
 
   describe('guardarHorario (HU-08-02)', () => {
@@ -208,7 +205,7 @@ describe('SesionesService', () => {
     });
 
     it('responde 404 si el usuario no ve el proyecto', async () => {
-      proyectos.obtener.mockRejectedValue(new NotFoundException());
+      prisma.proyecto_docente.findFirst.mockResolvedValue(null);
 
       await expect(
         servicio.guardarHorario(docente, 99, { bloques }),
@@ -229,7 +226,7 @@ describe('SesionesService', () => {
     });
 
     it('no deja cambiar el horario con el período cerrado', async () => {
-      prisma.proyecto_docente.findUnique.mockResolvedValue(
+      prisma.proyecto_docente.findFirst.mockResolvedValue(
         proyecto({
           periodo_academico: { ...proyecto().periodo_academico, cerrado: true },
         }),
@@ -333,8 +330,10 @@ describe('SesionesService', () => {
 
       const resultado = await servicio.generarCalendario(docente, 99);
 
-      expect(tx.sesion_clase.deleteMany).toHaveBeenCalledWith({
+      // Borrado lógico: se inactiva, no se elimina.
+      expect(tx.sesion_clase.updateMany).toHaveBeenCalledWith({
         where: { id: { in: [2] } },
+        data: { estado: 'retirada' },
       });
       expect(tx.sesion_clase.update).toHaveBeenCalledTimes(1);
       expect(tx.sesion_clase.update).toHaveBeenCalledWith({
@@ -374,10 +373,57 @@ describe('SesionesService', () => {
       });
     });
 
+    it('conserva una sesión sin diligenciar que tiene descripción (RF-21)', async () => {
+      tx.sesion_clase.findMany.mockResolvedValue([
+        sesion(6, '2026-08-05', {
+          id_tipo_sesion: TIPO_FESTIVO.id,
+          descripcion: 'Jornada sin clase',
+        }),
+      ]);
+
+      const resultado = await servicio.generarCalendario(docente, 99);
+
+      expect(tx.sesion_clase.update).not.toHaveBeenCalled();
+      expect(tx.sesion_clase.updateMany).not.toHaveBeenCalled();
+      expect(resultado).toMatchObject({ conservadas: 1, retiradas: 0 });
+    });
+
+    it('reactiva una sesión retirada si vuelve a caer en el horario', async () => {
+      tx.sesion_clase.findMany.mockResolvedValue([
+        sesion(7, '2026-08-17', { estado: 'retirada', semana: 3 }),
+        // Retirada que sigue fuera del horario: no se cuenta ni se toca.
+        sesion(8, '2026-08-19', { estado: 'retirada', dia_semana: 3 }),
+      ]);
+
+      const resultado = await servicio.generarCalendario(docente, 99);
+
+      expect(tx.sesion_clase.update).toHaveBeenCalledTimes(1);
+      expect(tx.sesion_clase.update).toHaveBeenCalledWith({
+        where: { id: 7 },
+        data: expect.objectContaining({ estado: 'programada', semana: 3 }),
+      });
+      const { data } = tx.sesion_clase.createMany.mock.calls[0][0];
+      expect(data.map((fila: { fecha: Date }) => fila.fecha)).toEqual([
+        aFechaColumna('2026-08-03'),
+        aFechaColumna('2026-08-10'),
+      ]);
+      expect(resultado).toMatchObject({ creadas: 3, conservadas: 0 });
+    });
+
+    it('usa el horario vigente al momento del bloqueo', async () => {
+      // El proyecto se leyó con lunes, pero dentro del bloqueo el horario ya es el martes.
+      tx.horario_curso.findMany.mockResolvedValue([{ dia_semana: 2 }]);
+
+      await servicio.generarCalendario(docente, 99);
+
+      const { data } = tx.sesion_clase.createMany.mock.calls[0][0];
+      expect(
+        data.map((fila: { dia_semana: number }) => fila.dia_semana),
+      ).toEqual([2, 2, 2]);
+    });
+
     it('exige el horario del curso (precondición)', async () => {
-      prisma.proyecto_docente.findUnique.mockResolvedValue(
-        proyecto({ horario_curso: [] }),
-      );
+      tx.horario_curso.findMany.mockResolvedValue([]);
 
       await expect(servicio.generarCalendario(docente, 99)).rejects.toThrow(
         new ConflictException(MENSAJE_SIN_HORARIO),
@@ -385,7 +431,7 @@ describe('SesionesService', () => {
     });
 
     it('exige las fechas del período (precondición)', async () => {
-      prisma.proyecto_docente.findUnique.mockResolvedValue(
+      prisma.proyecto_docente.findFirst.mockResolvedValue(
         proyecto({
           periodo_academico: {
             ...proyecto().periodo_academico,

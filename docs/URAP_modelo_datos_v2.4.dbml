@@ -540,7 +540,8 @@ Table sesion_clase {
   semana integer
   fecha date
   dia_semana integer
-  estado varchar // programada | registrada | vencida (RF-23, calculado)
+  estado varchar // programada | registrada | vencida (RF-23, calculado) | retirada
+                 // (RF-19: sin diligenciar y fuera del horario; borrado logico)
   descripcion varchar // parcial o actividad complementaria (RF-21)
   observaciones text
   id_dia_festivo integer // marcado automatico por RF-19

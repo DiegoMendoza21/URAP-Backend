@@ -504,6 +504,12 @@ describe('Calendario de sesiones (e2e) · RF-19, HU-08-02 y HU-08-03', () => {
         where: { id: diligenciada.id },
       });
       expect(despues).toMatchObject({ estado: 'registrada', semana: 1 });
+      // Borrado lógico: los miércoles vacíos siguen en la base, inactivos.
+      expect(
+        await prisma.sesion_clase.count({
+          where: { id_proyecto_docente: proyecto, estado: 'retirada' },
+        }),
+      ).toBe(3);
     });
 
     it('el administrador también puede generarlo', async () => {
