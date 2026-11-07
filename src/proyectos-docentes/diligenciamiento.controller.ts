@@ -20,9 +20,8 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { Roles } from '../auth/decoradores/roles.decorator.js';
+import { Permiso } from '../auth/decoradores/permiso.decorator.js';
 import { UsuarioActual } from '../auth/decoradores/usuario-actual.decorator.js';
-import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import { RespuestaErrorDto } from '../common/dto/respuesta-error.dto.js';
 import { DiligenciamientoService } from './diligenciamiento.service.js';
@@ -35,22 +34,14 @@ import {
 } from './dto/diligenciamiento.dto.js';
 import { RacService } from './rac.service.js';
 
-/** Quienes consultan proyectos docentes (los mismos de la bandeja de RF-08). */
-export const ROLES_CONSULTA = [
-  ROL.administrador,
-  ROL.departamento,
-  ROL.direccion,
-  ROL.liderRap,
-  ROL.docente,
-] as const;
-
 export const NO_EXISTE = {
   type: RespuestaErrorDto,
   description: 'El proyecto no existe o el usuario no tiene acceso a él',
 };
 export const SIN_ROL_CONSULTA = {
   type: RespuestaErrorDto,
-  description: 'El usuario no tiene un rol que consulte proyectos docentes',
+  description:
+    'Ninguno de los roles del usuario tiene el permiso de consultar proyectos docentes',
 };
 export const SOLO_ASIGNADOS = {
   type: RespuestaErrorDto,
@@ -84,7 +75,7 @@ export class DiligenciamientoController {
   ) {}
 
   @Get('diligenciamiento')
-  @Roles(...ROLES_CONSULTA)
+  @Permiso('proyectos', 'leer')
   @ApiOperation({
     summary: 'Estado de las secciones del proyecto docente (HU-06-08)',
     description:
@@ -101,7 +92,7 @@ export class DiligenciamientoController {
   }
 
   @Get('descripcion')
-  @Roles(...ROLES_CONSULTA)
+  @Permiso('proyectos', 'leer')
   @ApiOperation({ summary: 'Punto 2 «Descripción» (RF-11)' })
   @ApiOkResponse({ type: DescripcionDto })
   @ApiForbiddenResponse(SIN_ROL_CONSULTA)
@@ -114,7 +105,7 @@ export class DiligenciamientoController {
   }
 
   @Put('descripcion')
-  @Roles(ROL.docente)
+  @Permiso('proyectos', 'actualizar')
   @ApiOperation({
     summary: 'Guarda el punto 2 «Descripción» (RF-11, HU-06-01)',
     description:
@@ -138,7 +129,7 @@ export class DiligenciamientoController {
   }
 
   @Get('rac')
-  @Roles(...ROLES_CONSULTA)
+  @Permiso('proyectos', 'leer')
   @ApiOperation({
     summary: 'Punto 3: RAC del curso agrupados por RAP (RF-12)',
     description:
@@ -156,7 +147,7 @@ export class DiligenciamientoController {
   }
 
   @Post('rac')
-  @Roles(ROL.docente)
+  @Permiso('proyectos', 'actualizar')
   @ApiOperation({
     summary: 'Registra un RAC asociado a uno o varios RAP (HU-06-02, HU-06-03)',
     description: 'Devuelve la sección completa ya actualizada.',
@@ -183,7 +174,7 @@ export class DiligenciamientoController {
   }
 
   @Put('rac/:idRac')
-  @Roles(ROL.docente)
+  @Permiso('proyectos', 'actualizar')
   @ApiOperation({
     summary: 'Actualiza un RAC y reemplaza sus RAP asociados',
     description: 'Devuelve la sección completa ya actualizada.',
@@ -212,7 +203,7 @@ export class DiligenciamientoController {
   }
 
   @Delete('rac/:idRac')
-  @Roles(ROL.docente)
+  @Permiso('proyectos', 'actualizar')
   @ApiOperation({
     summary: 'Elimina un RAC del proyecto en diligenciamiento',
     description: 'Devuelve la sección completa ya actualizada.',

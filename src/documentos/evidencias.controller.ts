@@ -34,9 +34,8 @@ import {
 import type { Request, Response } from 'express';
 import { pipeline } from 'node:stream/promises';
 import { AuditarConsulta } from '../auditoria/auditar-consulta.decorator.js';
-import { Roles } from '../auth/decoradores/roles.decorator.js';
+import { Permiso } from '../auth/decoradores/permiso.decorator.js';
 import { UsuarioActual } from '../auth/decoradores/usuario-actual.decorator.js';
-import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import { RespuestaErrorDto } from '../common/dto/respuesta-error.dto.js';
 import type { ArchivoAbierto } from './almacenamiento/almacenamiento-documental.js';
@@ -52,15 +51,6 @@ import {
   PaginaEvidenciasDto,
 } from './dto/respuestas.dto.js';
 import { EvidenciasService } from './evidencias.service.js';
-
-/** Roles con alguna consulta en el módulo «Documentos» de la matriz de permisos. */
-const ROLES_CONSULTA = [
-  ROL.administrador,
-  ROL.departamento,
-  ROL.direccion,
-  ROL.liderRap,
-  ROL.docente,
-] as const;
 
 const DESCRIPCION_ALCANCE =
   'El Docente ve las de sus proyectos; el Líder RAP, las de los RAP que lidera; el ' +
@@ -84,7 +74,7 @@ export class EvidenciasController {
   constructor(private readonly evidencias: EvidenciasService) {}
 
   @Get('opciones')
-  @Roles(...ROLES_CONSULTA)
+  @Permiso('documentos', 'leer')
   @ApiOperation({
     summary:
       'RAP, sesiones y límites para cargar y consultar evidencias (RF-24, p1 y p2)',
@@ -97,7 +87,8 @@ export class EvidenciasController {
   @ApiForbiddenResponse({
     type: RespuestaErrorDto,
     description:
-      'Sin un rol que consulte evidencias, o Líder RAP sin RAP a cargo en el proyecto',
+      'Ninguno de los roles del usuario consulta documentos, o Líder RAP sin RAP a cargo en el ' +
+      'proyecto',
   })
   opciones(
     @UsuarioActual() usuario: UsuarioSesion,
@@ -107,7 +98,7 @@ export class EvidenciasController {
   }
 
   @Get()
-  @Roles(...ROLES_CONSULTA)
+  @Permiso('documentos', 'leer')
   @ApiOperation({
     summary: 'Galería de evidencias del proyecto, por RAP (RF-24, p6)',
     description: `Paginada, las más recientes primero. ${DESCRIPCION_ALCANCE}`,
@@ -120,7 +111,8 @@ export class EvidenciasController {
   @ApiForbiddenResponse({
     type: RespuestaErrorDto,
     description:
-      'Sin un rol que consulte evidencias, o Líder RAP sin RAP a cargo en el proyecto',
+      'Ninguno de los roles del usuario consulta documentos, o Líder RAP sin RAP a cargo en el ' +
+      'proyecto',
   })
   listar(
     @UsuarioActual() usuario: UsuarioSesion,
@@ -131,7 +123,7 @@ export class EvidenciasController {
   }
 
   @Post()
-  @Roles(ROL.docente)
+  @Permiso('documentos', 'crear')
   @UseInterceptors(ArchivosEvidenciaInterceptor)
   @ApiConsumes('multipart/form-data')
   @ApiBody({ type: FormularioCargaEvidenciasDto })
@@ -153,7 +145,9 @@ export class EvidenciasController {
   })
   @ApiForbiddenResponse({
     type: RespuestaErrorDto,
-    description: 'No es Docente, o no es uno de los docentes del proyecto',
+    description:
+      'Ninguno de los roles del usuario registra documentos, o no es uno de los docentes ' +
+      'del proyecto',
   })
   @ApiConflictResponse({
     type: RespuestaErrorDto,
@@ -184,7 +178,7 @@ export class EvidenciasController {
   }
 
   @Get(':idEvidencia/archivo')
-  @Roles(...ROLES_CONSULTA)
+  @Permiso('documentos', 'leer')
   // Una foto de clase es un dato personal (Ley 1581): cada descarga que no falla queda en
   // auditoría con usuario e IP, también la revalidación con 304.
   @AuditarConsulta('evidencia_rap', 'idEvidencia')
@@ -210,7 +204,8 @@ export class EvidenciasController {
   @ApiForbiddenResponse({
     type: RespuestaErrorDto,
     description:
-      'Sin un rol que consulte evidencias, o Líder RAP sin RAP a cargo en el proyecto',
+      'Ninguno de los roles del usuario consulta documentos, o Líder RAP sin RAP a cargo en el ' +
+      'proyecto',
   })
   @ApiServiceUnavailableResponse({
     type: RespuestaErrorDto,

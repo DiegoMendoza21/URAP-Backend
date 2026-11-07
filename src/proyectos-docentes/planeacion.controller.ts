@@ -17,9 +17,8 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { Roles } from '../auth/decoradores/roles.decorator.js';
+import { Permiso } from '../auth/decoradores/permiso.decorator.js';
 import { UsuarioActual } from '../auth/decoradores/usuario-actual.decorator.js';
-import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import { RespuestaErrorDto } from '../common/dto/respuesta-error.dto.js';
 import { BibliografiaService } from './bibliografia.service.js';
@@ -27,7 +26,6 @@ import { ContenidosService } from './contenidos.service.js';
 import {
   NO_EDITABLE,
   NO_EXISTE,
-  ROLES_CONSULTA,
   SIN_ROL_CONSULTA,
   SOLO_ASIGNADOS,
 } from './diligenciamiento.controller.js';
@@ -47,9 +45,10 @@ import { EvaluacionService } from './evaluacion.service.js';
 
 /**
  * Planeación del curso en el proyecto docente (EP-06): puntos 4 a 7 del formato
- * FO-DO/PC-001. Igual que los puntos 2 y 3 (`DiligenciamientoController`): consultan los
- * roles de la bandeja y guarda solo el Docente asignado al proyecto, mientras el estado lo
- * permita. Cada sección se guarda por separado (HU-06-08).
+ * FO-DO/PC-001. Igual que los puntos 2 y 3 (`DiligenciamientoController`): consulta quien
+ * tiene `proyectos.leer` y ve el proyecto, y guarda quien tiene `proyectos.actualizar` y es
+ * Docente asignado al proyecto («E propios»), mientras el estado lo permita. Cada sección se
+ * guarda por separado (HU-06-08).
  */
 @ApiTags('Diligenciamiento del proyecto docente')
 @ApiBearerAuth()
@@ -69,7 +68,7 @@ export class PlaneacionController {
   // ------------------------------------------------ Punto 4 · RF-13 · HU-06-04
 
   @Get('estrategias')
-  @Roles(...ROLES_CONSULTA)
+  @Permiso('proyectos', 'leer')
   @ApiOperation({
     summary: 'Punto 4 «Estrategias metodológicas» (RF-13)',
     description:
@@ -86,7 +85,7 @@ export class PlaneacionController {
   }
 
   @Put('estrategias')
-  @Roles(ROL.docente)
+  @Permiso('proyectos', 'actualizar')
   @ApiOperation({
     summary: 'Guarda el listado de estrategias metodológicas (HU-06-04)',
     description:
@@ -112,7 +111,7 @@ export class PlaneacionController {
   // ------------------------------------------------ Punto 5 · RF-14 · HU-06-05
 
   @Get('evaluacion')
-  @Roles(...ROLES_CONSULTA)
+  @Permiso('proyectos', 'leer')
   @ApiOperation({
     summary: 'Punto 5 «Evaluación de los resultados de aprendizaje» (RF-14)',
     description:
@@ -130,7 +129,7 @@ export class PlaneacionController {
   }
 
   @Put('evaluacion/:idRac')
-  @Roles(ROL.docente)
+  @Permiso('proyectos', 'actualizar')
   @ApiOperation({
     summary: 'Guarda la evaluación de un RAC (HU-06-05)',
     description:
@@ -160,7 +159,7 @@ export class PlaneacionController {
   // ------------------------------------------------ Punto 6 · RF-15 · HU-06-06
 
   @Get('contenidos')
-  @Roles(...ROLES_CONSULTA)
+  @Permiso('proyectos', 'leer')
   @ApiOperation({
     summary: 'Punto 6 «Contenidos del curso» (RF-15)',
     description:
@@ -178,7 +177,7 @@ export class PlaneacionController {
   }
 
   @Put('contenidos')
-  @Roles(ROL.docente)
+  @Permiso('proyectos', 'actualizar')
   @ApiOperation({
     summary: 'Guarda los contenidos por semana (HU-06-06)',
     description:
@@ -208,7 +207,7 @@ export class PlaneacionController {
   // ------------------------------------------------ Punto 7 · RF-16 · HU-06-07
 
   @Get('bibliografia')
-  @Roles(...ROLES_CONSULTA)
+  @Permiso('proyectos', 'leer')
   @ApiOperation({ summary: 'Punto 7 «Bibliografía» (RF-16)' })
   @ApiOkResponse({ type: SeccionBibliografiaDto })
   @ApiForbiddenResponse(SIN_ROL_CONSULTA)
@@ -221,7 +220,7 @@ export class PlaneacionController {
   }
 
   @Put('bibliografia')
-  @Roles(ROL.docente)
+  @Permiso('proyectos', 'actualizar')
   @ApiOperation({
     summary: 'Guarda la bibliografía (HU-06-07)',
     description:
@@ -245,7 +244,7 @@ export class PlaneacionController {
   }
 
   @Get('bibliografia/proyectos-para-importar')
-  @Roles(ROL.docente)
+  @Permiso('proyectos', 'actualizar')
   @ApiOperation({
     summary:
       'Proyectos de los que se puede importar la bibliografía (RF-16, p2)',
@@ -256,7 +255,8 @@ export class PlaneacionController {
   @ApiOkResponse({ type: [ProyectoConBibliografiaDto] })
   @ApiForbiddenResponse({
     type: RespuestaErrorDto,
-    description: 'No es Docente responsable',
+    description:
+      'Ninguno de los roles del usuario tiene el permiso de editar proyectos docentes',
   })
   @ApiNotFoundResponse(NO_EXISTE)
   proyectosParaImportar(

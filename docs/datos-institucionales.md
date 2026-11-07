@@ -61,6 +61,12 @@ seed de permisos de HU-01-03 le dio al Docente un permiso de creación sobre pro
 quitárselo. Las filas «Plan de curso» y «RAP y RAC» no cambian: ahí el `R` del Docente es
 registrar contenidos y RAC dentro de su proyecto, que sí le corresponde.
 
+**Decisión del 2026-11-07 (URAP-34): el Administrador tampoco crea proyectos docentes.** Aunque
+`ADM` incluye crear, RF-08 deja la creación al Departamento y el asistente no le ofrece programas
+al Administrador. La matriz inicial le quita `crear` en el módulo de proyectos docentes
+(`EXCLUSIONES` en `src/datos-iniciales/matriz-permisos.ts`), así que crear, duplicar y cargar
+desde Excel quedan solo para el Departamento.
+
 **Importante sobre la granularidad.** Esta matriz es por módulo, no por endpoint. Define el
 marco y resuelve los casos de alcance («propios», «RAP asignados», «publicados»), que es lo
 difícil. El detalle por operación sale del requisito funcional correspondiente: la matriz dice
