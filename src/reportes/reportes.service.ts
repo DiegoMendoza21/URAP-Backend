@@ -9,6 +9,11 @@ import {
   PERIODO_TOMA,
   TIPO_VALORACION,
 } from '../mediciones/constantes.js';
+import {
+  type Consolidado,
+  juicio,
+  logroDelRap,
+} from '../mediciones/consolidado.js';
 import { ConsolidadoService } from '../mediciones/consolidado.service.js';
 import { AlcanceService } from '../proyectos-docentes/alcance.service.js';
 import type {
@@ -47,6 +52,7 @@ const SELECCION_MEDICION = {
   acciones_implementadas: true,
   resultados_obtenidos: true,
   acciones_propuestas: true,
+  rubrica: { select: { version: true } },
   proyecto_docente: {
     select: {
       id_periodo: true,
@@ -226,24 +232,32 @@ export class ReportesService {
           .map((medicion) =>
             aAsignatura(medicion, consolidados.get(medicion.id)),
           );
-        const porcentaje = promedio(
-          asignaturas.map((asignatura) => asignatura.porcentajeCumplimiento),
+        // Se suman las valoraciones de todas las asignaturas: no se promedian porcentajes.
+        const logro = logroDelRap(
+          asignaturas.map((asignatura) => ({
+            enCumplimiento: asignatura.valoracionesEnCumplimiento,
+            valoraciones: asignatura.valoracionesTotales,
+          })),
         );
         const esperado = esperadoDelRap(asignaturas, porcentajeEsperado);
+        const versionesRubrica = versiones(
+          asignaturas.map((asignatura) => asignatura.versionRubrica),
+        );
         const comparacion = compararPeriodos(
           delRap.filter(esAnterior),
           consolidados,
+          versionesRubrica,
         );
         return {
           ...rap,
           evaluado: asignaturas.length > 0,
           asignaturas,
-          porcentajeCumplimiento: porcentaje,
+          versionesRubrica,
+          porcentajeCumplimiento: logro.porcentaje,
+          valoracionesEnCumplimiento: logro.enCumplimiento,
+          valoracionesTotales: logro.valoraciones,
           porcentajeEsperado: esperado,
-          alcanzado:
-            porcentaje === null || esperado === null
-              ? null
-              : porcentaje >= esperado,
+          alcanzado: juicio(logro.porcentaje, esperado),
           comparacion,
           motivoSinComparacion:
             comparacion.length === 0 ? MOTIVO_SIN_PERIODOS_ANTERIORES : null,
@@ -301,6 +315,8 @@ export class ReportesService {
         'Valoración',
         'Muestra',
         '% en niveles de cumplimiento',
+        'Valoraciones en cumplimiento',
+        'Total de valoraciones',
         '% esperado',
         'Resultado',
         'Acciones implementadas',
@@ -325,6 +341,8 @@ export class ReportesService {
             : 'Formativa',
           { value: asignatura.tamanoMuestra, type: Number },
           numero(asignatura.porcentajeCumplimiento),
+          { value: asignatura.valoracionesEnCumplimiento, type: Number },
+          { value: asignatura.valoracionesTotales, type: Number },
           numero(asignatura.porcentajeEsperado),
           resultado(asignatura.alcanzado),
           { value: asignatura.accionesImplementadas ?? undefined, wrap: true },
@@ -333,13 +351,15 @@ export class ReportesService {
         ]);
       }
       resumen.push([
-        { value: `${nombre} · promedio del período`, fontWeight: 'bold' },
+        { value: `${nombre} · logro del período`, fontWeight: 'bold' },
         null,
         null,
         null,
         null,
         null,
         numero(rap.porcentajeCumplimiento),
+        { value: rap.valoracionesEnCumplimiento, type: Number },
+        { value: rap.valoracionesTotales, type: Number },
         numero(rap.porcentajeEsperado),
         resultado(rap.alcanzado),
       ]);
@@ -354,6 +374,7 @@ export class ReportesService {
         'Instrumento',
         'Muestra',
         '% en niveles de cumplimiento',
+        'Resultado',
       ]),
     ];
     for (const rap of reporte.raps) {
@@ -367,6 +388,7 @@ export class ReportesService {
             indicador.instrumento,
             { value: indicador.muestra, type: Number },
             numero(indicador.porcentajeCumplimiento),
+            resultado(indicador.alcanzado),
           ]);
         }
       }
@@ -377,7 +399,11 @@ export class ReportesService {
         'RAP',
         'Período',
         '% en niveles de cumplimiento',
+        'Valoraciones en cumplimiento',
+        'Total de valoraciones',
         'Mediciones',
+        'Versión de la rúbrica',
+        'Nota',
       ]),
     ];
     for (const rap of reporte.raps) {
@@ -390,7 +416,11 @@ export class ReportesService {
           nombre,
           fila.periodo,
           numero(fila.porcentajeCumplimiento),
+          { value: fila.valoracionesEnCumplimiento, type: Number },
+          { value: fila.valoracionesTotales, type: Number },
           { value: fila.mediciones, type: Number },
+          fila.versionesRubrica.join(', '),
+          fila.nota,
         ]);
       }
       if (rap.porcentajeCumplimiento !== null) {
@@ -398,7 +428,10 @@ export class ReportesService {
           nombre,
           `${reporte.periodo.codigo} (consultado)`,
           numero(rap.porcentajeCumplimiento),
+          { value: rap.valoracionesEnCumplimiento, type: Number },
+          { value: rap.valoracionesTotales, type: Number },
           { value: rap.asignaturas.length, type: Number },
+          rap.versionesRubrica.join(', '),
         ]);
       }
     }
@@ -494,20 +527,7 @@ export class ReportesService {
 
 function aAsignatura(
   medicion: MedicionReporte,
-  consolidado:
-    | {
-        tamanoMuestra: number;
-        porcentajeCumplimiento: number | null;
-        porcentajeEsperado: number | null;
-        alcanzado: boolean | null;
-        indicadores: {
-          numero: number | null;
-          instrumento: string | null;
-          muestra: number;
-          porcentajeCumplimiento: number | null;
-        }[];
-      }
-    | undefined,
+  consolidado: Consolidado | undefined,
 ): AsignaturaEvaluadaDto {
   const proyecto = medicion.proyecto_docente;
   return {
@@ -531,14 +551,19 @@ function aAsignatura(
         : PERIODO_TOMA.segundo,
     anioToma: medicion.anio_toma ?? 0,
     tamanoMuestra: consolidado?.tamanoMuestra ?? 0,
+    versionRubrica: medicion.rubrica?.version ?? null,
     porcentajeCumplimiento: consolidado?.porcentajeCumplimiento ?? null,
+    valoracionesEnCumplimiento: consolidado?.valoracionesEnCumplimiento ?? 0,
+    valoracionesTotales: consolidado?.valoracionesTotales ?? 0,
     porcentajeEsperado: consolidado?.porcentajeEsperado ?? null,
     alcanzado: consolidado?.alcanzado ?? null,
     indicadores: (consolidado?.indicadores ?? []).map((indicador) => ({
       numero: indicador.numero,
       instrumento: indicador.instrumento,
       muestra: indicador.muestra,
+      enCumplimiento: indicador.enCumplimiento,
       porcentajeCumplimiento: indicador.porcentajeCumplimiento,
+      alcanzado: indicador.alcanzado,
     })),
     accionesImplementadas: medicion.acciones_implementadas,
     resultadosObtenidos: medicion.resultados_obtenidos,
@@ -546,36 +571,84 @@ function aAsignatura(
   };
 }
 
-/** RF-32, p4: promedio por período anterior, del más antiguo al más reciente. */
+/**
+ * RF-32, p4: logro de cada período anterior, del más antiguo al más reciente, con la misma
+ * regla (`logroDelRap`). Se marca el período medido con otra versión de la rúbrica que el
+ * consultado (o, si este no tiene mediciones, que el más reciente): con otros indicadores, el
+ * número deja de ser comparable.
+ */
 function compararPeriodos(
   anteriores: MedicionReporte[],
-  consolidados: ReadonlyMap<number, { porcentajeCumplimiento: number | null }>,
+  consolidados: ReadonlyMap<number, Consolidado>,
+  versionesConsultado: readonly number[],
 ): ComparacionPeriodoDto[] {
   const porPeriodo = new Map<
     string,
-    { orden: number; codigo: string; porcentajes: number[] }
+    {
+      orden: number;
+      codigo: string;
+      partes: { enCumplimiento: number; valoraciones: number }[];
+      versiones: (number | null)[];
+    }
   >();
   for (const medicion of anteriores) {
     const periodo = medicion.proyecto_docente?.periodo_academico;
-    const porcentaje = consolidados.get(medicion.id)?.porcentajeCumplimiento;
-    if (!periodo?.codigo || porcentaje == null) {
+    const consolidado = consolidados.get(medicion.id);
+    if (
+      !periodo?.codigo ||
+      !consolidado ||
+      consolidado.valoracionesTotales === 0
+    ) {
       continue;
     }
     const grupo = porPeriodo.get(periodo.codigo) ?? {
       orden: periodo.fecha_inicio?.getTime() ?? 0,
       codigo: periodo.codigo,
-      porcentajes: [],
+      partes: [],
+      versiones: [],
     };
-    grupo.porcentajes.push(porcentaje);
+    grupo.partes.push({
+      enCumplimiento: consolidado.valoracionesEnCumplimiento,
+      valoraciones: consolidado.valoracionesTotales,
+    });
+    grupo.versiones.push(medicion.rubrica?.version ?? null);
     porPeriodo.set(periodo.codigo, grupo);
   }
-  return [...porPeriodo.values()]
-    .sort((a, b) => a.orden - b.orden || a.codigo.localeCompare(b.codigo))
-    .map((grupo) => ({
+  const grupos = [...porPeriodo.values()].sort(
+    (a, b) => a.orden - b.orden || a.codigo.localeCompare(b.codigo),
+  );
+  const referencia =
+    versionesConsultado.length > 0
+      ? versionesConsultado
+      : versiones(grupos[grupos.length - 1]?.versiones ?? []);
+  return grupos.map((grupo) => {
+    const logro = logroDelRap(grupo.partes);
+    const versionesRubrica = versiones(grupo.versiones);
+    const comparable = mismasVersiones(versionesRubrica, referencia);
+    return {
       periodo: grupo.codigo,
-      porcentajeCumplimiento: promedio(grupo.porcentajes) as number,
-      mediciones: grupo.porcentajes.length,
-    }));
+      porcentajeCumplimiento: logro.porcentaje as number,
+      valoracionesEnCumplimiento: logro.enCumplimiento,
+      valoracionesTotales: logro.valoraciones,
+      mediciones: grupo.partes.length,
+      versionesRubrica,
+      comparable,
+      nota: comparable
+        ? null
+        : `Medido con la versión ${versionesRubrica.join(', ') || 'desconocida'} de la rúbrica y comparado con la ${referencia.join(', ')}: con otros indicadores, el número no es comparable.`,
+    };
+  });
+}
+
+/** Versiones de rúbrica distintas y ordenadas, sin las desconocidas. */
+function versiones(lista: readonly (number | null)[]): number[] {
+  return [
+    ...new Set(lista.filter((version): version is number => version !== null)),
+  ].sort((a, b) => a - b);
+}
+
+function mismasVersiones(a: readonly number[], b: readonly number[]): boolean {
+  return a.length === b.length && a.every((version, i) => version === b[i]);
 }
 
 /** Si el período de una medición es anterior al consultado: por fecha de inicio o por código. */
@@ -609,16 +682,6 @@ function esperadoDelRap(
     asignaturas.map((asignatura) => asignatura.porcentajeEsperado),
   );
   return congeladas.size === 1 ? [...congeladas][0] : vigente;
-}
-
-/** Promedio con dos decimales de los valores no nulos; nulo si no hay ninguno. */
-function promedio(valores: (number | null)[]): number | null {
-  const presentes = valores.filter((valor): valor is number => valor !== null);
-  if (presentes.length === 0) {
-    return null;
-  }
-  const suma = presentes.reduce((total, valor) => total + valor, 0);
-  return Math.round((suma * 100) / presentes.length) / 100;
 }
 
 function nombreSeguro(texto: string): string {

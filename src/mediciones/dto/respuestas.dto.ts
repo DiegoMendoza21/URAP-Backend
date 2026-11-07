@@ -335,6 +335,12 @@ export class IndicadorConsolidadoDto {
   muestra: number;
 
   @ApiProperty({
+    example: 29,
+    description: 'Estudiantes del indicador en los niveles de cumplimiento',
+  })
+  enCumplimiento: number;
+
+  @ApiProperty({
     example: 0,
     description:
       'Estudiantes de la hoja sin valorar en el indicador: fuera de la muestra',
@@ -390,10 +396,23 @@ export class ConsolidadoDto {
     nullable: true,
     type: Number,
     description:
-      'Resultado de la medición: promedio de los porcentajes de cumplimiento de sus ' +
-      'indicadores con muestra',
+      'Logro del RAP en la medición: valoraciones en los niveles de cumplimiento entre el ' +
+      'total de valoraciones (estudiante × indicador). Regla provisional, pendiente de ' +
+      'confirmar con el programa.',
   })
   porcentajeCumplimiento: number | null;
+
+  @ApiProperty({
+    example: 87,
+    description: 'Base del logro: valoraciones en los niveles de cumplimiento',
+  })
+  valoracionesEnCumplimiento: number;
+
+  @ApiProperty({
+    example: 136,
+    description: 'Base del logro: total de valoraciones',
+  })
+  valoracionesTotales: number;
 
   @ApiProperty({ example: null, nullable: true, type: Number })
   porcentajeEsperado: number | null;
@@ -501,6 +520,12 @@ export class MedicionDetalleDto extends MedicionResumenDto {
 export class MedicionListadaDto extends MedicionResumenDto {
   @ApiProperty({ example: 63.97, nullable: true, type: Number })
   porcentajeCumplimiento: number | null;
+
+  @ApiProperty({ example: 87 })
+  valoracionesEnCumplimiento: number;
+
+  @ApiProperty({ example: 136 })
+  valoracionesTotales: number;
 
   @ApiProperty({ example: null, nullable: true, type: Number })
   porcentajeEsperado: number | null;

@@ -1,9 +1,11 @@
 import {
+  advertenciaBajoMeta,
   ADVERTENCIA_SIN_COHORTE,
   ADVERTENCIA_SIN_META,
   ADVERTENCIA_SIN_VALORAR,
   consolidar,
   type EntradaConsolidado,
+  logroDelRap,
   porcentaje,
 } from './consolidado.js';
 
@@ -65,8 +67,12 @@ describe('consolidar · RF-31', () => {
     ]);
     expect(resultado.tamanoMuestra).toBe(34);
     expect(resultado.nivelesCumplimiento).toEqual(['Competente', 'Ejemplar']);
-    // Promedio de los cuatro indicadores: 87 / 136.
-    expect(resultado.porcentajeCumplimiento).toBe(63.97);
+    // Logro del RAP: 87 de 136 valoraciones en Competente o Ejemplar.
+    expect(resultado).toMatchObject({
+      porcentajeCumplimiento: 63.97,
+      valoracionesEnCumplimiento: 87,
+      valoracionesTotales: 136,
+    });
   });
 
   it('sin meta definida no emite juicio de cumplimiento (excepción de p4)', () => {
@@ -87,6 +93,7 @@ describe('consolidar · RF-31', () => {
     ]);
     expect(resultado.alcanzado).toBe(false);
     expect(resultado.advertencias).not.toContain(ADVERTENCIA_SIN_META);
+    expect(resultado.advertencias).toContain(advertenciaBajoMeta([3, 4]));
     expect(consolidar(entrada({ porcentajeEsperado: 63.97 })).alcanzado).toBe(
       true,
     );
@@ -123,7 +130,27 @@ describe('consolidar · RF-31', () => {
     expect(resultado.advertencias).toContain(ADVERTENCIA_SIN_VALORAR);
   });
 
-  it('un indicador sin valoraciones no tiene porcentaje ni entra al promedio', () => {
+  it('señala el indicador por debajo de la meta aunque el RAP la alcance', () => {
+    const resultado = consolidar(entrada({ porcentajeEsperado: 60 }));
+    expect(resultado.alcanzado).toBe(true);
+    expect(resultado.advertencias).toContain(
+      'Indicadores por debajo de la meta: los 3 y 4.',
+    );
+  });
+
+  it('el logro suma valoraciones: no promedia porcentajes de muestras distintas', () => {
+    // 29 de 34 y 1 de 1: la proporción es 30 / 35; el promedio simple daría 92,65 %.
+    const resultado = consolidar(
+      entrada({}, [
+        [0, 5, 29, 0],
+        [0, 0, 1, 0],
+      ]),
+    );
+    expect(resultado.porcentajeCumplimiento).toBe(85.71);
+    expect(resultado.valoracionesTotales).toBe(35);
+  });
+
+  it('un indicador sin valoraciones no tiene porcentaje ni entra al logro', () => {
     const resultado = consolidar(
       entrada({}, [
         [0, 5, 29, 0],
@@ -149,6 +176,23 @@ describe('consolidar · RF-31', () => {
     expect(resultado.porcentajeCumplimiento).toBeNull();
     expect(resultado.tamanoMuestra).toBe(0);
     expect(resultado.alcanzado).toBeNull();
+  });
+});
+
+describe('logroDelRap', () => {
+  it('suma las valoraciones de varias mediciones del período (RF-32)', () => {
+    // Un grupo de 8 no pesa lo mismo que uno de 39.
+    expect(
+      logroDelRap([
+        { enCumplimiento: 8, valoraciones: 8 },
+        { enCumplimiento: 13, valoraciones: 39 },
+      ]),
+    ).toEqual({ porcentaje: 44.68, enCumplimiento: 21, valoraciones: 47 });
+    expect(logroDelRap([])).toEqual({
+      porcentaje: null,
+      enCumplimiento: 0,
+      valoraciones: 0,
+    });
   });
 });
 

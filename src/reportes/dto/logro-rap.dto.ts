@@ -90,12 +90,33 @@ export class IndicadorReporteDto {
   @ApiProperty({ example: 34 })
   muestra: number;
 
+  @ApiProperty({ example: 29 })
+  enCumplimiento: number;
+
   @ApiProperty({ example: 85.29, nullable: true, type: Number })
   porcentajeCumplimiento: number | null;
+
+  @ApiProperty({
+    example: null,
+    nullable: true,
+    type: Boolean,
+    description:
+      'Falso: el indicador quedó por debajo de la meta, aunque el RAP la alcance. Nulo sin meta.',
+  })
+  alcanzado: boolean | null;
+}
+
+/** Base de un porcentaje de logro: siempre se muestra junto a él. */
+export class BaseLogroDto {
+  @ApiProperty({ example: 87 })
+  valoracionesEnCumplimiento: number;
+
+  @ApiProperty({ example: 136 })
+  valoracionesTotales: number;
 }
 
 /** Una asignatura (medición cerrada) que evaluó el RAP en el período. */
-export class AsignaturaEvaluadaDto {
+export class AsignaturaEvaluadaDto extends BaseLogroDto {
   @ApiProperty({ example: 8 })
   idMedicion: number;
 
@@ -120,12 +141,15 @@ export class AsignaturaEvaluadaDto {
   @ApiProperty({ example: 34 })
   tamanoMuestra: number;
 
+  @ApiProperty({ example: 1, nullable: true, type: Number })
+  versionRubrica: number | null;
+
   @ApiProperty({
     example: 63.97,
     nullable: true,
     type: Number,
     description:
-      'Porcentaje en los niveles de cumplimiento (promedio de los indicadores)',
+      'Logro del RAP en la medición: valoraciones en cumplimiento entre el total de valoraciones',
   })
   porcentajeCumplimiento: number | null;
 
@@ -148,7 +172,7 @@ export class AsignaturaEvaluadaDto {
   accionesPropuestas: string | null;
 }
 
-export class ComparacionPeriodoDto {
+export class ComparacionPeriodoDto extends BaseLogroDto {
   @ApiProperty({ example: '2026-1' })
   periodo: string;
 
@@ -160,9 +184,22 @@ export class ComparacionPeriodoDto {
     description: 'Mediciones cerradas que lo componen',
   })
   mediciones: number;
+
+  @ApiProperty({ type: [Number], example: [1] })
+  versionesRubrica: number[];
+
+  @ApiProperty({
+    example: true,
+    description:
+      'Falso: se midió con otra versión de la rúbrica y el número no es comparable (RF-32, p4)',
+  })
+  comparable: boolean;
+
+  @ApiProperty({ nullable: true, type: String })
+  nota: string | null;
 }
 
-export class RapReporteDto {
+export class RapReporteDto extends BaseLogroDto {
   @ApiProperty({ example: 2 })
   id: number;
 
@@ -187,10 +224,19 @@ export class RapReporteDto {
   asignaturas: AsignaturaEvaluadaDto[];
 
   @ApiProperty({
+    type: [Number],
+    example: [1],
+    description: 'Versiones de la rúbrica con que se midió en el período',
+  })
+  versionesRubrica: number[];
+
+  @ApiProperty({
     example: 63.97,
     nullable: true,
     type: Number,
-    description: 'Promedio de las asignaturas que lo evaluaron en el período',
+    description:
+      'Logro del RAP en el período: se suman las valoraciones de todas sus mediciones cerradas ' +
+      '(no se promedian porcentajes). Regla provisional, pendiente de confirmar con el programa.',
   })
   porcentajeCumplimiento: number | null;
 

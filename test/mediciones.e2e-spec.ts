@@ -786,7 +786,10 @@ describe('Medición de RAP (e2e) · RF-30, HU-11-01 a HU-11-03', () => {
         tamanoMuestra: 34,
         tamanoCohorte: 34,
         cohorteRegistrada: false,
+        // Logro del RAP: 87 de 136 valoraciones en Competente o Ejemplar.
         porcentajeCumplimiento: 63.97,
+        valoracionesEnCumplimiento: 87,
+        valoracionesTotales: 136,
         metaDefinida: false,
         alcanzado: null,
         nivelesCumplimiento: ['Competente', 'Ejemplar'],
@@ -1036,6 +1039,10 @@ describe('Medición de RAP (e2e) · RF-30, HU-11-01 a HU-11-03', () => {
       expect(porId.get(raps.conRubrica)).toMatchObject({
         evaluado: true,
         porcentajeCumplimiento: 63.97,
+        valoracionesEnCumplimiento: 87,
+        valoracionesTotales: 136,
+        // La medición del período usó la rúbrica 2; la del período anterior, la 1.
+        versionesRubrica: [2],
         // La meta congelada en la medición (70 %), no la vigente del programa (sin definir).
         porcentajeEsperado: 70,
         alcanzado: false,
@@ -1044,6 +1051,10 @@ describe('Medición de RAP (e2e) · RF-30, HU-11-01 a HU-11-03', () => {
             periodo: `E2E-RF32-ANT-${sufijo}`,
             porcentajeCumplimiento: 75,
             mediciones: 1,
+            valoracionesEnCumplimiento: 12,
+            valoracionesTotales: 16,
+            versionesRubrica: [1],
+            comparable: false,
           },
         ],
         motivoSinComparacion: null,

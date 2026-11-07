@@ -250,6 +250,9 @@ export class MedicionesService {
             fila.rubrica?.version ?? null,
           ),
           porcentajeCumplimiento: consolidado?.porcentajeCumplimiento ?? null,
+          valoracionesEnCumplimiento:
+            consolidado?.valoracionesEnCumplimiento ?? 0,
+          valoracionesTotales: consolidado?.valoracionesTotales ?? 0,
           porcentajeEsperado: consolidado?.porcentajeEsperado ?? null,
           alcanzado: consolidado?.alcanzado ?? null,
         };

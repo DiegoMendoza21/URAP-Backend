@@ -7,8 +7,11 @@
  * - El cumplimiento de un indicador es el porcentaje de estudiantes en los niveles desde el
  *   umbral de la escala (`escala_valoracion.umbral_cumplimiento`): «Nivel 3 + 4».
  * - Cada indicador se calcula sobre su muestra: los estudiantes valorados en él (RF-30, p6).
- * - El resultado de la medición es el promedio simple de sus indicadores con muestra.
- *   Decisión pendiente de confirmar con el programa: si cambia, se cambia aquí.
+ * - El logro del RAP es un solo número, `logroDelRap`: las valoraciones en cumplimiento entre
+ *   todas las valoraciones (estudiante × indicador). Regla provisional, pendiente de
+ *   confirmar con el programa: si cambia, se cambia en esa función.
+ * - Cada indicador se compara además con la meta, y se señala el que quede por debajo
+ *   aunque el RAP cumpla.
  * - Sin porcentaje esperado no hay juicio de cumplimiento (RF-31, excepción de p4).
  * - La cohorte no entra en ningún cálculo; si no se registró, se toma la muestra y se
  *   advierte (RF-31, excepción de p3).
@@ -67,11 +70,23 @@ export interface IndicadorConsolidado {
   descripcionInstrumento: string | null;
   conteos: ConteoNivel[];
   muestra: number;
+  /** Estudiantes del indicador en los niveles de cumplimiento. */
+  enCumplimiento: number;
   sinValorar: number;
   /** Porcentaje en los niveles de cumplimiento; nulo si nadie fue valorado. */
   porcentajeCumplimiento: number | null;
   /** Nulo si no hay meta o no hay muestra. */
   alcanzado: boolean | null;
+}
+
+/** Logro del RAP: el porcentaje y su base. */
+export interface LogroRap {
+  /** Nulo si no hay valoraciones. */
+  porcentaje: number | null;
+  /** Valoraciones en los niveles de cumplimiento (87). */
+  enCumplimiento: number;
+  /** Total de valoraciones (136). */
+  valoraciones: number;
 }
 
 export interface Consolidado {
@@ -83,8 +98,10 @@ export interface Consolidado {
   tamanoMuestra: number;
   tamanoCohorte: number;
   cohorteRegistrada: boolean;
-  /** Promedio de los indicadores con muestra; nulo si ninguno tiene. */
+  /** Logro del RAP en la medición (`logroDelRap`); nulo si no hay valoraciones. */
   porcentajeCumplimiento: number | null;
+  valoracionesEnCumplimiento: number;
+  valoracionesTotales: number;
   porcentajeEsperado: number | null;
   metaDefinida: boolean;
   alcanzado: boolean | null;
@@ -98,9 +115,59 @@ export const ADVERTENCIA_SIN_META =
 export const ADVERTENCIA_SIN_VALORAR =
   'Hay estudiantes sin valorar en algunos indicadores: quedan fuera de la muestra de ese indicador.';
 
+/** Aviso de los indicadores que no llegan a la meta, aunque el RAP la alcance. */
+export function advertenciaBajoMeta(
+  numeros: readonly (number | null)[],
+): string {
+  const lista = numeros.map((numero) => String(numero ?? '?'));
+  const texto =
+    lista.length === 1
+      ? `el ${lista[0]}`
+      : `los ${lista.slice(0, -1).join(', ')} y ${lista[lista.length - 1]}`;
+  return `${lista.length === 1 ? 'Indicador' : 'Indicadores'} por debajo de la meta: ${texto}.`;
+}
+
 /** Porcentaje con dos decimales, sin errores de coma flotante en los casos exactos. */
 export function porcentaje(cantidad: number, total: number): number {
   return total === 0 ? 0 : Math.round((cantidad * 10_000) / total) / 100;
+}
+
+/**
+ * La regla del logro del RAP, en un solo lugar: valoraciones en los niveles de cumplimiento
+ * entre el total de valoraciones, sumando todas las partes (los indicadores de una medición
+ * o, en el reporte, todas las mediciones cerradas del RAP en el período). Entre asignaturas no
+ * se promedian porcentajes: se suman valoraciones, para que un grupo de 8 no pese lo mismo
+ * que uno de 39. Con indicadores del mismo tamaño coincide con el promedio simple.
+ *
+ * Regla provisional, pendiente de confirmar con el programa.
+ */
+export function logroDelRap(
+  partes: readonly { enCumplimiento: number; valoraciones: number }[],
+): LogroRap {
+  const enCumplimiento = partes.reduce(
+    (suma, parte) => suma + parte.enCumplimiento,
+    0,
+  );
+  const valoraciones = partes.reduce(
+    (suma, parte) => suma + parte.valoraciones,
+    0,
+  );
+  return {
+    porcentaje:
+      valoraciones === 0 ? null : porcentaje(enCumplimiento, valoraciones),
+    enCumplimiento,
+    valoraciones,
+  };
+}
+
+/** Alcanzado si el porcentaje llega a la meta; nulo sin meta o sin porcentaje. */
+export function juicio(
+  porcentajeObtenido: number | null,
+  porcentajeEsperado: number | null,
+): boolean | null {
+  return porcentajeObtenido === null || porcentajeEsperado === null
+    ? null
+    : porcentajeObtenido >= porcentajeEsperado;
 }
 
 export function consolidar(entrada: EntradaConsolidado): Consolidado {
@@ -113,54 +180,53 @@ export function consolidar(entrada: EntradaConsolidado): Consolidado {
   } = entrada;
   const metaDefinida = porcentajeEsperado !== null;
 
-  // Fracciones exactas de cada indicador con muestra, para promediar antes de redondear.
-  const fracciones: number[] = [];
-  const indicadores = entrada.indicadores.map((indicador) => {
-    const muestra = niveles.reduce(
-      (suma, nivel) => suma + (indicador.conteos.get(nivel.valor) ?? 0),
-      0,
-    );
-    const cumplen = niveles
-      .filter((nivel) => nivel.valor >= umbralCumplimiento)
-      .reduce(
+  const indicadores = entrada.indicadores.map(
+    (indicador): IndicadorConsolidado => {
+      const muestra = niveles.reduce(
         (suma, nivel) => suma + (indicador.conteos.get(nivel.valor) ?? 0),
         0,
       );
-    if (muestra > 0) {
-      fracciones.push(cumplen / muestra);
-    }
-    const porcentajeCumplimiento =
-      muestra > 0 ? porcentaje(cumplen, muestra) : null;
-    return {
-      idIndicador: indicador.idIndicador,
-      numero: indicador.numero,
-      descripcion: indicador.descripcion,
-      instrumento: indicador.instrumento,
-      descripcionInstrumento: indicador.descripcionInstrumento,
-      conteos: niveles.map((nivel) => {
-        const cantidad = indicador.conteos.get(nivel.valor) ?? 0;
-        return {
-          valor: nivel.valor,
-          etiqueta: nivel.etiqueta,
-          cantidad,
-          porcentaje: porcentaje(cantidad, muestra),
-        };
-      }),
-      muestra,
-      sinValorar:
-        totalEstudiantes === null ? 0 : Math.max(0, totalEstudiantes - muestra),
-      porcentajeCumplimiento,
-      alcanzado: juicio(porcentajeCumplimiento, porcentajeEsperado),
-    };
-  });
+      const enCumplimiento = niveles
+        .filter((nivel) => nivel.valor >= umbralCumplimiento)
+        .reduce(
+          (suma, nivel) => suma + (indicador.conteos.get(nivel.valor) ?? 0),
+          0,
+        );
+      const porcentajeCumplimiento =
+        muestra > 0 ? porcentaje(enCumplimiento, muestra) : null;
+      return {
+        idIndicador: indicador.idIndicador,
+        numero: indicador.numero,
+        descripcion: indicador.descripcion,
+        instrumento: indicador.instrumento,
+        descripcionInstrumento: indicador.descripcionInstrumento,
+        conteos: niveles.map((nivel) => {
+          const cantidad = indicador.conteos.get(nivel.valor) ?? 0;
+          return {
+            valor: nivel.valor,
+            etiqueta: nivel.etiqueta,
+            cantidad,
+            porcentaje: porcentaje(cantidad, muestra),
+          };
+        }),
+        muestra,
+        enCumplimiento,
+        sinValorar:
+          totalEstudiantes === null
+            ? 0
+            : Math.max(0, totalEstudiantes - muestra),
+        porcentajeCumplimiento,
+        alcanzado: juicio(porcentajeCumplimiento, porcentajeEsperado),
+      };
+    },
+  );
 
-  const porcentajeCumplimiento =
-    fracciones.length === 0
-      ? null
-      : Math.round(
-          (fracciones.reduce((suma, valor) => suma + valor, 0) * 10_000) /
-            fracciones.length,
-        ) / 100;
+  const logro = logroDelRap(
+    indicadores.map((indicador) => ({
+      enCumplimiento: indicador.enCumplimiento,
+      valoraciones: indicador.muestra,
+    })),
+  );
   const tamanoMuestra = Math.max(0, ...indicadores.map((i) => i.muestra));
 
   const advertencias: string[] = [];
@@ -169,6 +235,10 @@ export function consolidar(entrada: EntradaConsolidado): Consolidado {
   }
   if (!metaDefinida) {
     advertencias.push(ADVERTENCIA_SIN_META);
+  }
+  const bajoMeta = indicadores.filter((i) => i.alcanzado === false);
+  if (bajoMeta.length > 0) {
+    advertencias.push(advertenciaBajoMeta(bajoMeta.map((i) => i.numero)));
   }
   if (indicadores.some((indicador) => indicador.sinValorar > 0)) {
     advertencias.push(ADVERTENCIA_SIN_VALORAR);
@@ -183,22 +253,14 @@ export function consolidar(entrada: EntradaConsolidado): Consolidado {
     tamanoMuestra,
     tamanoCohorte: tamanoCohorte ?? tamanoMuestra,
     cohorteRegistrada: tamanoCohorte !== null,
-    porcentajeCumplimiento,
+    porcentajeCumplimiento: logro.porcentaje,
+    valoracionesEnCumplimiento: logro.enCumplimiento,
+    valoracionesTotales: logro.valoraciones,
     porcentajeEsperado,
     metaDefinida,
-    alcanzado: juicio(porcentajeCumplimiento, porcentajeEsperado),
+    alcanzado: juicio(logro.porcentaje, porcentajeEsperado),
     advertencias,
   };
-}
-
-/** Alcanzado si el porcentaje llega a la meta; nulo sin meta o sin porcentaje. */
-function juicio(
-  porcentajeObtenido: number | null,
-  porcentajeEsperado: number | null,
-): boolean | null {
-  return porcentajeObtenido === null || porcentajeEsperado === null
-    ? null
-    : porcentajeObtenido >= porcentajeEsperado;
 }
 
 /** Cuenta valoraciones por indicador y valor de nivel. */
