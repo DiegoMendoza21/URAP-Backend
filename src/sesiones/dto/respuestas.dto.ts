@@ -93,6 +93,20 @@ export class SesionCalendarioDto {
   diligenciada: boolean;
 
   @ApiProperty({
+    example: 2,
+    description: 'Temas registrados en la sesión (RF-20)',
+  })
+  numeroTemas: number;
+
+  @ApiProperty({
+    example: 3,
+    description:
+      'Estudiantes que no asistieron (RF-22). Es un conteo: los nombres solo los ve quien puede ' +
+      'registrar la clase.',
+  })
+  numeroAusentes: number;
+
+  @ApiProperty({
     enum: TIPOS_ALERTA,
     enumName: 'TipoAlertaSesion',
     nullable: true,
