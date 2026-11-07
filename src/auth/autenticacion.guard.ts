@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
+import { contextoActual } from '../common/contexto/contexto-peticion.js';
 import { AuthService } from './auth.service.js';
 import { ACCESO_DECLARADO } from './decoradores/acceso.decorator.js';
 import { ES_PUBLICO } from './decoradores/publico.decorator.js';
@@ -50,6 +51,11 @@ export class AutenticacionGuard implements CanActivate {
       throw new UnauthorizedException(MENSAJE_SIN_TOKEN);
     }
     peticion.usuario = await this.auth.validarToken(token);
+    // La auditoría atribuye a este usuario lo que haga la petición (RF-29).
+    const contextoPeticion = contextoActual();
+    if (contextoPeticion) {
+      contextoPeticion.idUsuario = peticion.usuario.id;
+    }
 
     if (
       !this.reflector.getAllAndOverride<boolean>(ACCESO_DECLARADO, objetivos)
