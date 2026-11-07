@@ -200,6 +200,13 @@ export const PARAMETROS = [
     descripcion:
       'Extensiones de archivo permitidas, separadas por coma (NFR-019). Por validar.',
   },
+  {
+    clave: 'descripcion_curso_longitud_maxima',
+    valor: '4000',
+    tipo_dato: 'entero',
+    descripcion:
+      'Caracteres máximos de la descripción del curso, punto 2 del proyecto docente (RF-11). Valor propuesto, por validar.',
+  },
 ];
 
 /**
