@@ -77,9 +77,14 @@ tablero, la revisión, la medición y los reportes muestren algo:
   matriculados y la medición cerrada del RAP 2 que reproduce la real de 2024-1 (85,29 %,
   70,59 %, 50 % y 50 %; logro del RAP 63,97 %, 87 de 136), además de clases registradas,
   vencidas y evidencias;
+- Macroeconomía 2026-2, aprobada, con otra medición del RAP 2: el reporte de logro de 2026-2
+  suma las dos asignaturas (64,81 %, 140 de 216);
+- Organización y dirección 2026-2, aprobada, con evidencias en los RAP 3 y 7;
 - proyectos en diligenciamiento, enviado a revisión y devuelto con observaciones;
 - un período 2026-1 cerrado, de fechas aproximadas, con un proyecto que tiene sesiones
-  incumplidas.
+  incumplidas y la medición del RAP 2 con la que compara el reporte (50 %, 56 de 112).
+
+Solo se mide el RAP 2, el único con rúbrica real: los demás salen «No evaluado».
 
 Todo es ficticio y lleva el prefijo `DEMO-` (documentos de los estudiantes y grupo de los
 proyectos). Las evidencias son imágenes generadas por código, nunca fotos. Las sesiones se
