@@ -17,18 +17,51 @@ export class ProgramaOpcionDto {
   facultad: string | null;
 }
 
+/**
+ * Plan de estudios de una asignatura (modelo v2.5). Un programa puede tener varios planes
+ * vigentes, y la misma asignatura aparece en cada uno con su propio código: el plan es lo que
+ * las distingue.
+ */
+export class PlanEstudioDto {
+  @ApiProperty({ example: 2 })
+  id: number;
+
+  @ApiProperty({
+    example: '2502',
+    nullable: true,
+    type: String,
+    description: 'Código del plan en el sistema académico (SMA)',
+  })
+  codigo: string | null;
+
+  @ApiProperty({
+    example: 'Plan de estudios 2502',
+    nullable: true,
+    type: String,
+  })
+  nombre: string | null;
+}
+
 export class AsignaturaOpcionDto {
   @ApiProperty({ example: 3 })
   id: number;
 
-  @ApiProperty({ example: 'DEMO-01', nullable: true, type: String })
+  @ApiProperty({ example: 'IX24193', nullable: true, type: String })
   codigo: string | null;
 
-  @ApiProperty({ example: 'Finanzas a corto plazo' })
+  @ApiProperty({ example: 'Comportamiento organizacional' })
   nombre: string;
 
-  @ApiProperty({ example: 6, nullable: true, type: Number })
+  @ApiProperty({
+    example: 5,
+    nullable: true,
+    type: Number,
+    description: 'Semestre dentro de su plan de estudios',
+  })
   semestre: number | null;
+
+  @ApiProperty({ type: PlanEstudioDto })
+  planEstudio: PlanEstudioDto;
 }
 
 export class DocenteOpcionDto {
@@ -129,6 +162,14 @@ export class InformacionInstitucionalDto {
     type: String,
   })
   programa: string | null;
+
+  @ApiProperty({
+    example: '2502',
+    nullable: true,
+    type: String,
+    description: 'Código del plan de estudios al que pertenece la asignatura',
+  })
+  planEstudio: string | null;
 
   @ApiProperty({ example: 3 })
   idAsignatura: number;
@@ -275,6 +316,14 @@ export class ProyectoDocenteResumenDto {
     type: String,
   })
   programa: string | null;
+
+  @ApiProperty({
+    example: '1702',
+    nullable: true,
+    type: String,
+    description: 'Código del plan de estudios al que pertenece la asignatura',
+  })
+  planEstudio: string | null;
 
   @ApiProperty({ example: '2026-2', nullable: true, type: String })
   periodo: string | null;

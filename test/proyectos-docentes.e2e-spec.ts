@@ -13,6 +13,10 @@ import {
   borrarMatrizDePrueba,
   matrizDePrueba,
 } from './utilidades/permisos.js';
+import {
+  borrarPlanesDePrueba,
+  planDePrueba,
+} from './utilidades/plan-estudio.js';
 
 // Requiere el .env configurado y la base local levantada (npm run db:levantar). Crea sus
 // propios datos ficticios (dos programas, asignaturas, RAP y usuarios) y los borra al terminar.
@@ -110,7 +114,7 @@ describe('Proyectos docentes (e2e) · RF-08, HU-05-01 a HU-05-03', () => {
   ): Promise<number> {
     const asignatura = await prisma.asignatura.create({
       data: {
-        id_programa: idPrograma,
+        id_plan_estudio: await planDePrueba(prisma, idPrograma),
         codigo_interno: `${codigo}-${sufijo}`,
         nombre: `Asignatura ${codigo}`,
         semestre: 3,
@@ -275,6 +279,7 @@ describe('Proyectos docentes (e2e) · RF-08, HU-05-01 a HU-05-03', () => {
       await prisma.usuario.deleteMany({
         where: { id: { in: creados.usuarios } },
       });
+      await borrarPlanesDePrueba(prisma, creados.programas);
       await prisma.programa.deleteMany({
         where: { id: { in: creados.programas } },
       });

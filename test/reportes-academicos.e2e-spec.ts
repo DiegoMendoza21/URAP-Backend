@@ -10,6 +10,10 @@ import {
   SIN_ESTADO,
   TIPO_REPORTE,
 } from '../src/reportes/academicos.service.js';
+import {
+  borrarPlanesDePrueba,
+  planDePrueba,
+} from './utilidades/plan-estudio.js';
 
 // Requiere el .env configurado y la base local levantada (npm run db:levantar). Crea sus
 // propios datos ficticios y los borra al terminar. Funciona con o sin el seed.
@@ -115,7 +119,7 @@ describe('Reportes académicos (e2e) · RF-28, HU-12-03 y HU-12-05', () => {
   ) {
     const asignatura = await prisma.asignatura.create({
       data: {
-        id_programa: idPrograma,
+        id_plan_estudio: await planDePrueba(prisma, idPrograma),
         codigo_interno: `${nombre}-${sufijo}`,
         nombre: `${nombre} E2E`,
       },
@@ -300,6 +304,7 @@ describe('Reportes académicos (e2e) · RF-28, HU-12-03 y HU-12-05', () => {
       await prisma.usuario.deleteMany({
         where: { id: { in: creados.usuarios } },
       });
+      await borrarPlanesDePrueba(prisma, creados.programas);
       await prisma.programa.deleteMany({
         where: { id: { in: creados.programas } },
       });

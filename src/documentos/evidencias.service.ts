@@ -467,7 +467,9 @@ export class EvidenciasService {
           select: {
             id: true,
             id_periodo: true,
-            asignatura: { select: { id_programa: true } },
+            asignatura: {
+              select: { plan_estudio: { select: { id_programa: true } } },
+            },
             periodo_academico: { select: { cerrado: true } },
             proyecto_docente_rap: {
               select: { rap: true },
@@ -501,7 +503,7 @@ export class EvidenciasService {
       (await this.alcance.alcanzaPrograma(
         usuario.id,
         ROLES_CONSULTA_PROGRAMA,
-        proyecto.asignatura?.id_programa ?? null,
+        proyecto.asignatura?.plan_estudio.id_programa ?? null,
       ))
     ) {
       return { ...base, rapsConsultables: idsRap };

@@ -62,21 +62,35 @@ export class AsistenteService {
     }));
   }
 
-  /** Paso 2: asignaturas activas del programa. */
+  /**
+   * Paso 2: asignaturas activas del programa, de todos sus planes de estudio. Cada una lleva
+   * su plan, porque la misma asignatura puede estar en dos planes con códigos distintos
+   * (modelo v2.5). Van ordenadas por plan y, dentro de él, por semestre.
+   */
   async asignaturas(
     idUsuario: number,
     idPrograma: number,
   ): Promise<AsignaturaOpcionDto[]> {
     await this.exigirPrograma(idUsuario, idPrograma);
     const filas = await this.prisma.asignatura.findMany({
-      where: { id_programa: idPrograma, activo: true },
-      orderBy: [{ semestre: 'asc' }, { nombre: 'asc' }],
+      where: { plan_estudio: { id_programa: idPrograma }, activo: true },
+      include: { plan_estudio: true },
+      orderBy: [
+        { plan_estudio: { codigo: 'asc' } },
+        { semestre: 'asc' },
+        { nombre: 'asc' },
+      ],
     });
     return filas.map((asignatura) => ({
       id: asignatura.id,
       codigo: asignatura.codigo_interno,
       nombre: asignatura.nombre ?? '',
       semestre: asignatura.semestre,
+      planEstudio: {
+        id: asignatura.plan_estudio.id,
+        codigo: asignatura.plan_estudio.codigo,
+        nombre: asignatura.plan_estudio.nombre,
+      },
     }));
   }
 
@@ -95,12 +109,14 @@ export class AsistenteService {
     if (!asignatura) {
       throw new NotFoundException(MENSAJE_ASIGNATURA_NO_EXISTE);
     }
-    await this.exigirPrograma(idUsuario, asignatura.id_programa);
+    // Los RAP siguen siendo del programa (SUP-16): se ofrecen todos los del programa del plan.
+    const idPrograma = asignatura.plan_estudio.id_programa;
+    await this.exigirPrograma(idUsuario, idPrograma);
 
     const [periodo, raps] = await Promise.all([
       this.periodoVigente(),
       this.prisma.rap.findMany({
-        where: { id_programa: asignatura.id_programa, activo: true },
+        where: { id_programa: idPrograma, activo: true },
         orderBy: { numero: 'asc' },
       }),
     ]);
@@ -154,11 +170,12 @@ export class AsistenteService {
   ): Promise<ProyectoExistenteDto> {
     const asignatura = await this.prisma.asignatura.findFirst({
       where: { id: idAsignatura, activo: true },
+      select: { plan_estudio: { select: { id_programa: true } } },
     });
     if (!asignatura) {
       throw new NotFoundException(MENSAJE_ASIGNATURA_NO_EXISTE);
     }
-    await this.exigirPrograma(idUsuario, asignatura.id_programa);
+    await this.exigirPrograma(idUsuario, asignatura.plan_estudio.id_programa);
     const periodo = await this.periodoVigente();
     if (!periodo) {
       return { proyecto: null };

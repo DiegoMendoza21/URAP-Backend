@@ -38,7 +38,7 @@ export const ROLES = [
 export type NombreRol = (typeof ROLES)[number]['nombre'];
 
 /**
- * Módulos y permisos de la matriz de RF-03, con los códigos del modelo de datos (DBML v2.4).
+ * Módulos y permisos de la matriz de RF-03, con los códigos del modelo de datos (DBML v2.5).
  * La asignación inicial de permisos a cada rol está en matriz-permisos.ts (Tabla 17 del
  * Producto 1); el administrador la ajusta después con HU-02-06.
  */

@@ -83,7 +83,9 @@ const SELECCION_PROYECTO = {
   id: true,
   grupo: true,
   id_periodo: true,
-  asignatura: { select: { nombre: true, id_programa: true } },
+  asignatura: {
+    select: { nombre: true, plan_estudio: { select: { id_programa: true } } },
+  },
   periodo_academico: { select: { codigo: true, cerrado: true } },
   estado_proyecto: { select: { codigo: true, nombre: true } },
   proyecto_docente_rap: {
@@ -365,7 +367,7 @@ export class MedicionesService {
     }
     const escala = await this.escalaDeMedicion(
       rubrica.idEscala,
-      proyecto.asignatura?.id_programa ?? null,
+      proyecto.asignatura?.plan_estudio.id_programa ?? null,
     );
     if (!escala) {
       throw new ConflictException(MENSAJE_SIN_ESCALA);
@@ -526,7 +528,7 @@ export class MedicionesService {
     );
     const escala = await this.escalaDeMedicion(
       medicion.rubrica?.id_escala ?? null,
-      proyecto.asignatura?.id_programa ?? null,
+      proyecto.asignatura?.plan_estudio.id_programa ?? null,
     );
     if (!escala) {
       throw new ConflictException(MENSAJE_SIN_ESCALA);
@@ -647,7 +649,7 @@ export class MedicionesService {
     const [escala, totalEstudiantes] = await Promise.all([
       this.escalaDeMedicion(
         medicion.rubrica?.id_escala ?? null,
-        proyecto.asignatura?.id_programa ?? null,
+        proyecto.asignatura?.plan_estudio.id_programa ?? null,
       ),
       this.prisma.matricula.count({
         where: filtroHoja(proyecto.id, medicion.id),
@@ -727,7 +729,7 @@ export class MedicionesService {
     );
     const escala = await this.escalaDeMedicion(
       medicion.rubrica?.id_escala ?? null,
-      proyecto.asignatura?.id_programa ?? null,
+      proyecto.asignatura?.plan_estudio.id_programa ?? null,
     );
     if (!escala) {
       throw new ConflictException(MENSAJE_SIN_ESCALA);
@@ -858,7 +860,7 @@ export class MedicionesService {
     const [escala, matriculas] = await Promise.all([
       this.escalaDeMedicion(
         medicion.rubrica?.id_escala ?? null,
-        proyecto.asignatura?.id_programa ?? null,
+        proyecto.asignatura?.plan_estudio.id_programa ?? null,
       ),
       this.prisma.matricula.findMany({
         where: filtroHoja(proyecto.id, medicion.id),
@@ -1039,7 +1041,11 @@ export class MedicionesService {
       if (programas.length > 0) {
         condiciones.push({
           proyecto_docente: {
-            is: { asignatura: { is: { id_programa: { in: programas } } } },
+            is: {
+              asignatura: {
+                is: { plan_estudio: { id_programa: { in: programas } } },
+              },
+            },
           },
         });
       }
@@ -1095,7 +1101,7 @@ export class MedicionesService {
     if (!proyecto) {
       return null;
     }
-    const idPrograma = proyecto.asignatura?.id_programa ?? null;
+    const idPrograma = proyecto.asignatura?.plan_estudio.id_programa ?? null;
     const idsRap = proyecto.proyecto_docente_rap.map((fila) => fila.id_rap);
 
     const [departamento, liderados] = await Promise.all([

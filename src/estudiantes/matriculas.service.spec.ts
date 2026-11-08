@@ -65,7 +65,7 @@ function crearServicio({
         argumentos.select.proyecto_docente_docente.where.id_usuario;
       return Promise.resolve({
         id: ID_PROYECTO,
-        asignatura: { id_programa: 10 },
+        asignatura: { plan_estudio: { id_programa: 10 } },
         proyecto_docente_docente: asignados.includes(idUsuario)
           ? [{ id_usuario: idUsuario }]
           : [],

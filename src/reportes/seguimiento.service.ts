@@ -92,7 +92,12 @@ const SELECCION_FILA = {
   id: true,
   grupo: true,
   asignatura: {
-    select: { nombre: true, programa: { select: { nombre: true } } },
+    select: {
+      nombre: true,
+      plan_estudio: {
+        select: { codigo: true, programa: { select: { nombre: true } } },
+      },
+    },
   },
   periodo_academico: {
     select: {
@@ -163,7 +168,13 @@ export class SeguimientoService {
         this.prisma.programa.findMany({
           where: {
             activo: true,
-            asignatura: { some: { proyecto_docente: { some: deProyectos } } },
+            plan_estudio: {
+              some: {
+                asignatura: {
+                  some: { proyecto_docente: { some: deProyectos } },
+                },
+              },
+            },
           },
           select: { id: true, nombre: true },
           orderBy: { nombre: 'asc' },
@@ -174,8 +185,12 @@ export class SeguimientoService {
         }),
         this.prisma.asignatura.findMany({
           where: { proyecto_docente: { some: deProyectos } },
-          select: { id: true, nombre: true, id_programa: true },
-          orderBy: { nombre: 'asc' },
+          select: {
+            id: true,
+            nombre: true,
+            plan_estudio: { select: { codigo: true, id_programa: true } },
+          },
+          orderBy: [{ nombre: 'asc' }, { plan_estudio: { codigo: 'asc' } }],
         }),
         this.prisma.usuario.findMany({
           where: {
@@ -204,7 +219,8 @@ export class SeguimientoService {
       asignaturas: asignaturas.map((asignatura) => ({
         id: asignatura.id,
         nombre: asignatura.nombre ?? 'Asignatura sin nombre',
-        idPrograma: asignatura.id_programa,
+        idPrograma: asignatura.plan_estudio.id_programa,
+        planEstudio: asignatura.plan_estudio.codigo,
       })),
       docentes: docentes.map((docente) => ({
         id: docente.id,
@@ -353,7 +369,11 @@ export class SeguimientoService {
           adicional,
           { id_periodo: periodo.id },
           filtros.idPrograma
-            ? { asignatura: { is: { id_programa: filtros.idPrograma } } }
+            ? {
+                asignatura: {
+                  is: { plan_estudio: { id_programa: filtros.idPrograma } },
+                },
+              }
             : {},
           filtros.idAsignatura ? { id_asignatura: filtros.idAsignatura } : {},
           filtros.idDocente
@@ -422,7 +442,11 @@ export class SeguimientoService {
       return {};
     }
     return programas.length > 0
-      ? { asignatura: { is: { id_programa: { in: programas } } } }
+      ? {
+          asignatura: {
+            is: { plan_estudio: { id_programa: { in: programas } } },
+          },
+        }
       : null;
   }
 
@@ -529,7 +553,8 @@ function aFila(
     idProyecto: proyecto.id,
     asignatura: proyecto.asignatura?.nombre ?? 'Asignatura sin nombre',
     grupo: proyecto.grupo,
-    programa: proyecto.asignatura?.programa?.nombre ?? null,
+    programa: proyecto.asignatura?.plan_estudio.programa?.nombre ?? null,
+    planEstudio: proyecto.asignatura?.plan_estudio.codigo ?? null,
     periodo: periodo?.codigo ?? null,
     docentes: proyecto.proyecto_docente_docente
       .map((fila) => nombreCompleto(fila.usuario))

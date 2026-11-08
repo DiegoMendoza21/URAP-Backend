@@ -117,9 +117,13 @@ export class EstrategiasService {
   ): Promise<string[]> {
     const proyecto = await cliente.proyecto_docente.findUniqueOrThrow({
       where: { id },
-      select: { asignatura: { select: { id_programa: true } } },
+      select: {
+        asignatura: {
+          select: { plan_estudio: { select: { id_programa: true } } },
+        },
+      },
     });
-    const idPrograma = proyecto.asignatura?.id_programa;
+    const idPrograma = proyecto.asignatura?.plan_estudio.id_programa;
     if (!idPrograma) {
       return [];
     }
@@ -130,7 +134,7 @@ export class EstrategiasService {
         proyecto_docente: {
           is: {
             id: { not: id },
-            asignatura: { is: { id_programa: idPrograma } },
+            asignatura: { is: { plan_estudio: { id_programa: idPrograma } } },
           },
         },
       },

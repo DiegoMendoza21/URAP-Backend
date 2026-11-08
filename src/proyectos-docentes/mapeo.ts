@@ -10,13 +10,16 @@ import type {
 } from './dto/respuestas.dto.js';
 import { camposFaltantes } from './entities/informacion-institucional.js';
 
-/** Tipos de `asignatura_requisito.tipo` (DBML v2.4). */
+/** Tipos de `asignatura_requisito.tipo` (DBML v2.5). */
 const TIPO_PRERREQUISITO = 'prerrequisito';
 const TIPO_CORREQUISITO = 'correquisito';
 
-/** Lo que hace falta leer de la asignatura para la información institucional (p5). */
+/**
+ * Lo que hace falta leer de la asignatura para la información institucional (p5). Desde el
+ * modelo v2.5 el programa y la facultad se leen a través del plan de estudios.
+ */
 export const INCLUIR_ASIGNATURA = {
-  programa: { include: { facultad: true } },
+  plan_estudio: { include: { programa: { include: { facultad: true } } } },
   asignatura_requisito_asignatura_requisito_id_asignaturaToasignatura: {
     include: {
       asignatura_asignatura_requisito_id_asignatura_requeridaToasignatura: true,
@@ -30,7 +33,7 @@ export type AsignaturaConInformacion = Prisma.asignaturaGetPayload<{
 
 /** Lo que hace falta leer de un proyecto para su resumen en la bandeja. */
 export const INCLUIR_RESUMEN = {
-  asignatura: { include: { programa: true } },
+  asignatura: { include: { plan_estudio: { include: { programa: true } } } },
   periodo_academico: true,
   estado_proyecto: true,
   proyecto_docente_docente: {
@@ -104,8 +107,9 @@ export function aInformacionInstitucional(
   const faltantes = camposFaltantes(asignatura);
 
   return {
-    facultad: asignatura.programa?.facultad?.nombre ?? null,
-    programa: asignatura.programa?.nombre ?? null,
+    facultad: asignatura.plan_estudio.programa?.facultad?.nombre ?? null,
+    programa: asignatura.plan_estudio.programa?.nombre ?? null,
+    planEstudio: asignatura.plan_estudio.codigo,
     idAsignatura: asignatura.id,
     codigo: asignatura.codigo_interno,
     asignatura: asignatura.nombre,
@@ -140,7 +144,8 @@ export function aResumen(proyecto: ProyectoResumen): ProyectoDocenteResumenDto {
     idAsignatura: asignatura?.id ?? 0,
     codigoAsignatura: asignatura?.codigo_interno ?? null,
     asignatura: asignatura?.nombre ?? null,
-    programa: asignatura?.programa?.nombre ?? null,
+    programa: asignatura?.plan_estudio.programa?.nombre ?? null,
+    planEstudio: asignatura?.plan_estudio.codigo ?? null,
     periodo: proyecto.periodo_academico?.codigo ?? null,
     grupo: proyecto.grupo,
     estado: proyecto.estado_proyecto

@@ -125,7 +125,9 @@ const CAMPOS_ALERTA = {
 } as const satisfies Prisma.sesion_claseSelect;
 
 const INCLUIR_PROYECTO = {
-  asignatura: { select: { id_programa: true, nombre: true } },
+  asignatura: {
+    select: { plan_estudio: { select: { id_programa: true } }, nombre: true },
+  },
   periodo_academico: true,
   estado_proyecto: { select: { codigo: true, nombre: true } },
   horario_curso: { orderBy: { dia_semana: 'asc' } },
@@ -727,7 +729,7 @@ export class SesionesService {
       (await this.alcance.alcanzaPrograma(
         usuario.id,
         [ROL.administrador],
-        proyecto.asignatura?.id_programa ?? null,
+        proyecto.asignatura?.plan_estudio.id_programa ?? null,
       ))
     );
   }

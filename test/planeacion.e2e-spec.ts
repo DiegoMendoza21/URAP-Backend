@@ -13,6 +13,10 @@ import {
   borrarMatrizDePrueba,
   matrizDePrueba,
 } from './utilidades/permisos.js';
+import {
+  borrarPlanesDePrueba,
+  planDePrueba,
+} from './utilidades/plan-estudio.js';
 
 // Requiere el .env configurado y la base local levantada (npm run db:levantar). Crea sus
 // propios datos ficticios y los borra al terminar. Funciona con o sin el seed: usa los estados
@@ -211,7 +215,7 @@ describe('Planeación del curso (e2e) · RF-13 a RF-16, HU-06-04 a 07', () => {
     // Las horas de una asignatura real de 2 créditos (datos institucionales, §4).
     const conHoras = await prisma.asignatura.create({
       data: {
-        id_programa: programa.id,
+        id_plan_estudio: await planDePrueba(prisma, programa.id),
         codigo_interno: `PLAN-H-${sufijo}`,
         nombre: 'Asignatura ficticia con horas',
         semestre: 8,
@@ -224,7 +228,7 @@ describe('Planeación del curso (e2e) · RF-13 a RF-16, HU-06-04 a 07', () => {
     });
     const sinHoras = await prisma.asignatura.create({
       data: {
-        id_programa: programa.id,
+        id_plan_estudio: await planDePrueba(prisma, programa.id),
         codigo_interno: `PLAN-S-${sufijo}`,
         nombre: 'Asignatura ficticia sin horas',
         semestre: 1,
@@ -330,6 +334,7 @@ describe('Planeación del curso (e2e) · RF-13 a RF-16, HU-06-04 a 07', () => {
       await prisma.usuario.deleteMany({
         where: { id: { in: creados.usuarios } },
       });
+      await borrarPlanesDePrueba(prisma, creados.programas);
       await prisma.programa.deleteMany({
         where: { id: { in: creados.programas } },
       });

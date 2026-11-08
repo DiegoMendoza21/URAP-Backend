@@ -59,6 +59,15 @@ export class OpcionDto {
 export class AsignaturaOpcionSeguimientoDto extends OpcionDto {
   @ApiProperty({ example: 1, nullable: true, type: Number })
   idPrograma: number | null;
+
+  @ApiProperty({
+    example: '1702',
+    nullable: true,
+    type: String,
+    description:
+      'Código del plan de estudios: distingue la misma asignatura en dos planes',
+  })
+  planEstudio: string | null;
 }
 
 export class PeriodoOpcionSeguimientoDto {
@@ -197,6 +206,14 @@ export class ProyectoSeguimientoDto {
     type: String,
   })
   programa: string | null;
+
+  @ApiProperty({
+    example: '1702',
+    nullable: true,
+    type: String,
+    description: 'Código del plan de estudios de la asignatura',
+  })
+  planEstudio: string | null;
 
   @ApiProperty({ example: '2026-2', nullable: true, type: String })
   periodo: string | null;
