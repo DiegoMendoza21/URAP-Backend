@@ -70,6 +70,26 @@ Los datos del programa y sus fuentes están en `docs/datos-institucionales.md`.
 | `direccion.demo@urap.local` | Dirección del programa |
 | `estudiante.demo@urap.local` | Estudiante |
 
+y el **recorrido de demostración** (`src/datos-iniciales/recorrido-demo.ts`), para que el
+tablero, la revisión, la medición y los reportes muestren algo:
+
+- el caso de RF-31: Finanzas a corto plazo 2026-2, aprobado, con 34 estudiantes ficticios
+  matriculados y la medición cerrada del RAP 2 que reproduce la real de 2024-1 (85,29 %,
+  70,59 %, 50 % y 50 %; logro del RAP 63,97 %, 87 de 136), además de clases registradas,
+  vencidas y evidencias;
+- Macroeconomía 2026-2, aprobada, con otra medición del RAP 2: el reporte de logro de 2026-2
+  suma las dos asignaturas (64,81 %, 140 de 216);
+- Organización y dirección 2026-2, aprobada, con evidencias en los RAP 3 y 7;
+- proyectos en diligenciamiento, enviado a revisión y devuelto con observaciones;
+- un período 2026-1 cerrado, de fechas aproximadas, con un proyecto que tiene sesiones
+  incumplidas y la medición del RAP 2 con la que compara el reporte (50 %, 56 de 112).
+
+Solo se mide el RAP 2, el único con rúbrica real: los demás salen «No evaluado».
+
+Todo es ficticio y lleva el prefijo `DEMO-` (documentos de los estudiantes y grupo de los
+proyectos). Las evidencias son imágenes generadas por código, nunca fotos. Las sesiones se
+registran hasta siete días antes de sembrar: conviene sembrar cerca del día de la demostración.
+
 Faltan datos reales del programa: el porcentaje esperado, el calendario 2027-1, la ficha de las
 otras 65 asignaturas y las rúbricas de los RAP 1 y 3 a 7 (lista completa en
 `docs/datos-institucionales.md`, apartado 7).
