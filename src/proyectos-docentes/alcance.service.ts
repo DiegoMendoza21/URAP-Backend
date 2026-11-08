@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import type { NombreRol } from '../auth/roles.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
+import type {
+  CodigoModulo,
+  CodigoPermiso,
+} from '../datos-iniciales/catalogos.js';
 
 /**
  * Programas sobre los que un usuario ejerce uno o varios roles (`usuario_rol.id_programa`).
@@ -9,6 +13,19 @@ import { PrismaService } from '../common/prisma/prisma.service.js';
 export interface Alcance {
   global: boolean;
   programas: number[];
+}
+
+function aAlcance(filas: { id_programa: number | null }[]): Alcance {
+  return {
+    global: filas.some((fila) => fila.id_programa === null),
+    programas: [
+      ...new Set(
+        filas
+          .map((fila) => fila.id_programa)
+          .filter((id): id is number => id !== null),
+      ),
+    ],
+  };
 }
 
 /** Mismo criterio que el inicio de sesión: rol activo, no revocado y de un catálogo activo. */
@@ -40,16 +57,39 @@ export class AlcanceService {
       },
       select: { id_programa: true },
     });
-    return {
-      global: filas.some((fila) => fila.id_programa === null),
-      programas: [
-        ...new Set(
-          filas
-            .map((fila) => fila.id_programa)
-            .filter((id): id is number => id !== null),
-        ),
-      ],
-    };
+    return aAlcance(filas);
+  }
+
+  /**
+   * Programas donde el usuario tiene un permiso de la matriz, a través de alguno de sus roles
+   * vigentes (HU-01-03). Decide la matriz, no el nombre del rol: sirve también para los roles
+   * que cree el administrador. Lo usa la revisión del proyecto docente (RF-18) con
+   * `proyectos.aprobar`.
+   */
+  async alcanceConPermiso(
+    idUsuario: number,
+    modulo: CodigoModulo,
+    permiso: CodigoPermiso,
+  ): Promise<Alcance> {
+    const filas = await this.prisma.usuario_rol.findMany({
+      where: {
+        ...FILTRO_ROLES_VIGENTES,
+        id_usuario: idUsuario,
+        rol: {
+          is: {
+            activo: true,
+            rol_permiso: {
+              some: {
+                modulo: { codigo: modulo },
+                permiso: { codigo: permiso },
+              },
+            },
+          },
+        },
+      },
+      select: { id_programa: true },
+    });
+    return aAlcance(filas);
   }
 
   async alcanzaPrograma(
