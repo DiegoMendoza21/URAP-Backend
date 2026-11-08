@@ -194,6 +194,13 @@ español comprensible.
   la deja lista para que la otra persona continúe.
 - Antes de una tarea de varios archivos, propón un plan y espera aprobación.
 - Una rama y un PR por requisito o por grupo pequeño de requisitos relacionados.
+- **Trabaja siempre sobre lo último de `main`.** La copia local de `main` se atrasa sin avisar, y
+  los errores que solo aparecen al juntar el trabajo de los dos deben salir antes de la revisión.
+  - Antes de empezar, corre `git fetch origin` y crea la rama desde `origin/main`, nunca desde
+    un `main` local.
+  - Antes de pedir revisión, y otra vez antes de integrar, trae `origin/main` a tu rama
+    (`git merge origin/main`), resuelve los conflictos y vuelve a correr las pruebas.
+  - Si tu PR está apilado sobre otro, cuando ese se integre cambia la base a `main` y repite.
 - Al terminar un RF, verifica contra su secuencia normal **y sus excepciones**; las
   excepciones son criterios de aceptación, no casos borde opcionales.
 - Si un requisito y el modelo de datos se contradicen, para y pregunta. Casi siempre
