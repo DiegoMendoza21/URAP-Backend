@@ -16,6 +16,9 @@ import type { CodigoModulo, CodigoPermiso, NombreRol } from './catalogos.js';
  *   2026-11-06.
  * - `—` sin acceso.
  *
+ * Además, `EXCLUSIONES` quita permisos puntuales que una celda daría y que un requisito
+ * reserva a otro rol.
+ *
  * Los alcances de la tabla («propios», «publicados», «RAP asignados», «restringida») no caben
  * en `rol_permiso`: son filtros que aplica cada servicio. Aquí se guarda solo el permiso.
  */
@@ -121,15 +124,38 @@ export function permisosDeCelda(celda: CeldaMatriz): CodigoPermiso[] {
   return [...permisos];
 }
 
+/**
+ * Permisos que la celda de un rol daría, pero que un requisito reserva a otro.
+ *
+ * - **Administrador, crear proyectos docentes.** `ADM` incluye crear, pero RF-08 deja la
+ *   creación (asistente, duplicación y carga desde Excel) al Departamento académico, y el
+ *   asistente no le ofrece programas al Administrador. Sin esta exclusión vería «Nuevo proyecto
+ *   docente» y al entrar le dirían que no tiene programas. Decisión del 2026-11-07 (URAP-34).
+ */
+const EXCLUSIONES: Partial<
+  Record<NombreRol, { modulo: CodigoModulo; permiso: CodigoPermiso }[]>
+> = {
+  Administrador: [{ modulo: 'proyectos', permiso: 'crear' }],
+};
+
 /** Pares módulo–permiso iniciales de un rol. */
 export function permisosInicialesDe(
   rol: NombreRol,
 ): { modulo: CodigoModulo; permiso: CodigoPermiso }[] {
+  const excluidos = EXCLUSIONES[rol] ?? [];
   return Object.entries(MATRIZ_PERMISOS_INICIAL[rol]).flatMap(
     ([modulo, celda]) =>
-      permisosDeCelda(celda).map((permiso) => ({
-        modulo: modulo as CodigoModulo,
-        permiso,
-      })),
+      permisosDeCelda(celda)
+        .filter(
+          (permiso) =>
+            !excluidos.some(
+              (excluido) =>
+                excluido.modulo === modulo && excluido.permiso === permiso,
+            ),
+        )
+        .map((permiso) => ({
+          modulo: modulo as CodigoModulo,
+          permiso,
+        })),
   );
 }

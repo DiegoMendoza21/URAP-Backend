@@ -73,7 +73,7 @@ describe('Matriz inicial de permisos (Producto 1, Tabla 17)', () => {
     expect(proyectosDocente).toEqual(['actualizar', 'leer']);
   });
 
-  it('el Departamento crea y aprueba proyectos docentes (RF-08, RF-17), y el Administrador no los aprueba', () => {
+  it('el Departamento crea y aprueba proyectos docentes (RF-08, RF-17), y el Administrador no los crea ni los aprueba', () => {
     const departamento = permisosInicialesDe('Departamento académico');
     expect(departamento).toEqual(
       expect.arrayContaining([
@@ -81,10 +81,24 @@ describe('Matriz inicial de permisos (Producto 1, Tabla 17)', () => {
         { modulo: 'proyectos', permiso: 'aprobar' },
       ]),
     );
-    expect(
-      permisosInicialesDe('Administrador').some(
-        ({ permiso }) => permiso === 'aprobar',
-      ),
-    ).toBe(false);
+    const administrador = permisosInicialesDe('Administrador');
+    expect(administrador.some(({ permiso }) => permiso === 'aprobar')).toBe(
+      false,
+    );
+    const proyectosAdministrador = administrador
+      .filter(({ modulo }) => modulo === 'proyectos')
+      .map(({ permiso }) => permiso)
+      .sort();
+    expect(proyectosAdministrador).toEqual(
+      ['actualizar', 'administrar', 'eliminar', 'generar', 'leer'].sort(),
+    );
+  });
+
+  it('la exclusión solo quita crear en proyectos: el Administrador sigue creando en los demás módulos', () => {
+    const creaEn = permisosInicialesDe('Administrador')
+      .filter(({ permiso }) => permiso === 'crear')
+      .map(({ modulo }) => modulo);
+    expect(creaEn).not.toContain('proyectos');
+    expect(creaEn).toEqual(expect.arrayContaining(['usuarios', 'clases']));
   });
 });

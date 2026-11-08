@@ -27,6 +27,11 @@ import { ReportesService } from './reportes.service.js';
 /**
  * Reportes académicos. Por ahora, el de logro de los RAP del programa (RF-32). El rol abre la
  * puerta y el servicio aplica el alcance: el programa del rol o los RAP que lidera el líder.
+ *
+ * Va con `@Roles` y no con `@Permiso` porque la matriz no expresa la regla: `reportes.leer`
+ * incluye al Docente («C propios»), y este reporte es del programa: lo consultan el
+ * Administrador, el Departamento, la Dirección y el Líder RAP. Pendiente de decidir con el
+ * programa si la matriz debe expresarlo (URAP-34).
  */
 @ApiTags('Reportes')
 @ApiBearerAuth()

@@ -18,9 +18,8 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { AuditarConsulta } from '../auditoria/auditar-consulta.decorator.js';
-import { Roles } from '../auth/decoradores/roles.decorator.js';
+import { Permiso } from '../auth/decoradores/permiso.decorator.js';
 import { UsuarioActual } from '../auth/decoradores/usuario-actual.decorator.js';
-import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import { RespuestaErrorDto } from '../common/dto/respuesta-error.dto.js';
 import { DetalleSesionDto, RegistrarSesionDto } from './dto/registro.dto.js';
@@ -48,13 +47,7 @@ export class RegistroClaseController {
   @Get()
   // Trae la lista del curso con los ausentes (datos personales, Ley 1581): RF-29, NFR-020.
   @AuditarConsulta(TABLA_AUDITORIA_INASISTENCIA, 'idSesion')
-  @Roles(
-    ROL.administrador,
-    ROL.departamento,
-    ROL.direccion,
-    ROL.liderRap,
-    ROL.docente,
-  )
+  @Permiso('clases', 'leer')
   @ApiOperation({
     summary:
       'La sesión para registrarla o consultarla (RF-20, p2 y p3; RF-22, p3)',
@@ -67,7 +60,8 @@ export class RegistroClaseController {
   @ApiOkResponse({ type: DetalleSesionDto })
   @ApiForbiddenResponse({
     type: RespuestaErrorDto,
-    description: 'El usuario no tiene un rol que consulte proyectos docentes',
+    description:
+      'Ninguno de los roles del usuario consulta el registro de clases',
   })
   @ApiNotFoundResponse(NO_VISIBLE)
   detalle(
@@ -79,7 +73,7 @@ export class RegistroClaseController {
   }
 
   @Put('registro')
-  @Roles(ROL.docente, ROL.administrador)
+  @Permiso('clases', 'actualizar')
   @ApiOperation({
     summary: 'Registra o corrige la clase de una sesión (HU-08-04 y HU-09-02)',
     description:
@@ -98,8 +92,8 @@ export class RegistroClaseController {
   @ApiForbiddenResponse({
     type: RespuestaErrorDto,
     description:
-      'El usuario no tiene un rol que registre clases, o ve el proyecto pero no es su docente ' +
-      'asignado ni el administrador',
+      'Ninguno de los roles del usuario registra clases, o ve el proyecto pero no es su ' +
+      'docente asignado ni el administrador',
   })
   @ApiNotFoundResponse(NO_VISIBLE)
   @ApiConflictResponse({

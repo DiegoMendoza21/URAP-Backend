@@ -33,6 +33,12 @@ const ARCHIVO_EXCEL = {
 /**
  * Reportes académicos de RF-28. El rol abre la puerta y el servicio aplica el alcance: el
  * programa del rol o, para el Líder RAP, los RAP que lidera.
+ *
+ * Va con `@Roles` y no con `@Permiso` porque la matriz no expresa la regla: `reportes.leer`
+ * incluye al Docente («C propios»), y estos reportes son del programa: RF-28 no fija roles, y
+ * se dejaron al Administrador, el Departamento, la Dirección y, el de contribución, al Líder
+ * RAP (backend #20). Pendiente de decidir con el programa si la matriz debe expresarlo
+ * (URAP-34).
  */
 @ApiTags('Reportes')
 @ApiBearerAuth()

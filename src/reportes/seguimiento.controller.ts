@@ -29,6 +29,11 @@ import { SeguimientoService } from './seguimiento.service.js';
 /**
  * Tablero de seguimiento del diligenciamiento (RF-25). El rol abre la puerta y el servicio
  * aplica el alcance: los programas del rol del usuario.
+ *
+ * Va con `@Roles` y no con `@Permiso` porque la matriz no expresa la regla: el módulo
+ * «Reportes» de la Tabla 17 incluye al Docente («C propios») y al Líder RAP («C RAP
+ * asignados»), y la precondición de RF-25 deja el tablero al Administrador, el Departamento
+ * y la Dirección.
  */
 @ApiTags('Seguimiento del diligenciamiento')
 @ApiBearerAuth()

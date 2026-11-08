@@ -6,7 +6,7 @@ import path from 'node:path';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
 import { ContrasenasService } from '../src/auth/contrasenas.service.js';
-import { ROL } from '../src/auth/roles.js';
+import { type NombreRol, ROL } from '../src/auth/roles.js';
 import { PARAMETRO } from '../src/common/parametros/parametros.service.js';
 import { PrismaService } from '../src/common/prisma/prisma.service.js';
 import { configurarAplicacion } from '../src/configurar-aplicacion.js';
@@ -19,6 +19,13 @@ import {
   MENSAJE_SIN_RAP_A_CARGO,
   MENSAJE_SOLO_DOCENTES_DEL_PROYECTO,
 } from '../src/documentos/evidencias.service.js';
+import {
+  asegurarCatalogoDePermisos,
+  asegurarPermisosDeRol,
+  borrarCatalogoDePrueba,
+  borrarMatrizDePrueba,
+  matrizDePrueba,
+} from './utilidades/permisos.js';
 
 /**
  * Almacenamiento de disco en una carpeta temporal, con un interruptor para simular que el
@@ -58,6 +65,7 @@ describe('Evidencias (e2e) · RF-24, HU-10-01', () => {
   let almacenamiento: AlmacenamientoDePrueba;
   let tamanoMaximoMb: number;
 
+  const matriz = matrizDePrueba();
   const creados = {
     roles: [] as number[],
     parametros: [] as number[],
@@ -109,14 +117,17 @@ describe('Evidencias (e2e) · RF-24, HU-10-01', () => {
     fecha: '2026-09-14',
   });
 
+  /** El rol del sistema con sus permisos de la Tabla 17: la autorización los exige (HU-01-03). */
   async function rolPorNombre(nombre: string): Promise<number> {
     const existente = await prisma.rol.findUnique({ where: { nombre } });
-    if (existente) {
-      return existente.id;
+    const id =
+      existente?.id ??
+      (await prisma.rol.create({ data: { nombre, activo: true } })).id;
+    if (!existente) {
+      creados.roles.push(id);
     }
-    const rol = await prisma.rol.create({ data: { nombre, activo: true } });
-    creados.roles.push(rol.id);
-    return rol.id;
+    await asegurarPermisosDeRol(prisma, matriz, id, nombre as NombreRol);
+    return id;
   }
 
   async function asegurarParametro(clave: string, valor: string) {
@@ -216,6 +227,7 @@ describe('Evidencias (e2e) · RF-24, HU-10-01', () => {
     configurarAplicacion(app);
     await app.init();
     prisma = app.get(PrismaService);
+    await asegurarCatalogoDePermisos(prisma, matriz);
     const hash = await app.get(ContrasenasService).hashear(contrasena);
 
     tamanoMaximoMb = Number(
@@ -370,7 +382,9 @@ describe('Evidencias (e2e) · RF-24, HU-10-01', () => {
       await prisma.parametro_sistema.deleteMany({
         where: { id: { in: creados.parametros } },
       });
+      await borrarMatrizDePrueba(prisma, matriz);
       await prisma.rol.deleteMany({ where: { id: { in: creados.roles } } });
+      await borrarCatalogoDePrueba(prisma, matriz);
     }
     await app?.close();
     if (carpeta) {
@@ -778,15 +792,15 @@ describe('Evidencias (e2e) · RF-24, HU-10-01', () => {
         .expect(404);
     });
 
-    it('el Estudiante no consulta evidencias', async () => {
+    it('el Estudiante no consulta evidencias: no ve el proyecto (404)', async () => {
       await http()
         .get(ruta(proyecto))
         .set('Authorization', autorizar('estudiante'))
-        .expect(403);
+        .expect(404);
       await http()
         .get(ruta(proyecto, `/${idEvidenciaRap1}/archivo`))
         .set('Authorization', autorizar('estudiante'))
-        .expect(403);
+        .expect(404);
     });
   });
 });

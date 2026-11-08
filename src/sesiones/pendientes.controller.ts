@@ -8,9 +8,8 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { Roles } from '../auth/decoradores/roles.decorator.js';
+import { Permiso } from '../auth/decoradores/permiso.decorator.js';
 import { UsuarioActual } from '../auth/decoradores/usuario-actual.decorator.js';
-import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import { RespuestaErrorDto } from '../common/dto/respuesta-error.dto.js';
 import { ConsultarProyectosDocentesDto } from '../proyectos-docentes/dto/consultas.dto.js';
@@ -28,7 +27,7 @@ export class PendientesController {
   constructor(private readonly sesiones: SesionesService) {}
 
   @Get('pendientes')
-  @Roles(ROL.docente)
+  @Permiso('clases', 'actualizar')
   @ApiOperation({
     summary:
       'Sesiones vencidas y por vencer del docente, para su panel (RF-23, p5)',
@@ -44,7 +43,8 @@ export class PendientesController {
   })
   @ApiForbiddenResponse({
     type: RespuestaErrorDto,
-    description: 'El usuario no tiene el rol Docente responsable',
+    description:
+      'Ninguno de los roles del usuario registra clases (permiso `clases.actualizar`)',
   })
   pendientes(
     @UsuarioActual() usuario: UsuarioSesion,

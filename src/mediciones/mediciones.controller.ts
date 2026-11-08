@@ -48,6 +48,11 @@ import { MedicionesService } from './mediciones.service.js';
  * Medición de RAP (RF-30, HU-11-01 a HU-11-03). El rol abre la puerta y el servicio comprueba
  * el alcance: el docente sobre los cursos que tiene asignados, el líder RAP sobre los RAP que
  * lidera y el departamento sobre los cursos de su programa.
+ *
+ * Va con `@Roles` y no con `@Permiso` porque la matriz no expresa la regla: las valoraciones
+ * individuales son datos personales (Ley 1581) y las consultan solo esos tres roles, como dice
+ * el comentario de RF-30, mientras que `rap.leer` incluye además al Administrador, la Dirección
+ * y el Estudiante.
  */
 @ApiTags('Medición de RAP')
 @ApiBearerAuth()

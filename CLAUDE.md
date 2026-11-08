@@ -173,9 +173,13 @@ español comprensible.
   HU-01-03): el guard exige ese permiso de la matriz (`rol_permiso`) en la unión de los roles
   vigentes del usuario, leída de la base en cada petición. Decide la matriz, no el nombre del
   rol, así que también vale para los roles que cree el administrador. El alcance (el programa
-  del rol, los proyectos propios del docente) lo sigue comprobando el servicio, con
-  `usuario.asignaciones` o `AlcanceService`. `@Roles(ROL.departamento, …)` queda solo para
-  reglas que la matriz no expresa.
+  del rol, los proyectos propios del docente) lo sigue comprobando el servicio, y su fuente es
+  una sola: `AlcanceService` y `ProyectosDocentesService.filtroVisibilidad`. No leas el alcance
+  de `usuario.asignaciones`: llega en la sesión, pero pasar `AlcanceService` a usarla es una
+  tarea pendiente (URAP-34), y dos fuentes del mismo dato terminan diciendo cosas distintas.
+- `@Roles(ROL.departamento, …)` queda solo para reglas que la matriz no expresa, y el
+  controlador dice por qué (matriculados, mediciones, seguimiento y reportes). En el frontend,
+  la opción del menú de esas pantallas declara los mismos roles (`menu.ts`).
 - Errores: se lanzan las excepciones de Nest con el mensaje en español
   (`new ConflictException('Ya existe un usuario con ese correo.')`). El filtro global les da
   la forma `RespuestaErrorDto`. En los DTO, cada regla de class-validator lleva su `message`

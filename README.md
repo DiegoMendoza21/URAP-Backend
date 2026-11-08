@@ -89,6 +89,21 @@ npm run db:sembrar:demo
 
 `migrate reset` vuelve a aplicar las migraciones; en Prisma 7 ya no siembra por su cuenta.
 
+### Matriz de permisos (HU-01-03)
+
+Cada endpoint protegido exige un permiso de la matriz (`rol_permiso`), leída de la base en cada
+petición. **Una base sin la matriz responde 403 a todo**, también al Administrador en `/roles`,
+y no se puede arreglar desde la aplicación. Después de traer cambios, corra:
+
+```bash
+npm run db:sembrar
+```
+
+Carga la matriz en los roles que todavía no tienen permisos (`src/datos-iniciales/matriz-permisos.ts`).
+No modifica los roles que ya tienen: si la matriz inicial cambia (por ejemplo, el Administrador
+ya no crea proyectos docentes desde el 7 de noviembre), una base sembrada antes lo conserva.
+Se corrige con `PUT /roles/:id/permisos` o reiniciando la base como se explica arriba.
+
 ## Almacenamiento de archivos
 
 Las evidencias fotográficas (RF-24) no van a la base de datos: la base guarda solo su

@@ -3,9 +3,17 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
 import { ContrasenasService } from '../src/auth/contrasenas.service.js';
-import { ROL } from '../src/auth/roles.js';
+import { type NombreRol, ROL } from '../src/auth/roles.js';
 import { PrismaService } from '../src/common/prisma/prisma.service.js';
 import { configurarAplicacion } from '../src/configurar-aplicacion.js';
+import { MENSAJE_SOLO_DOCENTES_ASIGNADOS } from '../src/proyectos-docentes/edicion-proyecto.service.js';
+import {
+  asegurarCatalogoDePermisos,
+  asegurarPermisosDeRol,
+  borrarCatalogoDePrueba,
+  borrarMatrizDePrueba,
+  matrizDePrueba,
+} from './utilidades/permisos.js';
 
 // Requiere el .env configurado y la base local levantada (npm run db:levantar). Crea sus
 // propios datos ficticios (un programa, una asignatura, tres RAP, usuarios y proyectos) y los
@@ -19,6 +27,7 @@ describe('Diligenciamiento del proyecto docente (e2e) · RF-11, RF-12, HU-06-01 
   let prisma: PrismaService;
   let hash: string;
 
+  const matriz = matrizDePrueba();
   const creados = {
     roles: [] as number[],
     estados: [] as number[],
@@ -53,14 +62,17 @@ describe('Diligenciamiento del proyecto docente (e2e) · RF-11, RF-12, HU-06-01 
     };
   };
 
+  /** El rol del sistema con sus permisos de la Tabla 17: la autorización los exige (HU-01-03). */
   async function rolPorNombre(nombre: string): Promise<number> {
     const existente = await prisma.rol.findUnique({ where: { nombre } });
-    if (existente) {
-      return existente.id;
+    const id =
+      existente?.id ??
+      (await prisma.rol.create({ data: { nombre, activo: true } })).id;
+    if (!existente) {
+      creados.roles.push(id);
     }
-    const rol = await prisma.rol.create({ data: { nombre, activo: true } });
-    creados.roles.push(rol.id);
-    return rol.id;
+    await asegurarPermisosDeRol(prisma, matriz, id, nombre as NombreRol);
+    return id;
   }
 
   async function estado(
@@ -158,6 +170,7 @@ describe('Diligenciamiento del proyecto docente (e2e) · RF-11, RF-12, HU-06-01 
     configurarAplicacion(app);
     await app.init();
     prisma = app.get(PrismaService);
+    await asegurarCatalogoDePermisos(prisma, matriz);
     hash = await app.get(ContrasenasService).hashear(contrasena);
 
     estados.diligenciamiento = await estado(
@@ -198,6 +211,7 @@ describe('Diligenciamiento del proyecto docente (e2e) · RF-11, RF-12, HU-06-01 
     await crearUsuario('docenteNoAsignado', [ROL.docente], programa.id);
     await crearUsuario('departamento', [ROL.departamento], programa.id);
     await crearUsuario('estudiante', [ROL.estudiante], programa.id);
+    await crearUsuario('administrador', [ROL.administrador], programa.id);
 
     proyecto = await crearProyecto(estados.diligenciamiento, 'D1');
     proyectoAprobado = await crearProyecto(estados.aprobado, 'D2');
@@ -243,7 +257,9 @@ describe('Diligenciamiento del proyecto docente (e2e) · RF-11, RF-12, HU-06-01 
       await prisma.estado_proyecto.deleteMany({
         where: { id: { in: creados.estados } },
       });
+      await borrarMatrizDePrueba(prisma, matriz);
       await prisma.rol.deleteMany({ where: { id: { in: creados.roles } } });
+      await borrarCatalogoDePrueba(prisma, matriz);
     }
     await app?.close();
   });
@@ -264,10 +280,20 @@ describe('Diligenciamiento del proyecto docente (e2e) · RF-11, RF-12, HU-06-01 
         .expect(401);
     });
 
-    it('el Estudiante no consulta el diligenciamiento', async () => {
+    it('el Estudiante tiene «C publicados», pero no ve proyectos sin publicar (404)', async () => {
       await como('estudiante')
         .get(`/proyectos-docentes/${proyecto}/diligenciamiento`)
+        .expect(404);
+    });
+
+    it('el Administrador consulta, pero no diligencia: no es docente asignado (HU-01-03)', async () => {
+      await como('administrador')
+        .get(`/proyectos-docentes/${proyecto}/descripcion`)
+        .expect(200);
+      const { body } = await como('administrador')
+        .put(`/proyectos-docentes/${proyecto}/descripcion`, { texto: 'x' })
         .expect(403);
+      expect(body).toMatchObject({ mensaje: MENSAJE_SOLO_DOCENTES_ASIGNADOS });
     });
 
     it('un docente no asignado no ve el proyecto (404) ni lo edita', async () => {
