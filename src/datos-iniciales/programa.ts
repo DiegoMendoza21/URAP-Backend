@@ -523,12 +523,19 @@ export const PLAN_2502: AsignaturaPlan[] = [
   },
 ];
 
+/** Código del plan 1702: el del mapeo a RAP y el de los proyectos de demostración. */
+export const CODIGO_PLAN_1702 = '1702';
+
 /**
  * Los dos planes vigentes del programa en 2026-1 (docs/datos-institucionales.md, apartado 4).
  * Los dos quedan «vigente»: la regla de transición entre ellos todavía no la entrega el programa.
  */
 export const PLANES_DE_ESTUDIO: PlanEstudioSemilla[] = [
-  { codigo: '1702', nombre: 'Plan de estudios 1702', asignaturas: PLAN_1702 },
+  {
+    codigo: CODIGO_PLAN_1702,
+    nombre: 'Plan de estudios 1702',
+    asignaturas: PLAN_1702,
+  },
   { codigo: '2502', nombre: 'Plan de estudios 2502', asignaturas: PLAN_2502 },
 ];
 

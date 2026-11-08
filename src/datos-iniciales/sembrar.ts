@@ -3,6 +3,10 @@ import { existsSync } from 'node:fs';
 import { AppModule } from '../app.module.js';
 import { ContrasenasService } from '../auth/contrasenas.service.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
+import {
+  ALMACENAMIENTO_DOCUMENTAL,
+  type AlmacenamientoDocumental,
+} from '../documentos/almacenamiento/almacenamiento-documental.js';
 import { USUARIOS_DEMO } from './demostracion.js';
 import { leerOpcionesSembrado } from './opciones.js';
 import { sembrarDatosIniciales } from './sembrar-datos.js';
@@ -37,10 +41,21 @@ async function sembrar(): Promise<void> {
       demostracion = { hashesUsuarios };
     }
 
-    const resumen = await sembrarDatosIniciales(
+    const { resumen, archivos } = await sembrarDatosIniciales(
       app.get(PrismaService),
       demostracion,
     );
+    // Las imágenes de las evidencias de demostración, después de confirmar la transacción. Se
+    // vuelven a escribir en cada corrida: son siempre las mismas y así no falta ninguna.
+    if (archivos.length > 0) {
+      const almacenamiento = app.get<AlmacenamientoDocumental>(
+        ALMACENAMIENTO_DOCUMENTAL,
+        { strict: false },
+      );
+      for (const { clave, contenido } of archivos) {
+        await almacenamiento.guardar(clave, contenido);
+      }
+    }
     console.log(
       opciones.demo
         ? 'Datos base y de demostración cargados. Registros en la base:'
@@ -49,7 +64,8 @@ async function sembrar(): Promise<void> {
     console.table(resumen);
     if (opciones.demo) {
       console.log(
-        'Usuarios de demostración (contraseña: CONTRASENA_USUARIOS_DEMO):\n' +
+        `Recorrido de demostración: ${archivos.length} imágenes de evidencias guardadas.\n` +
+          'Usuarios de demostración (contraseña: CONTRASENA_USUARIOS_DEMO):\n' +
           USUARIOS_DEMO.map(
             ({ correo, roles }) => `  ${correo}  ${roles.join(', ')}`,
           ).join('\n'),

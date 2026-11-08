@@ -160,6 +160,10 @@ export const TIPOS_NOTIFICACION = [
   { codigo: 'sesion_por_vencer', nombre: 'Sesión por vencer' },
   { codigo: 'sesion_vencida', nombre: 'Sesión vencida' },
   {
+    codigo: 'proyecto_enviado',
+    nombre: 'Proyecto enviado a revisión',
+  },
+  {
     codigo: 'proyecto_devuelto',
     nombre: 'Proyecto devuelto con observaciones',
   },
