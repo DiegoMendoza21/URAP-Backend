@@ -6,7 +6,7 @@ import {
   GRUPO_DEMO,
   PERIODO_CERRADO_DEMO,
   SEMANAS_INCUMPLIDAS,
-  TOTAL_ESTUDIANTES_DEMO,
+  TAMANO_CASO_RF31,
 } from '../src/datos-iniciales/recorrido-demo.js';
 import { sembrarEn } from '../src/datos-iniciales/sembrar-datos.js';
 import type { Prisma } from '../src/generated/prisma/client.js';
@@ -125,7 +125,7 @@ describe('Datos de demostración del recorrido (e2e)', () => {
             ? null
             : Number(medicion.porcentaje_esperado),
         tamanoCohorte: medicion.tamano_cohorte,
-        totalEstudiantes: TOTAL_ESTUDIANTES_DEMO,
+        totalEstudiantes: TAMANO_CASO_RF31,
         indicadores: medicion.medicion_indicador.map((fila) => ({
           idIndicador: fila.id_indicador as number,
           numero: fila.indicador_rap?.numero ?? null,
@@ -174,13 +174,21 @@ describe('Datos de demostración del recorrido (e2e)', () => {
               tipo_sesion: { select: { codigo: true } },
             },
           },
+          evidencia_rap: { select: { rap: { select: { numero: true } } } },
           _count: { select: { matricula: true, evidencia_rap: true } },
         },
       });
+      const estados = new Set(proyectos.map((p) => p.estado_proyecto?.codigo));
       const porEstado = new Map(
         proyectos.map((p) => [p.estado_proyecto?.codigo, p]),
       );
-      expect([...porEstado.keys()].sort()).toEqual([
+      const curso = (asignatura: string, periodo: string) =>
+        proyectos.find(
+          (p) =>
+            p.asignatura?.nombre === asignatura &&
+            p.periodo_academico?.codigo === periodo,
+        );
+      expect([...estados].sort()).toEqual([
         'aprobado',
         'cerrado',
         'devuelto',
@@ -200,7 +208,7 @@ describe('Datos de demostración del recorrido (e2e)', () => {
       ).toEqual(['enviado']);
 
       // El caso de RF-31: 34 matriculados, evidencias y clases registradas y sin registrar.
-      const aprobado = porEstado.get('aprobado');
+      const aprobado = curso('Finanzas a corto plazo', PERIODO.codigo);
       expect(aprobado?._count.matricula).toBe(34);
       expect(aprobado?._count.evidencia_rap).toBeGreaterThan(0);
       const clases = (aprobado?.sesion_clase ?? []).filter(
@@ -210,7 +218,10 @@ describe('Datos de demostración del recorrido (e2e)', () => {
       expect(clases.some((s) => s.estado !== 'registrada')).toBe(true);
 
       // El período cerrado: una sesión incumplida por cada semana de SEMANAS_INCUMPLIDAS.
-      const cerrado = porEstado.get('cerrado');
+      const cerrado = curso(
+        'Finanzas a corto plazo',
+        PERIODO_CERRADO_DEMO.codigo,
+      );
       expect(cerrado?.periodo_academico?.codigo).toBe(
         PERIODO_CERRADO_DEMO.codigo,
       );
@@ -233,12 +244,80 @@ describe('Datos de demostración del recorrido (e2e)', () => {
         SEMANAS_INCUMPLIDAS.length,
       );
 
+      // Evidencias en más de un RAP (RF-24), para la contribución RAC-RAP.
+      expect(
+        [
+          ...new Set(
+            proyectos.flatMap((p) => p.evidencia_rap.map((e) => e.rap?.numero)),
+          ),
+        ].sort(),
+      ).toEqual([2, 3, 7]);
+
       // Una imagen por cada evidencia de demostración, para el almacenamiento documental.
       const evidencias = proyectos.reduce(
         (suma, p) => suma + p._count.evidencia_rap,
         0,
       );
       expect(archivos).toBe(evidencias);
+    });
+  }, 180_000);
+
+  it('el logro del RAP 2 suma las asignaturas del período y deja con qué comparar (RF-32)', async () => {
+    await sembrarYRevisar(async (tx) => {
+      /** Logro del RAP 2 en un período: todas sus mediciones cerradas de demostración juntas. */
+      const logroDelPeriodo = async (codigo: string) => {
+        const valoraciones = await tx.valoracion_estudiante.findMany({
+          where: {
+            medicion_indicador: {
+              is: {
+                medicion_rap: {
+                  is: {
+                    estado: 'cerrada',
+                    rap: { numero: 2 },
+                    proyecto_docente: {
+                      grupo: GRUPO_DEMO,
+                      periodo_academico: { codigo },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          select: { nivel_escala: { select: { valor: true } } },
+        });
+        const umbral = 3;
+        return logroDelRap([
+          {
+            enCumplimiento: valoraciones.filter(
+              (v) => (v.nivel_escala?.valor ?? 0) >= umbral,
+            ).length,
+            valoraciones: valoraciones.length,
+          },
+        ]);
+      };
+      // 2026-2: Finanzas a corto plazo (87 de 136) y Macroeconomía (53 de 80), sumadas.
+      expect(await logroDelPeriodo(PERIODO.codigo)).toEqual({
+        porcentaje: 64.81,
+        enCumplimiento: 140,
+        valoraciones: 216,
+      });
+      // 2026-1, el período anterior, más bajo y con la misma rúbrica.
+      expect(await logroDelPeriodo(PERIODO_CERRADO_DEMO.codigo)).toEqual({
+        porcentaje: 50,
+        enCumplimiento: 56,
+        valoraciones: 112,
+      });
+      const versiones = await tx.medicion_rap.findMany({
+        where: { proyecto_docente: { grupo: GRUPO_DEMO } },
+        select: {
+          rap: { select: { numero: true } },
+          rubrica: { select: { version: true } },
+        },
+      });
+      expect(versiones).toHaveLength(3);
+      expect(
+        versiones.every((m) => m.rap?.numero === 2 && m.rubrica?.version === 1),
+      ).toBe(true);
     });
   }, 180_000);
 });

@@ -21,12 +21,12 @@ import {
 } from '../sesiones/sesiones.service.js';
 import { imagenDemo } from './imagen-demo.js';
 import {
-  ANALISIS_CASO_RF31,
   DIAS_SIN_REGISTRAR,
   ESTUDIANTES_DEMO,
   GRUPO_DEMO,
-  INSTRUMENTOS_CASO_RF31,
-  nivelDelCasoRf31,
+  type EstudianteDemo,
+  type MedicionDemo,
+  nivelPorConteo,
   PERIODO_CERRADO_DEMO,
   PREFIJO_DEMO,
   type ProyectoDemo,
@@ -226,11 +226,11 @@ async function sembrarPeriodoCerrado(tx: Transaccion): Promise<number> {
   return periodo.id;
 }
 
-/** Los 34 estudiantes ficticios; devuelve su id en el orden de ESTUDIANTES_DEMO. */
+/** Los estudiantes ficticios de todos los cursos; devuelve su id por documento. */
 async function sembrarEstudiantes(
   tx: Transaccion,
   idPrograma: number,
-): Promise<number[]> {
+): Promise<Map<string, number>> {
   await tx.estudiante.createMany({
     data: ESTUDIANTES_DEMO.map((estudiante) => ({
       identificacion: estudiante.documento,
@@ -247,10 +247,7 @@ async function sembrarEstudiantes(
     },
     select: { id: true, identificacion: true },
   });
-  const porDocumento = porClave(filas, (fila) => fila.identificacion);
-  return ESTUDIANTES_DEMO.map((estudiante) =>
-    obtener(porDocumento, estudiante.documento, estudiante.documento),
-  );
+  return porClave(filas, (fila) => fila.identificacion);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -262,7 +259,7 @@ interface ContextoProyecto extends Referencias {
   idAsignatura: number;
   periodo: PeriodoLeido;
   hoy: string;
-  idsEstudiante: number[];
+  idsEstudiante: ReadonlyMap<string, number>;
 }
 
 async function sembrarProyecto(
@@ -331,8 +328,8 @@ async function sembrarProyecto(
     estadoDe,
   });
 
-  const idsMatricula = definicion.conMatriculados
-    ? await sembrarMatriculas(tx, idProyecto, contexto)
+  const idsMatricula = definicion.matriculados
+    ? await sembrarMatriculas(tx, idProyecto, definicion.matriculados, contexto)
     : [];
   const sesiones = definicion.horario
     ? await sembrarCalendario(tx, idProyecto, definicion, {
@@ -344,10 +341,10 @@ async function sembrarProyecto(
   await sembrarEvidencias(tx, idProyecto, definicion, {
     sesiones,
     idDocente,
-    idRap: obtener(idsRap, definicion.raps[0], `RAP ${definicion.raps[0]}`),
+    idsRap,
   });
-  if (definicion.conMedicionRf31) {
-    await sembrarMedicionRf31(tx, idProyecto, {
+  if (definicion.medicion) {
+    await sembrarMedicion(tx, idProyecto, definicion.medicion, {
       ...contexto,
       idDocente,
       idsMatricula,
@@ -466,12 +463,16 @@ async function sembrarRevision(
   }
 }
 
-/** RF-22: los 34 estudiantes ficticios, cargados por el administrador de demostración. */
+/** RF-22: los estudiantes ficticios del curso, cargados por el administrador de demostración. */
 async function sembrarMatriculas(
   tx: Transaccion,
   idProyecto: number,
-  { usuarios, periodo, idsEstudiante }: ContextoProyecto,
+  estudiantes: readonly EstudianteDemo[],
+  { usuarios, periodo, idsEstudiante: porDocumento }: ContextoProyecto,
 ): Promise<number[]> {
+  const idsEstudiante = estudiantes.map((estudiante) =>
+    obtener(porDocumento, estudiante.documento, estudiante.documento),
+  );
   const idAdministrador = obtener(
     usuarios,
     'admin.demo@urap.local',
@@ -564,7 +565,10 @@ async function sembrarCalendario(
         incumplidas.add(sesion.semana);
       }
     } else {
-      sinRegistrar = sesion.fecha > ultimoRegistrable;
+      // Al día: todas las que ya pasaron quedan registradas.
+      sinRegistrar = definicion.sesionesAlDia
+        ? sesion.fecha >= hoy
+        : sesion.fecha > ultimoRegistrable;
     }
     const registrada = idFestivo === null && !sinRegistrar;
     return {
@@ -658,7 +662,11 @@ async function sembrarEvidencias(
   tx: Transaccion,
   idProyecto: number,
   definicion: ProyectoDemo,
-  datos: { sesiones: SesionSembrada[]; idDocente: number; idRap: number },
+  datos: {
+    sesiones: SesionSembrada[];
+    idDocente: number;
+    idsRap: ReadonlyMap<number, number>;
+  },
 ): Promise<void> {
   for (const evidencia of definicion.evidencias ?? []) {
     const sesion = datos.sesiones.find(
@@ -667,15 +675,16 @@ async function sembrarEvidencias(
     if (!sesion) {
       continue;
     }
+    const rap = evidencia.rap ?? definicion.raps[0];
     await tx.evidencia_rap.create({
       data: {
         id_proyecto_docente: idProyecto,
-        id_rap: datos.idRap,
+        id_rap: obtener(datos.idsRap, rap, `RAP ${rap}`),
         id_sesion: sesion.id,
-        nombre_original: `${PREFIJO_DEMO}semana-${evidencia.semana}.png`,
-        url: claveEvidencia(idProyecto, evidencia.semana),
+        nombre_original: `${PREFIJO_DEMO}rap-${rap}-semana-${evidencia.semana}.png`,
+        url: claveEvidencia(idProyecto, rap, evidencia.semana),
         tipo: 'image/png',
-        tamano_bytes: imagenDemo(evidencia.semana).length,
+        tamano_bytes: imagenDemo(evidencia.semana + rap).length,
         descripcion: evidencia.descripcion,
         fecha: aFechaColumna(sesion.fecha),
         id_subido_por: datos.idDocente,
@@ -685,8 +694,12 @@ async function sembrarEvidencias(
   }
 }
 
-function claveEvidencia(idProyecto: number, semana: number): string {
-  return `evidencias/proyecto-${idProyecto}/${PREFIJO_DEMO.toLowerCase()}semana-${semana}.png`;
+function claveEvidencia(
+  idProyecto: number,
+  rap: number,
+  semana: number,
+): string {
+  return `evidencias/proyecto-${idProyecto}/${PREFIJO_DEMO.toLowerCase()}rap-${rap}-semana-${semana}.png`;
 }
 
 /** Los archivos de las evidencias de demostración de un proyecto, ya sembradas o no. */
@@ -699,23 +712,29 @@ async function archivosDeEvidencias(
       id_proyecto_docente: idProyecto,
       nombre_original: { startsWith: PREFIJO_DEMO },
     },
-    select: { url: true, sesion_clase: { select: { semana: true } } },
+    select: {
+      url: true,
+      sesion_clase: { select: { semana: true } },
+      rap: { select: { numero: true } },
+    },
   });
   return evidencias.flatMap((evidencia) => {
     const semana = evidencia.sesion_clase?.semana;
-    return evidencia.url && semana != null
-      ? [{ clave: evidencia.url, contenido: imagenDemo(semana) }]
+    const rap = evidencia.rap?.numero;
+    return evidencia.url && semana != null && rap != null
+      ? [{ clave: evidencia.url, contenido: imagenDemo(semana + rap) }]
       : [];
   });
 }
 
 /**
- * RF-30 y RF-31: la medición formativa del RAP 2, cerrada, con la rúbrica real (versión 1) y
- * los niveles que reproducen los conteos del caso real (CONTEOS_CASO_RF31).
+ * RF-30 y RF-31: una medición formativa del RAP 2, cerrada, con la rúbrica real (versión 1) y
+ * los niveles que reproducen sus conteos (`nivelPorConteo`), en el orden de los matriculados.
  */
-async function sembrarMedicionRf31(
+async function sembrarMedicion(
   tx: Transaccion,
   idProyecto: number,
+  medicionDemo: MedicionDemo,
   datos: ContextoProyecto & {
     idDocente: number;
     idsMatricula: number[];
@@ -724,7 +743,9 @@ async function sembrarMedicionRf31(
 ): Promise<void> {
   const { idsRap, idDocente, idsMatricula, niveles, periodo } = datos;
   if (datos.idRubrica === null) {
-    throw new Error('Falta la rúbrica real del RAP 2 para el caso de RF-31.');
+    throw new Error(
+      'Falta la rúbrica real del RAP 2 para la medición de demostración.',
+    );
   }
   const indicadores = await tx.indicador_rap.findMany({
     where: {
@@ -739,19 +760,19 @@ async function sembrarMedicionRf31(
       id_rap: obtener(idsRap, 2, 'RAP 2'),
       id_rubrica: datos.idRubrica,
       tipo_valoracion: TIPO_VALORACION.formativa,
-      periodo_toma: PERIODO_TOMA.segundo,
+      periodo_toma: PERIODO_TOMA[medicionDemo.periodoToma],
       anio_toma: Number(periodo.inicio.slice(0, 4)),
       tamano_cohorte: idsMatricula.length,
       porcentaje_esperado: datos.porcentajeEsperado,
       estado: ESTADO_MEDICION.cerrada,
-      ...ANALISIS_CASO_RF31,
+      ...medicionDemo.analisis,
       id_registrado_por: idDocente,
       id_cerrado_por: idDocente,
       fecha_cierre: momento(sumarDias(periodo.inicio, 84), '18:00'),
       medicion_indicador: {
         create: indicadores.map((indicador) => ({
           id_indicador: indicador.id,
-          instrumento: INSTRUMENTOS_CASO_RF31[indicador.numero ?? 0] ?? null,
+          instrumento: medicionDemo.instrumentos[indicador.numero ?? 0] ?? null,
         })),
       },
     },
@@ -768,7 +789,11 @@ async function sembrarMedicionRf31(
         id_matricula: idMatricula,
         id_nivel: obtener(
           niveles,
-          nivelDelCasoRf31(posicion, fila.indicador_rap?.numero ?? 0),
+          nivelPorConteo(
+            medicionDemo.conteos,
+            posicion,
+            fila.indicador_rap?.numero ?? 0,
+          ),
           'el nivel de la escala',
         ),
       })),
