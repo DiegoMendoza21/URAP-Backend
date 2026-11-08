@@ -26,6 +26,7 @@ import {
   RUBRICA_RAP_2,
   type RubricaSemilla,
 } from './programa.js';
+import { type ArchivoDemo, sembrarRecorridoDemo } from './sembrar-recorrido.js';
 
 type Transaccion = Prisma.TransactionClient;
 
@@ -35,42 +36,66 @@ export type ResumenSembrado = Record<string, number>;
 export interface DatosDemostracion {
   /** Hash de la contraseña de cada usuario de demostración, por correo. */
   hashesUsuarios: ReadonlyMap<string, string>;
+  /** `YYYY-MM-DD` desde el que se cuentan las sesiones pasadas; por defecto, hoy. */
+  hoy?: string;
+}
+
+export interface ResultadoSembrado {
+  resumen: ResumenSembrado;
+  /**
+   * Archivos de las evidencias de demostración, para guardarlos en el almacenamiento documental
+   * después de confirmar la transacción. Vacío sin datos de demostración.
+   */
+  archivos: ArchivoDemo[];
 }
 
 /**
  * Carga los datos base (catálogos, programa, RAP, rúbrica del RAP 2 y plan de estudios), que
- * sirven en cualquier ambiente, y, si se piden, los de demostración (período 2026-2 con su
- * receso, rúbricas provisionales y usuarios ficticios). Es repetible: solo
- * crea lo que falta y nunca modifica lo que ya existe, para no pisar lo que se cambie desde la
- * aplicación. Todo va en una transacción: si algo falla, la base queda como estaba.
+ * sirven en cualquier ambiente, y, si se piden, los de demostración: período 2026-2 con su
+ * receso, rúbricas provisionales, usuarios ficticios y el recorrido (proyectos en todos los
+ * estados, 34 estudiantes ficticios y la medición del caso de RF-31; ver recorrido-demo.ts). Es
+ * repetible: solo crea lo que falta y nunca modifica lo que ya existe, para no pisar lo que se
+ * cambie desde la aplicación. Todo va en una transacción: si algo falla, la base queda como estaba.
  */
 export function sembrarDatosIniciales(
   prisma: PrismaService,
   demostracion?: DatosDemostracion,
-): Promise<ResumenSembrado> {
-  return prisma.$transaction(
-    async (tx) => {
-      await sembrarCatalogos(tx);
-      const idPrograma = await sembrarPrograma(tx);
-      const idsRap = await sembrarRaps(tx, idPrograma);
-      await sembrarRubrica(tx, idPrograma, idsRap, RUBRICA_RAP_2);
-      await sembrarPlanDeEstudios(tx, idPrograma, idsRap);
-      if (demostracion) {
-        const idPeriodo = await sembrarPeriodo(tx);
-        for (const rubrica of RUBRICAS_PROVISIONALES) {
-          await sembrarRubrica(tx, idPrograma, idsRap, rubrica);
-        }
-        await sembrarUsuariosDemo(tx, {
-          idPrograma,
-          idPeriodo,
-          idsRap,
-          hashesUsuarios: demostracion.hashesUsuarios,
-        });
-      }
-      return contarRegistros(tx);
-    },
-    { timeout: 60_000 },
-  );
+): Promise<ResultadoSembrado> {
+  return prisma.$transaction((tx) => sembrarEn(tx, demostracion), {
+    timeout: 120_000,
+  });
+}
+
+/** El sembrado dentro de una transacción ya abierta (la prueba e2e la revierte al terminar). */
+export async function sembrarEn(
+  tx: Transaccion,
+  demostracion?: DatosDemostracion,
+): Promise<ResultadoSembrado> {
+  await sembrarCatalogos(tx);
+  const idPrograma = await sembrarPrograma(tx);
+  const idsRap = await sembrarRaps(tx, idPrograma);
+  await sembrarRubrica(tx, idPrograma, idsRap, RUBRICA_RAP_2);
+  await sembrarPlanDeEstudios(tx, idPrograma, idsRap);
+  let archivos: ArchivoDemo[] = [];
+  if (demostracion) {
+    const idPeriodo = await sembrarPeriodo(tx);
+    for (const rubrica of RUBRICAS_PROVISIONALES) {
+      await sembrarRubrica(tx, idPrograma, idsRap, rubrica);
+    }
+    await sembrarUsuariosDemo(tx, {
+      idPrograma,
+      idPeriodo,
+      idsRap,
+      hashesUsuarios: demostracion.hashesUsuarios,
+    });
+    archivos = await sembrarRecorridoDemo(tx, {
+      idPrograma,
+      idPeriodo,
+      idsRap,
+      hoy: demostracion.hoy,
+    });
+  }
+  return { resumen: await contarRegistros(tx), archivos };
 }
 
 async function sembrarCatalogos(tx: Transaccion): Promise<void> {
@@ -503,6 +528,11 @@ async function contarRegistros(tx: Transaccion): Promise<ResumenSembrado> {
     descriptores: await tx.rubrica_descriptor.count(),
     usuarios: await tx.usuario.count(),
     permisos_por_rol: await tx.rol_permiso.count(),
+    proyectos_docentes: await tx.proyecto_docente.count(),
+    estudiantes: await tx.estudiante.count(),
+    sesiones: await tx.sesion_clase.count(),
+    mediciones: await tx.medicion_rap.count(),
+    evidencias: await tx.evidencia_rap.count(),
   };
 }
 
