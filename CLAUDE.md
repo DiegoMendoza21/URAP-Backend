@@ -16,11 +16,11 @@ El dominio es institucional y no se deduce leyendo el repositorio. Lee primero:
 
 - `docs/glosario-dominio.md` — **siempre**. RAP, RAC, proyecto docente, roles, escalas.
   Confundir RAP con RAC es el error más fácil y más caro de este proyecto.
-- `docs/modelo-datos.md` y `docs/URAP_modelo_datos_v2.4.dbml` — antes de tocar migraciones,
-  entidades o consultas. 51 tablas, 91 claves foráneas.
+- `docs/modelo-datos.md` y `docs/URAP_modelo_datos_v2.5.dbml` — antes de tocar migraciones,
+  entidades o consultas. 52 tablas, 92 claves foráneas.
 - `docs/datos-institucionales.md` — los datos reales del programa (matriz de permisos, RAP y
-  rúbrica del RAP 2, cómo se mide el cumplimiento, plan de estudios, calendario 2026-2) y lo
-  que todavía falta pedirle.
+  rúbrica del RAP 2, cómo se mide el cumplimiento, planes de estudio 1702 y 2502, calendario
+  2026-2) y lo que todavía falta pedirle.
 - `docs/urap-backlog.md` — qué se construye y en qué orden: 15 épicas, 89 historias, 8 sprints.
 - `docs/indice-requisitos.md` — para ubicar el requisito que aplica.
 - `docs/requisitos-funcionales.md` — el RF completo del caso que vas a implementar,
@@ -96,10 +96,10 @@ npm run db:sembrar     # datos base: catálogos, programa, RAP, rúbrica del RAP
 npm run db:sembrar:demo # además, período 2026-2, rúbricas provisionales y usuarios de demostración (nunca en producción)
 ```
 
-- **Línea base:** ya existe (`prisma/migrations/0_init`). Salió una sola vez del DDL
-  `docs/URAP_esquema_mysql_v2.4.sql` con `prisma db pull`, más `@updatedAt` en cada
-  `updated_at`. El DDL no se vuelve a aplicar: una base nueva se crea con
-  `npm run db:desplegar`.
+- **Línea base:** ya existe (`prisma/migrations/0_init`). Salió una sola vez del DDL de la
+  v2.4 con `prisma db pull`, más `@updatedAt` en cada `updated_at`; los cambios posteriores,
+  como los planes de estudio de la v2.5, son migraciones. El DDL no se vuelve a aplicar: una
+  base nueva se crea con `npm run db:desplegar`.
 - **Cada cambio de modelo:** DBML → `prisma/schema.prisma` →
   `npm run db:migrar -- --name <cambio>` → `npm run db:generar`. En Prisma 7, `migrate dev`
   ya no regenera el cliente por su cuenta.
@@ -158,9 +158,9 @@ español comprensible.
   19 de enero de 2038. Los porcentajes son `decimal(5,2)`; sin precisión explícita MySQL los
   crea como `DECIMAL(10,0)` y redondea.
 - **El DBML es el documento de diseño; las migraciones de Prisma son el historial de la base.**
-  Todo cambio de modelo empieza en `docs/URAP_modelo_datos_v2.4.dbml` y termina en una
+  Todo cambio de modelo empieza en `docs/URAP_modelo_datos_v2.5.dbml` y termina en una
   migración, y no está terminado hasta que los dos digan lo mismo. El DDL completo
-  (`docs/URAP_esquema_mysql_v2.4.sql`) se aplica **una sola vez**, para crear la base vacía y
+  (`docs/URAP_esquema_mysql_v2.5.sql`) se aplica **una sola vez**, para crear la base vacía y
   sacar la línea base; después no se vuelve a aplicar, porque no es incremental y la base ya
   tiene datos. Si una migración necesita apartarse del DBML, primero se cambia el DBML y se
   explica en el PR.

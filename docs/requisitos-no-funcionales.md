@@ -1,6 +1,6 @@
 # URAP — Requisitos no funcionales (NFR-001 a NFR-020)
 
-Generado desde `Requisitos_URAP_v1.1.xlsx`. El Excel es la fuente oficial.
+Generado desde `Requisitos_URAP_v1.2.xlsx`. El Excel es la fuente oficial.
 
 ## NFR-001 — Capacidad de usuarios concurrentes
 
