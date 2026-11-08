@@ -85,10 +85,10 @@ export async function sembrarRecorridoDemo(
       definicion.periodo === 'vigente'
         ? await leerPeriodo(tx, contexto.idPeriodo)
         : await leerPeriodo(tx, idPeriodoCerrado);
-    const idAsignatura = obtener(
-      datos.asignaturas,
+    const idAsignatura = await asignaturaDemo(
+      tx,
+      contexto.idPrograma,
       definicion.asignatura,
-      `la asignatura ${definicion.asignatura}`,
     );
     const existente = await tx.proyecto_docente.findFirst({
       where: {
@@ -121,7 +121,6 @@ interface Referencias {
   estados: Map<string, number>;
   tiposSesion: Map<string, number>;
   usuarios: Map<string, number>;
-  asignaturas: Map<string, number>;
   festivos: Map<string, number>;
   /** Nivel de la escala del programa por su valor (1 a 4). */
   niveles: Map<number, number>;
@@ -132,31 +131,26 @@ async function leerReferencias(
   tx: Transaccion,
   { idPrograma }: ContextoRecorrido,
 ): Promise<Referencias> {
-  const [estados, tipos, usuarios, asignaturas, festivos, programa] =
-    await Promise.all([
-      tx.estado_proyecto.findMany({ select: { id: true, codigo: true } }),
-      tx.tipo_sesion.findMany({ select: { id: true, codigo: true } }),
-      tx.usuario.findMany({
-        where: { email: { endsWith: '.demo@urap.local' } },
-        select: { id: true, email: true },
-      }),
-      tx.asignatura.findMany({
-        where: { id_programa: idPrograma },
-        select: { id: true, nombre: true },
-      }),
-      tx.dia_festivo.findMany({ select: { id: true, fecha: true } }),
-      tx.programa.findUniqueOrThrow({
-        where: { id: idPrograma },
-        select: {
-          escala_valoracion_programa_id_escala_activaToescala_valoracion: {
-            select: {
-              porcentaje_esperado: true,
-              nivel_escala: { select: { id: true, valor: true } },
-            },
+  const [estados, tipos, usuarios, festivos, programa] = await Promise.all([
+    tx.estado_proyecto.findMany({ select: { id: true, codigo: true } }),
+    tx.tipo_sesion.findMany({ select: { id: true, codigo: true } }),
+    tx.usuario.findMany({
+      where: { email: { endsWith: '.demo@urap.local' } },
+      select: { id: true, email: true },
+    }),
+    tx.dia_festivo.findMany({ select: { id: true, fecha: true } }),
+    tx.programa.findUniqueOrThrow({
+      where: { id: idPrograma },
+      select: {
+        escala_valoracion_programa_id_escala_activaToescala_valoracion: {
+          select: {
+            porcentaje_esperado: true,
+            nivel_escala: { select: { id: true, valor: true } },
           },
         },
-      }),
-    ]);
+      },
+    }),
+  ]);
   const escala =
     programa.escala_valoracion_programa_id_escala_activaToescala_valoracion;
   if (!escala) {
@@ -168,13 +162,35 @@ async function leerReferencias(
     estados: porClave(estados, (fila) => fila.codigo),
     tiposSesion: porClave(tipos, (fila) => fila.codigo),
     usuarios: porClave(usuarios, (fila) => fila.email),
-    asignaturas: porClave(asignaturas, (fila) => fila.nombre),
     festivos: porClave(festivos, (fila) =>
       fila.fecha ? aTextoFecha(fila.fecha) : null,
     ),
     niveles: porClave(escala.nivel_escala, (fila) => fila.valor),
     porcentajeEsperado: escala.porcentaje_esperado,
   };
+}
+
+/**
+ * La asignatura de un proyecto de demostración, por su nombre en el plan de estudios. Es la
+ * única búsqueda de asignaturas del recorrido, a propósito: con el modelo v2.5 las asignaturas
+ * dejan de colgar del programa y cuelgan del plan de estudios (1702 o 2502), y todas las de la
+ * demostración son del plan 1702. Cuando entre, se cambia aquí el filtro por ese plan y nada más.
+ */
+async function asignaturaDemo(
+  tx: Transaccion,
+  idPrograma: number,
+  nombre: string,
+): Promise<number> {
+  const asignatura = await tx.asignatura.findFirst({
+    where: { id_programa: idPrograma, nombre },
+    select: { id: true },
+  });
+  if (!asignatura) {
+    throw new Error(
+      `No se encontró la asignatura ${nombre} al sembrar el recorrido de demostración.`,
+    );
+  }
+  return asignatura.id;
 }
 
 interface PeriodoLeido {
