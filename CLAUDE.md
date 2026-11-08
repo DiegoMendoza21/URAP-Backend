@@ -160,10 +160,10 @@ español comprensible.
 - **El DBML es el documento de diseño; las migraciones de Prisma son el historial de la base.**
   Todo cambio de modelo empieza en `docs/URAP_modelo_datos_v2.5.dbml` y termina en una
   migración, y no está terminado hasta que los dos digan lo mismo. El DDL completo
-  (`docs/URAP_esquema_mysql_v2.5.sql`) se aplica **una sola vez**, para crear la base vacía y
-  sacar la línea base; después no se vuelve a aplicar, porque no es incremental y la base ya
-  tiene datos. Si una migración necesita apartarse del DBML, primero se cambia el DBML y se
-  explica en el PR.
+  (`docs/URAP_esquema_mysql_v2.5.sql`) es solo de consulta: **no se aplica** a ninguna base.
+  La línea base ya salió una vez del DDL de la v2.4, y una base nueva se crea con las
+  migraciones; aplicarle el DDL rompería `npm run db:desplegar`, porque no es incremental. Si
+  una migración necesita apartarse del DBML, primero se cambia el DBML y se explica en el PR.
 - Todo endpoint se documenta con decoradores de OpenAPI: el frontend genera sus tipos desde
   ahí y es el único contrato entre los dos repos. La especificación se publica en
   `/api/openapi.json`.
