@@ -103,7 +103,7 @@ CREATE TABLE `plan_estudio` (
 
 CREATE TABLE `asignatura` (
   `id` integer PRIMARY KEY AUTO_INCREMENT,
-  `id_plan_estudio` integer,
+  `id_plan_estudio` integer NOT NULL,
   `codigo_interno` varchar(255),
   `nombre` varchar(255),
   `semestre` integer,

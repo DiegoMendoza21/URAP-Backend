@@ -183,7 +183,7 @@ Table plan_estudio {
 
 Table asignatura {
   id integer [primary key, increment]
-  id_plan_estudio integer // v2.5: reemplaza id_programa; el programa sale del plan
+  id_plan_estudio integer [not null] // v2.5: reemplaza id_programa; el programa sale del plan
   codigo_interno varchar  // codigo SMA, unico dentro del plan. Ej: IX24193 (plan 2502)
   nombre varchar
   semestre integer        // nivel dentro de SU plan (I a X); cambia entre planes
