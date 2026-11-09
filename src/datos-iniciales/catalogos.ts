@@ -188,6 +188,13 @@ export const PARAMETROS = [
       'Días antes del vencimiento en que una sesión se marca «Por vencer» (RF-23).',
   },
   {
+    clave: 'revision_bloquear_autoaprobacion',
+    valor: 'si',
+    tipo_dato: 'booleano',
+    descripcion:
+      'Con «si», quien es docente de un proyecto docente no puede aprobarlo ni devolverlo: lo revisa otra persona del Departamento (RF-18; separación de funciones, Ley 87 de 1993). Con «no», no se aplica.',
+  },
+  {
     clave: 'inicio_sesion_intentos_maximos',
     valor: '5',
     tipo_dato: 'entero',

@@ -37,6 +37,7 @@ import {
   PaginaPendientesRevisionDto,
   TransicionProyectoDto,
   VerificacionEnvioDto,
+  VerificacionRevisionDto,
 } from './dto/revision.dto.js';
 import { RevisionService } from './revision.service.js';
 
@@ -48,8 +49,9 @@ const SIN_PERMISO_LEER = {
 const SIN_PERMISO_REVISAR = {
   type: RespuestaErrorDto,
   description:
-    'Ninguno de los roles del usuario aprueba proyectos docentes, o no los aprueba en el ' +
-    'programa del proyecto',
+    'Ninguno de los roles del usuario aprueba proyectos docentes, no los aprueba en el ' +
+    'programa del proyecto, o es docente del proyecto y el parámetro ' +
+    '`revision_bloquear_autoaprobacion` está encendido (separación de funciones)',
 };
 const NO_ENVIADO = {
   type: RespuestaErrorDto,
@@ -131,7 +133,8 @@ export class RevisionController {
       'Bandeja de proyectos pendientes de revisión (RF-18, p1; HU-07-02)',
     description:
       'Proyectos «Enviado a revisión» de los programas donde el usuario aprueba, los que ' +
-      'llevan más tiempo esperando primero.',
+      'llevan más tiempo esperando primero. Incluye aquellos en los que es docente, con ' +
+      '`puedeRevisar` en falso y el `motivo`, cuando la separación de funciones está encendida.',
   })
   @ApiOkResponse({ type: PaginaPendientesRevisionDto })
   @ApiBadRequestResponse({
@@ -147,6 +150,29 @@ export class RevisionController {
     @Query() consulta: ConsultarPendientesRevisionDto,
   ): Promise<PaginaPendientesRevisionDto> {
     return this.revision.pendientes(usuario, consulta);
+  }
+
+  @Get('proyectos-docentes/:id/revision')
+  @Permiso('proyectos', 'aprobar')
+  @ApiOperation({
+    summary:
+      'Verificación antes de aprobar o devolver (RF-18; HU-07-03 y HU-07-04)',
+    description:
+      'Si el usuario puede aprobar o devolver el proyecto ahora y, si no, por qué: no lo ' +
+      'aprueba en el programa, es docente del proyecto con la separación de funciones ' +
+      'encendida (`revision_bloquear_autoaprobacion`) o el proyecto no está enviado a revisión.',
+  })
+  @ApiOkResponse({ type: VerificacionRevisionDto })
+  @ApiForbiddenResponse({
+    type: RespuestaErrorDto,
+    description: 'Ninguno de los roles del usuario aprueba proyectos docentes',
+  })
+  @ApiNotFoundResponse(NO_EXISTE)
+  verificarRevision(
+    @UsuarioActual() usuario: UsuarioSesion,
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<VerificacionRevisionDto> {
+    return this.revision.verificarRevision(usuario, id);
   }
 
   @Post('proyectos-docentes/:id/aprobacion')

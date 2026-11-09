@@ -4,6 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
 import { ContrasenasService } from '../src/auth/contrasenas.service.js';
 import { type NombreRol, ROL } from '../src/auth/roles.js';
+import { PARAMETRO } from '../src/common/parametros/parametros.service.js';
 import { PrismaService } from '../src/common/prisma/prisma.service.js';
 import { configurarAplicacion } from '../src/configurar-aplicacion.js';
 import { NOTIFICACION } from '../src/notificaciones/notificaciones.service.js';
@@ -12,8 +13,10 @@ import {
   MENSAJE_OBSERVACION_NO_EXISTE,
   MENSAJE_OBSERVACIONES_SOLO_DEVUELTO,
   MENSAJE_PERIODO_CERRADO_ENVIO,
+  MENSAJE_PROYECTO_PROPIO,
   MENSAJE_SECCIONES_INCOMPLETAS,
   MENSAJE_SOLO_RESPONSABLE,
+  MOTIVO_PROYECTO_PROPIO,
 } from '../src/proyectos-docentes/revision.service.js';
 import {
   asegurarCatalogoDePermisos,
@@ -853,6 +856,165 @@ describe('Revisión y aprobación del proyecto docente (e2e) · RF-17, RF-18, HU
 
     it('el Estudiante no lo ve: el proyecto no está publicado (404)', async () => {
       await como('estudiante').get(ruta(proyecto, 'historial')).expect(404);
+    });
+  });
+
+  // Va al final: crea sus propios proyectos y cambia un parámetro global, que deja como estaba.
+  describe('separación de funciones (RF-18, revision_bloquear_autoaprobacion)', () => {
+    const clave = PARAMETRO.revisionBloquearAutoaprobacion;
+    const devolucion = {
+      observaciones: [{ seccion: 'descripcion', observacion: 'Complete.' }],
+    };
+    let original: {
+      valor: string | null;
+      tipo_dato: string | null;
+      descripcion: string | null;
+      id_actualizado_por: number | null;
+    } | null;
+    /** Del Departamento y docente responsable del proyecto. */
+    let propio: number;
+    /** Del Departamento y codocente: también lo elabora. */
+    let comoCodocente: number;
+
+    type Pendiente = { id: number; puedeRevisar: boolean; motivo: unknown };
+    const pendientesDe = async (quien: string): Promise<Pendiente[]> => {
+      const { body } = await como(quien)
+        .get(`/revisiones/pendientes?idDocente=${usuarios.mixtoDocente}`)
+        .expect(200);
+      return (body as { elementos: Pendiente[] }).elementos;
+    };
+
+    /** Fija el parámetro; con `null` lo borra, como en una base sin los datos base. */
+    async function fijar(valor: string | null): Promise<void> {
+      if (valor === null) {
+        await prisma.parametro_sistema.deleteMany({ where: { clave } });
+        return;
+      }
+      await prisma.parametro_sistema.upsert({
+        where: { clave },
+        create: { clave, valor, tipo_dato: 'booleano' },
+        update: { valor },
+      });
+    }
+
+    beforeAll(async () => {
+      original = await prisma.parametro_sistema.findUnique({
+        where: { clave },
+        select: {
+          valor: true,
+          tipo_dato: true,
+          descripcion: true,
+          id_actualizado_por: true,
+        },
+      });
+      await crearUsuario(
+        'mixtoDocente',
+        [ROL.departamento, ROL.docente],
+        programa,
+      );
+      propio = await crearProyecto(
+        'R5',
+        periodoAbierto,
+        usuarios.mixtoDocente,
+        estados.enviado,
+      );
+      comoCodocente = await crearProyecto(
+        'R6',
+        periodoAbierto,
+        usuarios.docente,
+        estados.enviado,
+      );
+      await prisma.proyecto_docente_docente.create({
+        data: {
+          id_proyecto_docente: comoCodocente,
+          id_usuario: usuarios.mixtoDocente,
+          responsable: false,
+          orden: 3,
+        },
+      });
+    });
+
+    afterAll(async () => {
+      // Con los datos base, la fila vuelve tal como estaba (una prueba la borra); sin ellos, sin fila.
+      if (original) {
+        await prisma.parametro_sistema.upsert({
+          where: { clave },
+          create: { clave, ...original },
+          update: original,
+        });
+      } else {
+        await prisma.parametro_sistema.deleteMany({ where: { clave } });
+      }
+    });
+
+    it('encendido: la bandeja muestra los propios con el aviso; para otra persona, revisables', async () => {
+      await fijar('si');
+      expect(await pendientesDe('mixtoDocente')).toEqual(
+        expect.arrayContaining(
+          [propio, comoCodocente].map((id) =>
+            expect.objectContaining({
+              id,
+              puedeRevisar: false,
+              motivo: MOTIVO_PROYECTO_PROPIO,
+            }),
+          ),
+        ),
+      );
+      expect(await pendientesDe('departamento')).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: propio,
+            puedeRevisar: true,
+            motivo: null,
+          }),
+        ]),
+      );
+    });
+
+    it('encendido: quien es docente del proyecto no lo aprueba ni lo devuelve (403)', async () => {
+      await fijar('si');
+      for (const id of [propio, comoCodocente]) {
+        const { body } = await como('mixtoDocente')
+          .post(ruta(id, 'aprobacion'))
+          .expect(403);
+        expect(body).toMatchObject({ mensaje: MENSAJE_PROYECTO_PROPIO });
+        await como('mixtoDocente')
+          .post(ruta(id, 'devolucion'), devolucion)
+          .expect(403);
+        expect(await estadoDe(id)).toBe('enviado');
+      }
+    });
+
+    it('si el parámetro falta, se aplica la regla (403)', async () => {
+      await fijar(null);
+      const { body } = await como('mixtoDocente')
+        .post(ruta(propio, 'aprobacion'))
+        .expect(403);
+      expect(body).toMatchObject({ mensaje: MENSAJE_PROYECTO_PROPIO });
+      expect(await estadoDe(propio)).toBe('enviado');
+    });
+
+    it('encendido: otra persona del Departamento sí lo aprueba', async () => {
+      await fijar('si');
+      await como('departamento')
+        .post(ruta(comoCodocente, 'aprobacion'))
+        .expect(200);
+      expect(await estadoDe(comoCodocente)).toBe('aprobado');
+    });
+
+    it('apagado: el docente del proyecto lo revisa como antes', async () => {
+      await fijar('no');
+      expect(await pendientesDe('mixtoDocente')).toEqual([
+        expect.objectContaining({
+          id: propio,
+          puedeRevisar: true,
+          motivo: null,
+        }),
+      ]);
+      await como('mixtoDocente')
+        .post(ruta(propio, 'devolucion'), devolucion)
+        .expect(200);
+      expect(await estadoDe(propio)).toBe('devuelto');
     });
   });
 });

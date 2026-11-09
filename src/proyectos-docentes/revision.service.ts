@@ -9,6 +9,10 @@ import {
 import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
+import {
+  PARAMETRO,
+  ParametrosService,
+} from '../common/parametros/parametros.service.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import {
@@ -33,10 +37,12 @@ import type {
   SeccionIncompletaDto,
   TransicionProyectoDto,
   VerificacionEnvioDto,
+  VerificacionRevisionDto,
 } from './dto/revision.dto.js';
 import {
   EdicionProyectoService,
   MENSAJE_SOLO_DOCENTES_ASIGNADOS,
+  type ProyectoConAcceso,
 } from './edicion-proyecto.service.js';
 import { SECCIONES } from './entities/secciones.js';
 import { aResumen, INCLUIR_RESUMEN } from './mapeo.js';
@@ -75,6 +81,29 @@ export const MENSAJE_SECCIONES_INCOMPLETAS =
   'El proyecto todavía tiene secciones incompletas. Complételas para enviarlo a revisión.';
 export const MENSAJE_FUERA_DE_ALCANCE =
   'Usted no revisa proyectos docentes de este programa.';
+/**
+ * RF-18 · Separación de funciones (control interno, Ley 87 de 1993): quien elabora el proyecto
+ * no lo aprueba. Se aplica mientras `revision_bloquear_autoaprobacion` esté encendido.
+ */
+export const MENSAJE_PROYECTO_PROPIO =
+  'No puede revisar un proyecto docente en el que es docente. Debe revisarlo otra persona del Departamento.';
+/** El mismo caso, como aviso de la bandeja y de la pantalla de revisión. */
+export const MOTIVO_PROYECTO_PROPIO =
+  'Usted es docente de este proyecto: debe revisarlo otra persona del Departamento.';
+
+/** Por qué alguien no puede aprobar ni devolver un proyecto: el error (403) y el aviso. */
+interface Impedimento {
+  error: string;
+  motivo: string;
+}
+const FUERA_DE_ALCANCE: Impedimento = {
+  error: MENSAJE_FUERA_DE_ALCANCE,
+  motivo: MENSAJE_FUERA_DE_ALCANCE,
+};
+const PROYECTO_PROPIO: Impedimento = {
+  error: MENSAJE_PROYECTO_PROPIO,
+  motivo: MOTIVO_PROYECTO_PROPIO,
+};
 export const MENSAJE_OBSERVACION_NO_EXISTE =
   'La observación no existe o no pertenece a la última devolución del proyecto.';
 export const MENSAJE_OBSERVACIONES_SOLO_DEVUELTO =
@@ -169,6 +198,17 @@ function nombreProyecto(proyecto: ProyectoEnRevision): string {
 }
 
 /**
+ * Si el usuario figura entre los docentes del proyecto (`proyecto_docente_docente`). Cuentan
+ * todos, no solo el responsable: todos lo elaboran.
+ */
+function esDocenteDelProyecto(
+  usuario: UsuarioSesion,
+  docentes: readonly { id_usuario: number }[],
+): boolean {
+  return docentes.some((docente) => docente.id_usuario === usuario.id);
+}
+
+/**
  * Revisión y aprobación del proyecto docente (EP-07): el docente responsable lo envía a
  * revisión (RF-17) y quien tiene `proyectos.aprobar` en el programa lo aprueba o lo devuelve
  * con observaciones por sección (RF-18). Cada paso queda en `revision_proyecto`, que sustituye
@@ -177,6 +217,10 @@ function nombreProyecto(proyecto: ProyectoEnRevision): string {
  * Las transiciones bloquean la fila del proyecto, igual que `EdicionProyectoService.editar`:
  * un guardado de sección y un envío simultáneos se atienden de a uno, y dos revisores no
  * pueden aprobar y devolver el mismo proyecto a la vez.
+ *
+ * Quien es docente del proyecto no lo aprueba ni lo devuelve mientras el parámetro
+ * `revision_bloquear_autoaprobacion` esté encendido (separación de funciones). Si el programa
+ * decide otra cosa, el administrador lo apaga sin tocar código.
  */
 @Injectable()
 export class RevisionService {
@@ -188,6 +232,7 @@ export class RevisionService {
     private readonly alcance: AlcanceService,
     private readonly auditoria: AuditoriaService,
     private readonly notificaciones: NotificacionesService,
+    private readonly parametros: ParametrosService,
   ) {}
 
   // ——— RF-17 · Envío a revisión (HU-07-01) ———
@@ -290,7 +335,8 @@ export class RevisionService {
 
   /**
    * HU-07-02: proyectos «Enviado a revisión» de los programas donde el usuario tiene
-   * `proyectos.aprobar`, los que llevan más tiempo esperando primero.
+   * `proyectos.aprobar`, los que llevan más tiempo esperando primero. Los suyos también
+   * aparecen, con `puedeRevisar` en falso y el motivo: así sabe que esperan a otra persona.
    */
   async pendientes(
     usuario: UsuarioSesion,
@@ -341,15 +387,48 @@ export class RevisionService {
         take: tamano,
       }),
     ]);
+    // Como en la aprobación, el parámetro se lee solo si en la página hay alguno suyo.
+    const bloquearPropios =
+      filas.some((fila) =>
+        esDocenteDelProyecto(usuario, fila.proyecto_docente_docente),
+      ) && (await this.bloquearProyectosPropios());
     return {
-      elementos: filas.map((fila) => ({
-        ...aResumen(fila),
-        fechaEnvio: fila.fecha_envio?.toISOString() ?? null,
-      })),
+      elementos: filas.map((fila) => {
+        const propio =
+          bloquearPropios &&
+          esDocenteDelProyecto(usuario, fila.proyecto_docente_docente);
+        return {
+          ...aResumen(fila),
+          fechaEnvio: fila.fecha_envio?.toISOString() ?? null,
+          puedeRevisar: !propio,
+          motivo: propio ? MOTIVO_PROYECTO_PROPIO : null,
+        };
+      }),
       pagina,
       tamano,
       total,
     };
+  }
+
+  /**
+   * RF-18: si el usuario puede aprobar o devolver el proyecto ahora y, si no, por qué. La
+   * pantalla de revisión lo consulta para mostrar el aviso en lugar de las decisiones. Aplica
+   * las mismas reglas que `aprobar` y `devolver`, en el mismo orden: primero quién revisa,
+   * después el estado.
+   */
+  async verificarRevision(
+    usuario: UsuarioSesion,
+    id: number,
+  ): Promise<VerificacionRevisionDto> {
+    const visible = await this.edicion.consultable(usuario, id);
+    const impedimento = await this.impedimentoRevision(usuario, visible);
+    const estado = aEstado(visible.estado_proyecto);
+    const motivo =
+      impedimento?.motivo ??
+      (estado?.codigo === ESTADO.enviado
+        ? null
+        : mensajeNoRevisable(estado?.nombre ?? 'sin estado'));
+    return { idProyecto: id, estado, puedeRevisar: motivo === null, motivo };
   }
 
   /** HU-07-03: aprueba el proyecto, lo que habilita el registro de clases (RF-20). */
@@ -653,32 +732,68 @@ export class RevisionService {
   }
 
   /**
-   * Quien aprueba o devuelve: ve el proyecto (si no, 404 sin revelar que existe) y tiene
-   * `proyectos.aprobar` en su programa (si no, 403). El guard ya exigió el permiso; aquí se
-   * comprueba el alcance.
+   * Quien aprueba o devuelve: ve el proyecto (si no, 404 sin revelar que existe) y no tiene
+   * impedimento (si lo tiene, 403). El guard ya exigió el permiso.
    */
   private async exigirRevisable(
     usuario: UsuarioSesion,
     id: number,
   ): Promise<void> {
-    await this.edicion.consultable(usuario, id);
-    const proyecto = await this.prisma.proyecto_docente.findUniqueOrThrow({
-      where: { id },
-      select: {
-        asignatura: {
-          select: { plan_estudio: { select: { id_programa: true } } },
+    const visible = await this.edicion.consultable(usuario, id);
+    const impedimento = await this.impedimentoRevision(usuario, visible);
+    if (impedimento) {
+      throw new ForbiddenException(impedimento.error);
+    }
+  }
+
+  /**
+   * Por qué el usuario no puede aprobar ni devolver el proyecto, sin mirar su estado, o nulo si
+   * puede. Primero el alcance: no tiene `proyectos.aprobar` en el programa del proyecto.
+   * Después la separación de funciones: es docente del proyecto y el parámetro está encendido.
+   */
+  private async impedimentoRevision(
+    usuario: UsuarioSesion,
+    proyecto: ProyectoConAcceso,
+  ): Promise<Impedimento | null> {
+    const { asignatura } = await this.prisma.proyecto_docente.findUniqueOrThrow(
+      {
+        where: { id: proyecto.id },
+        select: {
+          asignatura: {
+            select: { plan_estudio: { select: { id_programa: true } } },
+          },
         },
       },
-    });
+    );
     const { global, programas } = await this.alcance.alcanceConPermiso(
       usuario.id,
       'proyectos',
       'aprobar',
     );
-    const idPrograma = proyecto.asignatura?.plan_estudio.id_programa ?? null;
+    const idPrograma = asignatura?.plan_estudio.id_programa ?? null;
     if (!global && (idPrograma === null || !programas.includes(idPrograma))) {
-      throw new ForbiddenException(MENSAJE_FUERA_DE_ALCANCE);
+      return FUERA_DE_ALCANCE;
     }
+    // El parámetro se lee solo si hace falta: casi nunca revisa un docente del proyecto.
+    if (
+      esDocenteDelProyecto(usuario, proyecto.proyecto_docente_docente) &&
+      (await this.bloquearProyectosPropios())
+    ) {
+      return PROYECTO_PROPIO;
+    }
+    return null;
+  }
+
+  /**
+   * RF-18 · Separación de funciones: si quien es docente del proyecto queda impedido de
+   * revisarlo. Si el parámetro falta o tiene un valor inválido, se impide: es una regla de
+   * control interno y ante la duda se aplica. El error queda en el registro técnico.
+   */
+  private bloquearProyectosPropios(): Promise<boolean> {
+    return this.parametros.leerSiNo(
+      PARAMETRO.revisionBloquearAutoaprobacion,
+      true,
+    );
   }
 
   /** Bloquea la fila y exige el estado «Enviado a revisión» (RF-18, precondición). */
