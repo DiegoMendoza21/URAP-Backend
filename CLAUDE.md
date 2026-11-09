@@ -20,7 +20,7 @@ El dominio es institucional y no se deduce leyendo el repositorio. Lee primero:
   entidades o consultas. 52 tablas, 92 claves foráneas.
 - `docs/datos-institucionales.md` — los datos reales del programa (matriz de permisos, RAP y
   rúbrica del RAP 2, cómo se mide el cumplimiento, planes de estudio 1702 y 2502, calendario
-  2026-2) y lo que todavía falta pedirle.
+  2026-2, catálogo de estrategias del MEN para RF-13) y lo que todavía falta pedirle.
 - `docs/urap-backlog.md` — qué se construye y en qué orden: 15 épicas, 89 historias, 8 sprints.
 - `docs/indice-requisitos.md` — para ubicar el requisito que aplica.
 - `docs/requisitos-funcionales.md` — el RF completo del caso que vas a implementar,
@@ -29,9 +29,10 @@ El dominio es institucional y no se deduce leyendo el repositorio. Lee primero:
 
 No los cargues enteros por costumbre: busca el RF que necesitas y lee esa sección.
 
-`docs/fuentes/` guarda los Excel oficiales de los que se generan esos markdown. **No los
-abras para trabajar**: están ahí para trazabilidad de la tesis y para la carga del backlog a
-Jira. Si un requisito cambia, se cambia en el Excel y se vuelve a exportar el markdown.
+Los requisitos y el backlog se exportan de dos Excel que el equipo de la tesis conserva fuera
+del repositorio, porque sus hojas de fuentes nombran a personas (`docs/fuentes/README.md`).
+No edites a mano un markdown exportado: si un requisito cambia, se cambia en el Excel y se
+vuelve a exportar.
 
 ## Stack
 
