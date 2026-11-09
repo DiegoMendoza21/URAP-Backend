@@ -104,7 +104,8 @@ export class ParametrosService {
       .trim()
       .toLowerCase()
       .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '');
+      // Tras NFD, cada tilde es una marca combinante aparte: se quitan las marcas.
+      .replace(/\p{M}/gu, '');
     if (texto === 'si' || texto === 'no') {
       return texto === 'si';
     }
