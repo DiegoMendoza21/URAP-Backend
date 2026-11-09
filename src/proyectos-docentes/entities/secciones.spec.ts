@@ -1,6 +1,8 @@
 import {
+  contarCompletas,
   type DatosCompletitud,
   describirSemanas,
+  evaluarSecciones,
   MENSAJE_PERIODO_SIN_SEMANAS,
   SECCIONES,
   semanasSinTema,
@@ -141,6 +143,97 @@ describe('secciones del proyecto docente', () => {
       'Registre al menos una referencia.',
     ]);
     expect(pendientes('bibliografia', { bibliografia: 3 })).toEqual([]);
+  });
+});
+
+describe('estado de cada sección (HU-06-09)', () => {
+  const estados = (datos: DatosCompletitud) =>
+    Object.fromEntries(
+      evaluarSecciones(datos).map(({ seccion, estado }) => [
+        seccion.clave,
+        estado,
+      ]),
+    );
+
+  it('un proyecto nuevo tiene todas las secciones vacías, salvo el punto 3 sin RAP', () => {
+    expect(estados({ ...vacio, raps })).toEqual({
+      descripcion: 'vacia',
+      rac: 'vacia',
+      estrategias: 'vacia',
+      evaluacion: 'vacia',
+      contenidos: 'vacia',
+      bibliografia: 'vacia',
+    });
+    // Sin RAP no hay RAC que exigir: el punto 3 no tiene pendientes.
+    expect(estados(vacio).rac).toBe('completa');
+  });
+
+  it('con algo registrado, pero sin terminar, la sección queda incompleta', () => {
+    expect(
+      estados({
+        ...vacio,
+        raps,
+        racs: [rac('RAC 1', [1], 2), rac('RAC 2', [1])],
+        contenidos: { numeroSemanas: 16, semanasConTema: [1, 2] },
+      }),
+    ).toMatchObject({
+      rac: 'incompleta',
+      evaluacion: 'incompleta',
+      contenidos: 'incompleta',
+    });
+  });
+
+  it('una sección sin pendientes está completa', () => {
+    expect(
+      estados({
+        descripcion: 'Curso de finanzas.',
+        raps,
+        racs: [rac('RAC 1', [1, 2], 1)],
+        estrategias: 2,
+        contenidos: { numeroSemanas: 2, semanasConTema: [1, 2] },
+        bibliografia: 1,
+      }),
+    ).toEqual({
+      descripcion: 'completa',
+      rac: 'completa',
+      estrategias: 'completa',
+      evaluacion: 'completa',
+      contenidos: 'completa',
+      bibliografia: 'completa',
+    });
+  });
+
+  it('el período sin semanas deja el punto 6 vacío o incompleto, según haya temas', () => {
+    const sinSemanas = { numeroSemanas: null, semanasConTema: [] };
+    expect(estados({ ...vacio, contenidos: sinSemanas }).contenidos).toBe(
+      'vacia',
+    );
+    expect(
+      estados({
+        ...vacio,
+        contenidos: { ...sinSemanas, semanasConTema: [1] },
+      }).contenidos,
+    ).toBe('incompleta');
+  });
+
+  it('cuenta las secciones completas con dos decimales', () => {
+    const evaluadas = evaluarSecciones({
+      ...vacio,
+      descripcion: 'Curso de finanzas.',
+      estrategias: 1,
+      bibliografia: 1,
+      raps,
+    });
+    expect(contarCompletas(evaluadas)).toEqual({
+      completas: 3,
+      total: 6,
+      porcentaje: 50,
+    });
+    expect(contarCompletas(evaluarSecciones({ ...vacio, raps }))).toEqual({
+      completas: 0,
+      total: 6,
+      porcentaje: 0,
+    });
   });
 });
 

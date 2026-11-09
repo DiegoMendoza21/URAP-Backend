@@ -12,6 +12,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { ESTADO_SECCION, type EstadoSeccion } from '../entities/secciones.js';
 import { EstadoProyectoDto, RapDto } from './respuestas.dto.js';
 
 /*
@@ -148,11 +149,39 @@ export class SeccionResumenDto {
   completa: boolean;
 
   @ApiProperty({
+    enum: Object.values(ESTADO_SECCION),
+    example: ESTADO_SECCION.incompleta,
+    description:
+      'HU-06-09: «completa» (sin pendientes), «incompleta» (tiene algo, pero le falta) o ' +
+      '«vacia» (el docente no ha registrado nada)',
+  })
+  estado: EstadoSeccion;
+
+  @ApiProperty({
     type: [String],
     example: ['Redacte la descripción del curso.'],
     description: 'Lo que le falta a la sección. Vacío si está completa.',
   })
   pendientes: string[];
+}
+
+export class CompletitudDto {
+  @ApiProperty({ example: 4, description: 'Secciones completas' })
+  completas: number;
+
+  @ApiProperty({
+    example: 6,
+    description: 'Secciones del formato (puntos 2 a 7)',
+  })
+  total: number;
+
+  @ApiProperty({
+    example: 66.67,
+    description:
+      'Porcentaje de secciones completas, con dos decimales. Es la misma cuenta del tablero ' +
+      'de seguimiento (RF-25).',
+  })
+  porcentaje: number;
 }
 
 export class DiligenciamientoDto {
@@ -192,6 +221,12 @@ export class DiligenciamientoDto {
     description: 'Secciones en el orden del formato',
   })
   secciones: SeccionResumenDto[];
+
+  @ApiProperty({
+    type: CompletitudDto,
+    description: 'HU-06-09: cuántas secciones están completas',
+  })
+  completitud: CompletitudDto;
 }
 
 export class DescripcionDto {

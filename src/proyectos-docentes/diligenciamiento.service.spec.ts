@@ -189,7 +189,7 @@ describe('DiligenciamientoService', () => {
     );
   });
 
-  it('resume las secciones con sus pendientes (HU-06-08)', async () => {
+  it('resume las secciones con sus pendientes y su estado (HU-06-08, HU-06-09)', async () => {
     const { servicio } = crear();
     const resumen = await servicio.resumen(docente, 7);
     expect(resumen).toMatchObject({
@@ -198,25 +198,29 @@ describe('DiligenciamientoService', () => {
       motivoNoEditable: null,
       estado: { codigo: 'en_diligenciamiento' },
       secciones: [
-        { numero: 2, completa: false },
+        { numero: 2, completa: false, estado: 'vacia' },
         {
           numero: 3,
           completa: false,
+          estado: 'incompleta',
           pendientes: ['RAP 2 no tiene RAC asociados.'],
         },
-        { numero: 4, completa: true, pendientes: [] },
+        { numero: 4, completa: true, estado: 'completa', pendientes: [] },
         {
           numero: 5,
           completa: false,
+          estado: 'vacia',
           pendientes: ['RAC 1 no tiene actividades de evaluación.'],
         },
         {
           numero: 6,
           completa: false,
+          estado: 'incompleta',
           pendientes: ['La semana 2 no tiene tema.'],
         },
-        { numero: 7, completa: false },
+        { numero: 7, completa: false, estado: 'vacia' },
       ],
+      completitud: { completas: 1, total: 6, porcentaje: 16.67 },
     });
   });
 });

@@ -7,9 +7,11 @@
  * 1. Sumar a `DatosCompletitud` lo que la sección necesita para saber si está completa.
  * 2. Agregar su entrada a `SECCIONES`, en el orden del formato.
  * 3. Leer esos datos en `DiligenciamientoService.datosCompletitud()`.
- * El resumen (`GET /proyectos-docentes/:id/diligenciamiento`) y la verificación de envío a
- * revisión (RF-17) se alimentan de esta lista.
+ * El resumen (`GET /proyectos-docentes/:id/diligenciamiento`), la verificación de envío a
+ * revisión (RF-17) y el tablero de seguimiento (RF-25) se alimentan de esta lista.
  */
+
+import { porcentaje } from '../../mediciones/consolidado.js';
 
 /** Lo mínimo que hay que leer del proyecto para evaluar todas las secciones. */
 export interface DatosCompletitud {
@@ -38,6 +40,61 @@ export interface Seccion {
   titulo: string;
   /** Lo que le falta a la sección para estar completa. Vacío: completa. */
   pendientes(datos: DatosCompletitud): string[];
+  /** HU-06-09: si el docente todavía no registró nada en la sección. */
+  vacia(datos: DatosCompletitud): boolean;
+}
+
+/**
+ * HU-06-09: estado de una sección. «Vacía» es una sección en la que el docente no ha registrado
+ * nada; «incompleta», una que tiene algo pero le faltan cosas. Una sección sin pendientes está
+ * completa aunque no tenga datos (por ejemplo, el punto 3 de un proyecto sin RAP).
+ */
+export const ESTADO_SECCION = {
+  completa: 'completa',
+  incompleta: 'incompleta',
+  vacia: 'vacia',
+} as const;
+
+export type EstadoSeccion =
+  (typeof ESTADO_SECCION)[keyof typeof ESTADO_SECCION];
+
+export interface SeccionEvaluada {
+  seccion: Seccion;
+  pendientes: string[];
+  estado: EstadoSeccion;
+}
+
+/** Cada sección con lo que le falta y su estado, en el orden del formato. */
+export function evaluarSecciones(datos: DatosCompletitud): SeccionEvaluada[] {
+  return SECCIONES.map((seccion) => {
+    const pendientes = seccion.pendientes(datos);
+    const estado =
+      pendientes.length === 0
+        ? ESTADO_SECCION.completa
+        : seccion.vacia(datos)
+          ? ESTADO_SECCION.vacia
+          : ESTADO_SECCION.incompleta;
+    return { seccion, pendientes, estado };
+  });
+}
+
+/**
+ * Cuántas secciones están completas y su porcentaje (HU-06-09). Es la misma cuenta del tablero
+ * de seguimiento (RF-25), para que el docente y el Departamento vean el mismo número.
+ */
+export function contarCompletas(evaluadas: readonly SeccionEvaluada[]): {
+  completas: number;
+  total: number;
+  porcentaje: number;
+} {
+  const completas = evaluadas.filter(
+    ({ estado }) => estado === ESTADO_SECCION.completa,
+  ).length;
+  return {
+    completas,
+    total: evaluadas.length,
+    porcentaje: porcentaje(completas, evaluadas.length),
+  };
 }
 
 /** Nombre corto de un RAP: su código o, si no tiene, «RAP n». */
@@ -101,6 +158,7 @@ export const SECCIONES: readonly Seccion[] = [
     titulo: 'Descripción',
     pendientes: ({ descripcion }) =>
       descripcion?.trim() ? [] : ['Redacte la descripción del curso.'],
+    vacia: ({ descripcion }) => !descripcion?.trim(),
   },
   {
     numero: 3,
@@ -113,6 +171,7 @@ export const SECCIONES: readonly Seccion[] = [
         .filter((rap) => !conRac.has(rap.id))
         .map((rap) => `${nombreRap(rap)} no tiene RAC asociados.`);
     },
+    vacia: ({ racs }) => racs.length === 0,
   },
   {
     numero: 4,
@@ -121,6 +180,7 @@ export const SECCIONES: readonly Seccion[] = [
     // RF-13, p4: la sección vacía bloquea el envío a revisión.
     pendientes: ({ estrategias }) =>
       estrategias > 0 ? [] : ['Registre al menos una estrategia metodológica.'],
+    vacia: ({ estrategias }) => estrategias === 0,
   },
   {
     numero: 5,
@@ -139,6 +199,8 @@ export const SECCIONES: readonly Seccion[] = [
             `${rac.codigo ?? 'Un RAC'} no tiene actividades de evaluación.`,
         );
     },
+    // Vacía mientras ningún RAC tenga actividades, también si todavía no hay RAC.
+    vacia: ({ racs }) => racs.every((rac) => rac.evaluaciones === 0),
   },
   {
     numero: 6,
@@ -160,6 +222,7 @@ export const SECCIONES: readonly Seccion[] = [
           : `Las semanas ${describirSemanas(faltan)} no tienen tema.`,
       ];
     },
+    vacia: ({ contenidos }) => contenidos.semanasConTema.length === 0,
   },
   {
     numero: 7,
@@ -168,5 +231,6 @@ export const SECCIONES: readonly Seccion[] = [
     // RF-16, p4: la sección vacía bloquea el envío a revisión.
     pendientes: ({ bibliografia }) =>
       bibliografia > 0 ? [] : ['Registre al menos una referencia.'],
+    vacia: ({ bibliografia }) => bibliografia === 0,
   },
 ];
