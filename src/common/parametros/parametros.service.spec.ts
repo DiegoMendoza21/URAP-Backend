@@ -1,4 +1,5 @@
 import { InternalServerErrorException, Logger } from '@nestjs/common';
+import { PARAMETROS } from '../../datos-iniciales/catalogos.js';
 import type { PrismaService } from '../prisma/prisma.service.js';
 import { PARAMETRO, ParametrosService } from './parametros.service.js';
 
@@ -56,6 +57,64 @@ describe('ParametrosService', () => {
       expect(registrarError).toHaveBeenCalledOnce();
     },
   );
+
+  describe('leerSiNo: sin el parámetro, el valor seguro que elige quien lo pide', () => {
+    const clave = PARAMETRO.revisionBloquearAutoaprobacion;
+
+    it.each([
+      ['si', true],
+      [' Sí ', true],
+      ['SI', true],
+      ['no', false],
+      [' No ', false],
+    ])('lee «%s» como %s', async (valor, esperado) => {
+      prisma.parametro_sistema.findUnique.mockResolvedValue({ valor });
+
+      await expect(servicio.leerSiNo(clave, !esperado)).resolves.toBe(esperado);
+      expect(prisma.parametro_sistema.findUnique).toHaveBeenCalledWith({
+        where: { clave },
+        select: { valor: true },
+      });
+      expect(registrarError).not.toHaveBeenCalled();
+    });
+
+    it.each([null, { valor: null }])(
+      'si falta (%o), devuelve el valor por defecto y registra el error',
+      async (fila) => {
+        prisma.parametro_sistema.findUnique.mockResolvedValue(fila);
+
+        await expect(servicio.leerSiNo(clave, true)).resolves.toBe(true);
+        expect(registrarError).toHaveBeenCalledWith(
+          expect.stringContaining(`Falta el parámetro «${clave}»`),
+        );
+      },
+    );
+
+    it.each(['', 'quizás', 'true', '1', 'sii'])(
+      'con un valor inválido («%s»), devuelve el valor por defecto y registra el error',
+      async (valor) => {
+        prisma.parametro_sistema.findUnique.mockResolvedValue({ valor });
+
+        await expect(servicio.leerSiNo(clave, false)).resolves.toBe(false);
+        expect(registrarError).toHaveBeenCalledOnce();
+        expect(registrarError).toHaveBeenCalledWith(
+          expect.stringContaining('valor inválido'),
+        );
+      },
+    );
+  });
+
+  it('los datos base traen cada parámetro que lee el código, con RF-18 encendido', () => {
+    const sembradas = PARAMETROS.map(({ clave }) => clave);
+    expect(
+      Object.values(PARAMETRO).filter((clave) => !sembradas.includes(clave)),
+    ).toEqual([]);
+    expect(
+      PARAMETROS.find(
+        ({ clave }) => clave === PARAMETRO.revisionBloquearAutoaprobacion,
+      ),
+    ).toMatchObject({ valor: 'si', tipo_dato: 'booleano' });
+  });
 
   describe('enteroPositivo y lista: sin el parámetro, la operación se niega', () => {
     it('lee un entero positivo', async () => {

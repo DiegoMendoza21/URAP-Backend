@@ -1,11 +1,13 @@
 import {
   ConflictException,
   ForbiddenException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import type { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
+import { ParametrosService } from '../common/parametros/parametros.service.js';
 import type { PrismaService } from '../common/prisma/prisma.service.js';
 import {
   NOTIFICACION,
@@ -18,10 +20,12 @@ import {
   MENSAJE_OBSERVACION_NO_EXISTE,
   MENSAJE_OBSERVACIONES_SOLO_DEVUELTO,
   MENSAJE_PERIODO_CERRADO_ENVIO,
+  MENSAJE_PROYECTO_PROPIO,
   MENSAJE_SECCIONES_INCOMPLETAS,
   MENSAJE_SOLO_RESPONSABLE,
   mensajeNoEnviable,
   mensajeNoRevisable,
+  MOTIVO_PROYECTO_PROPIO,
   RevisionService,
 } from './revision.service.js';
 
@@ -42,6 +46,9 @@ function usuario(id: number, roles: string[]): UsuarioSesion {
 const responsable = usuario(20, [ROL.docente]);
 const codocente = usuario(21, [ROL.docente]);
 const revisor = usuario(30, [ROL.departamento]);
+// Del Departamento y, a la vez, docentes del proyecto 7: el responsable y el codocente.
+const revisorResponsable = usuario(20, [ROL.docente, ROL.departamento]);
+const revisorCodocente = usuario(21, [ROL.docente, ROL.departamento]);
 
 const ESTADOS: Record<string, { id: number; codigo: string; nombre: string }> =
   {
@@ -113,11 +120,33 @@ function proyecto({
   };
 }
 
+/** Una fila de la bandeja (`INCLUIR_RESUMEN`) con sus docentes; el primero es el responsable. */
+function pendiente(id: number, docentes: number[]) {
+  return {
+    id,
+    grupo: 'A',
+    fecha_creacion: null,
+    fecha_envio: new Date('2026-11-08T15:00:00.000Z'),
+    asignatura: null,
+    periodo_academico: null,
+    estado_proyecto: ESTADOS.enviado,
+    proyecto_docente_docente: docentes.map((idUsuario, indice) => ({
+      id_usuario: idUsuario,
+      responsable: indice === 0,
+      orden: indice + 1,
+      usuario: { id: idUsuario, nombres: 'Docente', apellidos: 'Ficticio' },
+    })),
+  };
+}
+
 function crear({
   actual = proyecto(),
   completitud = COMPLETO as object,
   alcance = { global: false, programas: [1] },
   devolucion = null as object | null,
+  // RF-18: `revision_bloquear_autoaprobacion` tal como lo siembran los datos base.
+  parametro = { valor: 'si' } as { valor: string | null } | null,
+  pendientes = [] as object[],
 } = {}) {
   const proyectoDocente = {
     // Mismo método para tres lecturas: se distinguen por lo que piden.
@@ -133,6 +162,8 @@ function crear({
       },
     ),
     update: vi.fn().mockResolvedValue({}),
+    count: vi.fn().mockResolvedValue(pendientes.length),
+    findMany: vi.fn().mockResolvedValue(pendientes),
   };
   const revisionProyecto = {
     create: vi.fn().mockResolvedValue({ id: 90 }),
@@ -161,6 +192,7 @@ function crear({
         Promise.resolve(ESTADOS[args.where.codigo] ?? null),
       ),
     },
+    parametro_sistema: { findUnique: vi.fn().mockResolvedValue(parametro) },
     $transaction: vi.fn((fn: (t: typeof tx) => unknown) => fn(tx)),
   };
   const edicion = {
@@ -181,6 +213,8 @@ function crear({
     alcanceServicio as unknown as AlcanceService,
     auditoria as unknown as AuditoriaService,
     notificaciones as unknown as NotificacionesService,
+    // El lector real: las pruebas cubren también cómo interpreta el parámetro.
+    new ParametrosService(prisma as unknown as PrismaService),
   );
   return { servicio, prisma, tx, auditoria, notificaciones };
 }
@@ -376,6 +410,211 @@ describe('RevisionService', () => {
       await expect(servicio.aprobar(revisor, 7, {})).rejects.toThrow(
         new ForbiddenException(MENSAJE_FUERA_DE_ALCANCE),
       );
+    });
+  });
+
+  describe('separación de funciones (RF-18, revision_bloquear_autoaprobacion)', () => {
+    const enviado = () => proyecto({ estado: 'enviado' });
+    const devolucion = {
+      observaciones: [{ seccion: 'rac', observacion: 'Precise el RAC.' }],
+    };
+    let registrarError: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      registrarError = vi
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it.each([
+      ['el responsable', revisorResponsable],
+      ['un codocente', revisorCodocente],
+    ])(
+      'encendido: %s del proyecto no lo aprueba ni lo devuelve (403)',
+      async (_quien, docenteRevisor) => {
+        const { servicio, prisma, tx } = crear({ actual: enviado() });
+
+        await expect(servicio.aprobar(docenteRevisor, 7, {})).rejects.toThrow(
+          new ForbiddenException(MENSAJE_PROYECTO_PROPIO),
+        );
+        await expect(
+          servicio.devolver(docenteRevisor, 7, devolucion),
+        ).rejects.toThrow(new ForbiddenException(MENSAJE_PROYECTO_PROPIO));
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+        expect(tx.proyecto_docente.update).not.toHaveBeenCalled();
+        expect(registrarError).not.toHaveBeenCalled();
+      },
+    );
+
+    it('encendido: otra persona del Departamento sí lo aprueba, sin leer el parámetro', async () => {
+      const { servicio, prisma } = crear({ actual: enviado() });
+
+      await expect(servicio.aprobar(revisor, 7, {})).resolves.toMatchObject({
+        idProyecto: 7,
+      });
+      expect(prisma.parametro_sistema.findUnique).not.toHaveBeenCalled();
+    });
+
+    it.each(['no', ' NO '])(
+      'apagado («%s»): el docente del proyecto lo aprueba y lo devuelve como antes',
+      async (valor) => {
+        const aprobar = crear({ actual: enviado(), parametro: { valor } });
+        await expect(
+          aprobar.servicio.aprobar(revisorCodocente, 7, {}),
+        ).resolves.toMatchObject({ idProyecto: 7 });
+        expect(aprobar.tx.revision_proyecto.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            id_usuario: 21,
+            tipo: 'aprobacion',
+          }),
+        });
+
+        const devolver = crear({ actual: enviado(), parametro: { valor } });
+        await expect(
+          devolver.servicio.devolver(revisorResponsable, 7, devolucion),
+        ).resolves.toMatchObject({ idProyecto: 7 });
+        expect(registrarError).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([
+      ['falta', null],
+      ['no tiene valor', { valor: null }],
+      ['tiene un valor inválido', { valor: 'quizás' }],
+    ])(
+      'si el parámetro %s, se aplica la regla y queda en el registro técnico',
+      async (_caso, parametro) => {
+        const { servicio } = crear({ actual: enviado(), parametro });
+
+        await expect(servicio.aprobar(revisorCodocente, 7, {})).rejects.toThrow(
+          new ForbiddenException(MENSAJE_PROYECTO_PROPIO),
+        );
+        expect(registrarError).toHaveBeenCalledWith(
+          expect.stringContaining('revision_bloquear_autoaprobacion'),
+        );
+      },
+    );
+
+    it('acepta «Sí» con tilde y mayúscula como encendido', async () => {
+      const { servicio } = crear({
+        actual: enviado(),
+        parametro: { valor: 'Sí' },
+      });
+      await expect(servicio.aprobar(revisorCodocente, 7, {})).rejects.toThrow(
+        new ForbiddenException(MENSAJE_PROYECTO_PROPIO),
+      );
+      expect(registrarError).not.toHaveBeenCalled();
+    });
+
+    it('la bandeja muestra los propios con el aviso y deja revisar los demás', async () => {
+      const { servicio } = crear({
+        pendientes: [pendiente(7, [20, 21]), pendiente(8, [40])],
+      });
+
+      const pagina = await servicio.pendientes(revisorCodocente, {
+        pagina: 1,
+        tamano: 20,
+      });
+
+      expect(pagina.total).toBe(2);
+      expect(pagina.elementos).toEqual([
+        expect.objectContaining({
+          id: 7,
+          puedeRevisar: false,
+          motivo: MOTIVO_PROYECTO_PROPIO,
+          fechaEnvio: '2026-11-08T15:00:00.000Z',
+        }),
+        expect.objectContaining({ id: 8, puedeRevisar: true, motivo: null }),
+      ]);
+    });
+
+    it('apagado: la bandeja deja revisar también los propios', async () => {
+      const { servicio } = crear({
+        parametro: { valor: 'no' },
+        pendientes: [pendiente(7, [20, 21])],
+      });
+
+      const pagina = await servicio.pendientes(revisorCodocente, {
+        pagina: 1,
+        tamano: 20,
+      });
+
+      expect(pagina.elementos).toEqual([
+        expect.objectContaining({ id: 7, puedeRevisar: true, motivo: null }),
+      ]);
+    });
+
+    describe('verificación de la pantalla de revisión', () => {
+      it('puede revisar: enviado y no es docente del proyecto', async () => {
+        const { servicio } = crear({ actual: enviado() });
+        await expect(servicio.verificarRevision(revisor, 7)).resolves.toEqual({
+          idProyecto: 7,
+          estado: { codigo: 'enviado', nombre: 'Enviado a revisión' },
+          puedeRevisar: true,
+          motivo: null,
+        });
+      });
+
+      it('no puede: es docente del proyecto con la regla encendida', async () => {
+        const { servicio } = crear({ actual: enviado() });
+        await expect(
+          servicio.verificarRevision(revisorCodocente, 7),
+        ).resolves.toEqual({
+          idProyecto: 7,
+          estado: { codigo: 'enviado', nombre: 'Enviado a revisión' },
+          puedeRevisar: false,
+          motivo: MOTIVO_PROYECTO_PROPIO,
+        });
+      });
+
+      it('con la regla apagada, el docente del proyecto puede', async () => {
+        const { servicio } = crear({
+          actual: enviado(),
+          parametro: { valor: 'no' },
+        });
+        await expect(
+          servicio.verificarRevision(revisorCodocente, 7),
+        ).resolves.toMatchObject({ puedeRevisar: true, motivo: null });
+      });
+
+      it('no puede: el proyecto no está enviado a revisión', async () => {
+        const { servicio } = crear({
+          actual: proyecto({ estado: 'devuelto' }),
+        });
+        await expect(
+          servicio.verificarRevision(revisor, 7),
+        ).resolves.toMatchObject({
+          puedeRevisar: false,
+          motivo: mensajeNoRevisable('Devuelto con observaciones'),
+        });
+      });
+
+      it('si fallan las dos, el motivo es el de la aprobación: primero el proyecto propio', async () => {
+        const { servicio } = crear({
+          actual: proyecto({ estado: 'devuelto' }),
+        });
+        await expect(
+          servicio.verificarRevision(revisorResponsable, 7),
+        ).resolves.toMatchObject({
+          puedeRevisar: false,
+          motivo: MOTIVO_PROYECTO_PROPIO,
+        });
+      });
+
+      it('fuera de su programa responde 403, como la aprobación, sin revelar el estado', async () => {
+        const { servicio, prisma } = crear({
+          actual: enviado(),
+          alcance: { global: false, programas: [2] },
+        });
+        await expect(
+          servicio.verificarRevision(revisorCodocente, 7),
+        ).rejects.toThrow(new ForbiddenException(MENSAJE_FUERA_DE_ALCANCE));
+        expect(prisma.parametro_sistema.findUnique).not.toHaveBeenCalled();
+      });
     });
   });
 

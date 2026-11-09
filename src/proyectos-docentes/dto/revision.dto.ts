@@ -136,6 +136,25 @@ export class PendienteRevisionDto extends ProyectoDocenteResumenDto {
     description: 'Desde cuándo está pendiente: el último envío a revisión',
   })
   fechaEnvio: string | null;
+
+  @ApiProperty({
+    example: true,
+    description:
+      'Si el usuario puede aprobarlo o devolverlo (RF-18). Es falso cuando es docente del ' +
+      'proyecto y el parámetro `revision_bloquear_autoaprobacion` está encendido ' +
+      '(separación de funciones): debe revisarlo otra persona del Departamento.',
+  })
+  puedeRevisar: boolean;
+
+  @ApiProperty({
+    example: null,
+    nullable: true,
+    type: String,
+    description:
+      'Por qué no puede revisarlo, en lenguaje del usuario; nulo si puede. Ejemplo: «Usted ' +
+      'es docente de este proyecto: debe revisarlo otra persona del Departamento.»',
+  })
+  motivo: string | null;
 }
 
 export class PaginaPendientesRevisionDto {
@@ -153,6 +172,35 @@ export class PaginaPendientesRevisionDto {
 }
 
 // ——— Aprobación y devolución (RF-18, HU-07-03 y HU-07-04) ———
+
+export class VerificacionRevisionDto {
+  @ApiProperty({ example: 41 })
+  idProyecto: number;
+
+  @ApiProperty({ type: EstadoProyectoDto, nullable: true })
+  estado: EstadoProyectoDto | null;
+
+  @ApiProperty({
+    example: false,
+    description:
+      'Si el usuario puede aprobar o devolver el proyecto ahora (RF-18). Es verdadero solo si ' +
+      'el proyecto está «Enviado a revisión» y el usuario no es docente de él mientras ' +
+      '`revision_bloquear_autoaprobacion` esté encendido (separación de funciones). Es la ' +
+      'única señal para mostrar las decisiones.',
+  })
+  puedeRevisar: boolean;
+
+  @ApiProperty({
+    example:
+      'Usted es docente de este proyecto: debe revisarlo otra persona del Departamento.',
+    nullable: true,
+    type: String,
+    description:
+      'Cuál de las dos condiciones falla, en lenguaje del usuario: es docente del proyecto, o ' +
+      'el proyecto no está enviado a revisión. Si fallan las dos, la primera. Nulo si puede.',
+  })
+  motivo: string | null;
+}
 
 export class AprobarProyectoDto {
   @ApiPropertyOptional({

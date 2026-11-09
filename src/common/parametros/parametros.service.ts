@@ -13,6 +13,8 @@ import { PrismaService } from '../prisma/prisma.service.js';
 export const PARAMETRO = {
   /** RF-23: días de anticipación con que una sesión se marca «Por vencer». */
   alertaDiasAnticipacion: 'alerta_dias_anticipacion',
+  /** RF-18: si quien es docente de un proyecto queda impedido de aprobarlo o devolverlo. */
+  revisionBloquearAutoaprobacion: 'revision_bloquear_autoaprobacion',
   /** HU-01-04: intentos fallidos antes del bloqueo temporal. */
   inicioSesionIntentosMaximos: 'inicio_sesion_intentos_maximos',
   /** HU-01-04: minutos de bloqueo tras superar los intentos. */
@@ -90,6 +92,36 @@ export class ParametrosService {
       return null;
     }
     return valor;
+  }
+
+  /**
+   * Valor sí/no de un parámetro: `si` o `no`, sin importar mayúsculas ni tildes. Si falta o
+   * tiene otro valor, devuelve `porDefecto` y lo registra como error técnico. Quien lo pide
+   * elige ese valor: el que deja la operación del lado seguro (una regla de control interno se
+   * aplica ante la duda).
+   */
+  async leerSiNo(clave: ClaveParametro, porDefecto: boolean): Promise<boolean> {
+    const parametro = await this.prisma.parametro_sistema.findUnique({
+      where: { clave },
+      select: { valor: true },
+    });
+    const texto = (parametro?.valor ?? '')
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      // Tras NFD, cada tilde es una marca combinante aparte: se quitan las marcas.
+      .replace(/\p{M}/gu, '');
+    if (texto === 'si' || texto === 'no') {
+      return texto === 'si';
+    }
+    const usado = `Se aplica «${porDefecto ? 'si' : 'no'}».`;
+    this.logger.error(
+      parametro?.valor == null
+        ? `Falta el parámetro «${clave}» en parametro_sistema (ver npm run db:sembrar). ${usado}`
+        : `El parámetro «${clave}» tiene un valor inválido («${parametro.valor}»): se ` +
+            `esperaba «si» o «no». ${usado}`,
+    );
+    return porDefecto;
   }
 
   /** Entero mayor que cero. Si falta o no es válido, responde 500. */
