@@ -99,4 +99,50 @@ describe('ParametrosService', () => {
       );
     });
   });
+
+  describe('leerTextos: textos que se muestran, y sin el parámetro la operación sigue', () => {
+    it('conserva mayúsculas y tildes, sin espacios de más ni vacíos', async () => {
+      prisma.parametro_sistema.findUnique.mockResolvedValue({
+        valor: ' Lluvia de ideas,  Matriz C-Q-A ,,Producción   de textos ',
+      });
+
+      await expect(
+        servicio.leerTextos(PARAMETRO.catalogoEstrategiasAprendizaje),
+      ).resolves.toEqual([
+        'Lluvia de ideas',
+        'Matriz C-Q-A',
+        'Producción de textos',
+      ]);
+      expect(prisma.parametro_sistema.findUnique).toHaveBeenCalledWith({
+        where: { clave: PARAMETRO.catalogoEstrategiasAprendizaje },
+        select: { valor: true },
+      });
+      expect(registrarError).not.toHaveBeenCalled();
+    });
+
+    it.each([null, { valor: null }])(
+      'devuelve una lista vacía y registra el error si el parámetro falta (%o)',
+      async (fila) => {
+        prisma.parametro_sistema.findUnique.mockResolvedValue(fila);
+
+        await expect(
+          servicio.leerTextos(PARAMETRO.catalogoEstrategiasEnsenanza),
+        ).resolves.toEqual([]);
+        expect(registrarError).toHaveBeenCalledWith(
+          expect.stringContaining(
+            `Falta el parámetro «${PARAMETRO.catalogoEstrategiasEnsenanza}»`,
+          ),
+        );
+      },
+    );
+
+    it('un valor en blanco es una lista vacía, no un error: así se deja sin catálogo', async () => {
+      prisma.parametro_sistema.findUnique.mockResolvedValue({ valor: ' ' });
+
+      await expect(
+        servicio.leerTextos(PARAMETRO.catalogoEstrategiasEnsenanza),
+      ).resolves.toEqual([]);
+      expect(registrarError).not.toHaveBeenCalled();
+    });
+  });
 });

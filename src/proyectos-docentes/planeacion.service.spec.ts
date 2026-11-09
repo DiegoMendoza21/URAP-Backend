@@ -1,12 +1,17 @@
 import {
   BadRequestException,
   ConflictException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
+import {
+  PARAMETRO,
+  ParametrosService,
+} from '../common/parametros/parametros.service.js';
 import type { PrismaService } from '../common/prisma/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';
 import {
@@ -25,6 +30,7 @@ import {
   GuardarEvaluacionRacDto,
 } from './dto/planeacion.dto.js';
 import type { EdicionProyectoService } from './edicion-proyecto.service.js';
+import { primeraRepetida } from './entities/listas.js';
 import { MENSAJE_PERIODO_SIN_SEMANAS } from './entities/secciones.js';
 import {
   EstrategiasService,
@@ -89,7 +95,25 @@ async function errores<T extends object>(
 }
 
 describe('EstrategiasService (RF-13)', () => {
-  function crear() {
+  /** Valor de cada parámetro del catálogo del MEN; el que no está, falta en la base. */
+  const CATALOGO_MEN: Record<string, string | null> = {
+    [PARAMETRO.catalogoEstrategiasEnsenanza]:
+      'Lluvia de ideas, Matriz C-Q-A, estudio de caso',
+    [PARAMETRO.catalogoEstrategiasAprendizaje]: 'Portafolio',
+  };
+  const USADAS_EN_EL_PROGRAMA = [
+    'Estudio de caso',
+    'Aprendizaje basado en problemas',
+    'aprendizaje  basado en problemas',
+  ];
+
+  function crear({
+    parametros = CATALOGO_MEN,
+    usadas = USADAS_EN_EL_PROGRAMA,
+  }: {
+    parametros?: Record<string, string | null>;
+    usadas?: string[];
+  } = {}) {
     let filas = [
       { id: 1, descripcion: 'Clase magistral', orden: 1 },
       { id: 2, descripcion: 'Estudio de caso', orden: 2 },
@@ -109,33 +133,112 @@ describe('EstrategiasService (RF-13)', () => {
         ),
         groupBy: vi
           .fn()
-          .mockResolvedValue([
-            { descripcion: 'Estudio de caso' },
-            { descripcion: 'Aprendizaje basado en problemas' },
-            { descripcion: 'aprendizaje  basado en problemas' },
-          ]),
+          .mockResolvedValue(usadas.map((descripcion) => ({ descripcion }))),
       },
       proyecto_docente: {
         findUniqueOrThrow: vi.fn().mockResolvedValue({
           asignatura: { plan_estudio: { id_programa: 1 } },
         }),
       },
+      parametro_sistema: {
+        findUnique: vi.fn(({ where }: { where: { clave: string } }) =>
+          Promise.resolve(
+            where.clave in parametros
+              ? { valor: parametros[where.clave] }
+              : null,
+          ),
+        ),
+      },
     };
     const { edicion, auditorias } = edicionFalsa(tx);
     const servicio = new EstrategiasService(
       tx as unknown as PrismaService,
       edicion,
+      new ParametrosService(tx as unknown as PrismaService),
     );
     return { servicio, tx, auditorias };
   }
 
-  it('lista en orden y sugiere las del programa que aún no están, sin repetir', async () => {
+  let registrarError: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    registrarError = vi
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    registrarError.mockRestore();
+  });
+
+  it('lista en orden y sugiere en tres grupos lo que aún no está en el proyecto (p2)', async () => {
     const { servicio } = crear();
     const seccion = await servicio.seccion(docente, 7);
     expect(seccion.estrategias).toEqual([
       { id: 1, numero: 1, descripcion: 'Clase magistral' },
       { id: 2, numero: 2, descripcion: 'Estudio de caso' },
     ]);
+    // «estudio de caso» ya está en el proyecto, escrita de otra forma: no se sugiere.
+    expect(seccion.catalogo).toEqual({
+      ensenanza: ['Lluvia de ideas', 'Matriz C-Q-A'],
+      aprendizaje: ['Portafolio'],
+    });
+    expect(seccion.sugeridas).toEqual(['Aprendizaje basado en problemas']);
+    expect(registrarError).not.toHaveBeenCalled();
+  });
+
+  it('ninguna estrategia sale en dos grupos: cada uno descarta las de los anteriores', async () => {
+    const { servicio } = crear({
+      parametros: {
+        [PARAMETRO.catalogoEstrategiasEnsenanza]:
+          'Lluvia de ideas, Ideogramas, lluvia de ideas',
+        [PARAMETRO.catalogoEstrategiasAprendizaje]:
+          'ideogramas, Ideograma, Portafolio',
+      },
+      usadas: ['Portafolio', 'Ideograma ', 'Debate', 'LLUVIA DE IDEAS'],
+    });
+    const seccion = await servicio.seccion(docente, 7);
+    expect(seccion.catalogo).toEqual({
+      ensenanza: ['Lluvia de ideas', 'Ideogramas'],
+      aprendizaje: ['Ideograma', 'Portafolio'],
+    });
+    expect(seccion.sugeridas).toEqual(['Debate']);
+    const todas = [
+      ...seccion.estrategias.map((estrategia) => estrategia.descripcion),
+      ...seccion.catalogo.ensenanza,
+      ...seccion.catalogo.aprendizaje,
+      ...seccion.sugeridas,
+    ];
+    expect(primeraRepetida(todas)).toBeNull();
+  });
+
+  it('sin un parámetro, su grupo queda vacío, la sección responde y el error queda registrado', async () => {
+    const { servicio } = crear({
+      parametros: { [PARAMETRO.catalogoEstrategiasAprendizaje]: 'Portafolio' },
+    });
+    const seccion = await servicio.seccion(docente, 7);
+    expect(seccion.catalogo).toEqual({
+      ensenanza: [],
+      aprendizaje: ['Portafolio'],
+    });
+    expect(seccion.sugeridas).toEqual(['Aprendizaje basado en problemas']);
+    expect(registrarError).toHaveBeenCalledOnce();
+    expect(registrarError).toHaveBeenCalledWith(
+      expect.stringContaining(
+        `Falta el parámetro «${PARAMETRO.catalogoEstrategiasEnsenanza}»`,
+      ),
+    );
+  });
+
+  it('al guardar deja de sugerir lo que se acaba de agregar', async () => {
+    const { servicio } = crear();
+    const seccion = await servicio.guardar(docente, 7, {
+      estrategias: ['Clase magistral', 'matriz c-q-a'],
+    });
+    expect(seccion.catalogo).toEqual({
+      ensenanza: ['Lluvia de ideas', 'estudio de caso'],
+      aprendizaje: ['Portafolio'],
+    });
     expect(seccion.sugeridas).toEqual(['Aprendizaje basado en problemas']);
   });
 

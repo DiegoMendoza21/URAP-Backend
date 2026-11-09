@@ -1,5 +1,9 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import type { UsuarioSesion } from '../auth/tipos.js';
+import {
+  PARAMETRO,
+  ParametrosService,
+} from '../common/parametros/parametros.service.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import type {
@@ -12,11 +16,27 @@ import { citar, claveTexto, primeraRepetida } from './entities/listas.js';
 
 type Tx = Prisma.TransactionClient;
 
-/** Cuántas estrategias sugeridas se ofrecen como máximo. */
+/** Cuántas estrategias de otros proyectos del programa se sugieren como máximo. */
 export const SUGERIDAS_MAXIMO = 20;
 
 export function mensajeEstrategiaRepetida(texto: string): string {
   return `La estrategia «${citar(texto)}» está repetida.`;
+}
+
+/**
+ * Los textos de `lista` que no están en `vistas`, en su orden y sin repetir. Los que devuelve
+ * pasan a `vistas`, para que el grupo siguiente no los vuelva a ofrecer.
+ */
+function sinLasVistas(lista: readonly string[], vistas: Set<string>): string[] {
+  const nuevas: string[] = [];
+  for (const texto of lista) {
+    const clave = claveTexto(texto);
+    if (clave && !vistas.has(clave)) {
+      vistas.add(clave);
+      nuevas.push(texto.trim());
+    }
+  }
+  return nuevas;
 }
 
 /**
@@ -29,6 +49,7 @@ export class EstrategiasService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly edicion: EdicionProyectoService,
+    private readonly parametros: ParametrosService,
   ) {}
 
   async seccion(
@@ -88,32 +109,45 @@ export class EstrategiasService {
     });
   }
 
+  /**
+   * El listado y lo que se sugiere agregar (RF-13, p2), en tres grupos: el catálogo del MEN de
+   * enseñanza, el de aprendizaje y lo que usan otros proyectos del programa. Ninguna sugerencia
+   * está ya en el proyecto, y ninguna sale en dos grupos: cada grupo descarta las anteriores.
+   */
   private async leerSeccion(
     cliente: Tx | PrismaService,
     id: number,
   ): Promise<SeccionEstrategiasDto> {
-    const filas = await this.filas(cliente, id);
+    // Sin un parámetro, ParametrosService registra el error y su grupo queda vacío.
+    const [filas, ensenanza, aprendizaje] = await Promise.all([
+      this.filas(cliente, id),
+      this.parametros.leerTextos(PARAMETRO.catalogoEstrategiasEnsenanza),
+      this.parametros.leerTextos(PARAMETRO.catalogoEstrategiasAprendizaje),
+    ]);
     const estrategias = filas.map((fila, indice) => ({
       id: fila.id,
       numero: indice + 1,
       descripcion: fila.descripcion ?? '',
     }));
-    const usadas = new Set(
+    const vistas = new Set(
       estrategias.map((estrategia) => claveTexto(estrategia.descripcion)),
     );
-    const sugeridas = (await this.catalogo(cliente, id)).filter(
-      (texto) => !usadas.has(claveTexto(texto)),
-    );
-    return { estrategias, sugeridas: sugeridas.slice(0, SUGERIDAS_MAXIMO) };
+    const catalogo = {
+      ensenanza: sinLasVistas(ensenanza, vistas),
+      aprendizaje: sinLasVistas(aprendizaje, vistas),
+    };
+    const sugeridas = await this.usadasEnElPrograma(cliente, id, vistas);
+    return { estrategias, catalogo, sugeridas };
   }
 
   /**
-   * Catálogo sugerido (RF-13, p2): las estrategias que más usan los otros proyectos docentes
-   * del mismo programa. No hay un catálogo oficial cargado; este se llena con el uso.
+   * Las estrategias que más usan los otros proyectos docentes del mismo programa, sin las de
+   * `descartar` (las del proyecto y las del catálogo del MEN, que ya se ofrecen).
    */
-  private async catalogo(
+  private async usadasEnElPrograma(
     cliente: Tx | PrismaService,
     id: number,
+    descartar: ReadonlySet<string>,
   ): Promise<string[]> {
     const proyecto = await cliente.proyecto_docente.findUniqueOrThrow({
       where: { id },
@@ -140,18 +174,11 @@ export class EstrategiasService {
       },
       _count: { descripcion: true },
       orderBy: [{ _count: { descripcion: 'desc' } }, { descripcion: 'asc' }],
-      // Holgura para las que ya están en el proyecto, que se descartan después.
-      take: SUGERIDAS_MAXIMO * 3,
+      // Holgura para las que se descartan después y para las variantes de escritura de una
+      // misma estrategia, que pueden quedar en grupos distintos.
+      take: SUGERIDAS_MAXIMO * 3 + descartar.size,
     });
-    const vistas = new Set<string>();
-    const sugeridas: string[] = [];
-    for (const { descripcion } of grupos) {
-      const clave = descripcion ? claveTexto(descripcion) : '';
-      if (clave && !vistas.has(clave)) {
-        vistas.add(clave);
-        sugeridas.push(descripcion!.trim());
-      }
-    }
-    return sugeridas;
+    const usadas = grupos.flatMap(({ descripcion }) => descripcion ?? []);
+    return sinLasVistas(usadas, new Set(descartar)).slice(0, SUGERIDAS_MAXIMO);
   }
 }

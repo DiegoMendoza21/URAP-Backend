@@ -1,5 +1,12 @@
 import {
+  PARAMETRO,
+  separarTextos,
+} from '../common/parametros/parametros.service.js';
+import { primeraRepetida } from '../proyectos-docentes/entities/listas.js';
+import {
   ESTADOS_PROYECTO,
+  ESTRATEGIAS_APRENDIZAJE_MEN,
+  ESTRATEGIAS_ENSENANZA_MEN,
   FESTIVOS_2026,
   MODULOS,
   PARAMETROS,
@@ -185,6 +192,34 @@ describe('Datos iniciales', () => {
     for (const { descripcion } of PARAMETROS) {
       expect(descripcion.length).toBeLessThanOrEqual(255);
     }
+  });
+
+  it('deja el valor de cada parámetro dentro de su columna de 255 caracteres', () => {
+    const largos = PARAMETROS.filter(({ valor }) => valor.length > 255).map(
+      ({ clave }) => clave,
+    );
+    expect(largos).toEqual([]);
+  });
+
+  it('trae el catálogo del MEN de RF-13: 9 estrategias de enseñanza y 4 de aprendizaje, sin comas', () => {
+    expect(ESTRATEGIAS_ENSENANZA_MEN).toHaveLength(9);
+    expect(ESTRATEGIAS_APRENDIZAJE_MEN).toHaveLength(4);
+    const todas = [
+      ...ESTRATEGIAS_ENSENANZA_MEN,
+      ...ESTRATEGIAS_APRENDIZAJE_MEN,
+    ];
+    // La coma separa los nombres en el parámetro: un nombre con coma se partiría en dos.
+    expect(todas.filter((nombre) => nombre.includes(','))).toEqual([]);
+    expect(primeraRepetida(todas)).toBeNull();
+    // Leídos como los lee el punto 4, los parámetros devuelven los mismos nombres.
+    const valorDe = (clave: string) =>
+      PARAMETROS.find((parametro) => parametro.clave === clave)?.valor ?? '';
+    expect(
+      separarTextos(valorDe(PARAMETRO.catalogoEstrategiasEnsenanza)),
+    ).toEqual(ESTRATEGIAS_ENSENANZA_MEN);
+    expect(
+      separarTextos(valorDe(PARAMETRO.catalogoEstrategiasAprendizaje)),
+    ).toEqual(ESTRATEGIAS_APRENDIZAJE_MEN);
   });
 });
 

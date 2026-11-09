@@ -4,6 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
 import { ContrasenasService } from '../src/auth/contrasenas.service.js';
 import { type NombreRol, ROL } from '../src/auth/roles.js';
+import { PARAMETRO } from '../src/common/parametros/parametros.service.js';
 import { PrismaService } from '../src/common/prisma/prisma.service.js';
 import { configurarAplicacion } from '../src/configurar-aplicacion.js';
 import {
@@ -52,6 +53,34 @@ describe('Planeación del curso (e2e) · RF-13 a RF-16, HU-06-04 a 07', () => {
   // Proyectos: el que se diligencia, uno aprobado, uno sin horas en la asignatura, uno con un
   // período sin semanas, uno anterior del mismo docente y uno de otro docente.
   const proyectos: Record<string, number> = {};
+
+  // El catálogo del MEN (RF-13) para la prueba: «lluvia de ideas» está en los dos grupos y debe
+  // salir solo en el primero. Al terminar, los parámetros vuelven a como estaban.
+  const CATALOGO_DE_PRUEBA = {
+    [PARAMETRO.catalogoEstrategiasEnsenanza]: 'Lluvia de ideas, Matriz C-Q-A',
+    [PARAMETRO.catalogoEstrategiasAprendizaje]: 'Portafolio, lluvia de ideas',
+  };
+  const catalogoAnterior = new Map<
+    string,
+    {
+      valor: string | null;
+      tipo_dato: string | null;
+      descripcion: string | null;
+    } | null
+  >();
+
+  /** Escribe un parámetro del catálogo, o lo borra con `null`. */
+  async function ponerParametro(clave: string, valor: string | null) {
+    if (valor === null) {
+      await prisma.parametro_sistema.deleteMany({ where: { clave } });
+      return;
+    }
+    await prisma.parametro_sistema.upsert({
+      where: { clave },
+      create: { clave, valor, tipo_dato: 'lista' },
+      update: { valor },
+    });
+  }
 
   const http = () => request(app.getHttpServer());
   const como = (quien: string) => {
@@ -285,17 +314,40 @@ describe('Planeación del curso (e2e) · RF-13 a RF-16, HU-06-04 a 07', () => {
         orden: 1,
       },
     });
-    await prisma.estrategia_metodologica.create({
-      data: {
-        id_proyecto_docente: proyectos.AJENO,
-        descripcion: 'Estrategia ficticia del programa',
-        orden: 1,
-      },
+    // «Portafolio» también está en el catálogo del MEN: se sugiere ahí, no entre las del programa.
+    await prisma.estrategia_metodologica.createMany({
+      data: ['Estrategia ficticia del programa', 'Portafolio'].map(
+        (descripcion, indice) => ({
+          id_proyecto_docente: proyectos.AJENO,
+          descripcion,
+          orden: indice + 1,
+        }),
+      ),
     });
+
+    for (const [clave, valor] of Object.entries(CATALOGO_DE_PRUEBA)) {
+      catalogoAnterior.set(
+        clave,
+        await prisma.parametro_sistema.findUnique({
+          where: { clave },
+          select: { valor: true, tipo_dato: true, descripcion: true },
+        }),
+      );
+      await ponerParametro(clave, valor);
+    }
   }, 60_000);
 
   afterAll(async () => {
     if (prisma) {
+      for (const [clave, anterior] of catalogoAnterior) {
+        await (anterior === null
+          ? ponerParametro(clave, null)
+          : prisma.parametro_sistema.upsert({
+              where: { clave },
+              create: { clave, ...anterior },
+              update: anterior,
+            }));
+      }
       const deProyectos = { id_proyecto_docente: { in: creados.proyectos } };
       const racs = await prisma.rac.findMany({
         where: deProyectos,
@@ -405,12 +457,18 @@ describe('Planeación del curso (e2e) · RF-13 a RF-16, HU-06-04 a 07', () => {
   });
 
   describe('punto 4 · estrategias metodológicas (RF-13, HU-06-04)', () => {
-    it('empieza vacía, pendiente y con el catálogo sugerido del programa', async () => {
+    it('empieza vacía, pendiente y con el catálogo del MEN completo y lo usado en el programa', async () => {
       const { body } = await como('docente')
         .get(ruta('P1', 'estrategias'))
         .expect(200);
+      // Ninguna sale dos veces: «lluvia de ideas» queda en enseñanza, y «Portafolio», que usa
+      // otro proyecto, queda en el catálogo del MEN.
       expect(body).toEqual({
         estrategias: [],
+        catalogo: {
+          ensenanza: ['Lluvia de ideas', 'Matriz C-Q-A'],
+          aprendizaje: ['Portafolio'],
+        },
         sugeridas: ['Estrategia ficticia del programa'],
       });
       expect(await seccion(4)).toMatchObject({ completa: false });
@@ -474,6 +532,36 @@ describe('Planeación del curso (e2e) · RF-13 a RF-16, HU-06-04 a 07', () => {
         .get(ruta('P1', 'estrategias'))
         .expect(200);
       expect(body.estrategias).toHaveLength(2);
+    });
+
+    it('una estrategia del catálogo del MEN ya agregada no se vuelve a sugerir (p2)', async () => {
+      const { body } = await como('docente')
+        .put(ruta('P1', 'estrategias'), {
+          estrategias: ['Taller práctico', 'Debate dirigido', 'matriz c-q-a'],
+        })
+        .expect(200);
+      expect(body.catalogo).toEqual({
+        ensenanza: ['Lluvia de ideas'],
+        aprendizaje: ['Portafolio'],
+      });
+      expect(body.sugeridas).toEqual(['Estrategia ficticia del programa']);
+    });
+
+    it('sin un parámetro del catálogo, la sección responde igual, con ese grupo vacío', async () => {
+      const clave = PARAMETRO.catalogoEstrategiasEnsenanza;
+      await ponerParametro(clave, null);
+      try {
+        const { body } = await como('docente')
+          .get(ruta('P1', 'estrategias'))
+          .expect(200);
+        expect(body.catalogo).toEqual({
+          ensenanza: [],
+          aprendizaje: ['Portafolio', 'lluvia de ideas'],
+        });
+        expect(body.estrategias).toHaveLength(3);
+      } finally {
+        await ponerParametro(clave, CATALOGO_DE_PRUEBA[clave]);
+      }
     });
 
     it('p4: una sección vacía queda pendiente para el envío a revisión', async () => {
