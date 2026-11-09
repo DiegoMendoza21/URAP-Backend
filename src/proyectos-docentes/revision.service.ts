@@ -94,7 +94,9 @@ type Cliente = PrismaService | Prisma.TransactionClient;
 const INCLUIR_REVISION = {
   estado_proyecto: true,
   periodo_academico: { select: { codigo: true, cerrado: true } },
-  asignatura: { select: { nombre: true, id_programa: true } },
+  asignatura: {
+    select: { nombre: true, plan_estudio: { select: { id_programa: true } } },
+  },
   proyecto_docente_docente: {
     select: {
       id_usuario: true,
@@ -308,12 +310,16 @@ export class RevisionService {
     ];
     if (!global) {
       condiciones.push({
-        asignatura: { is: { id_programa: { in: programas } } },
+        asignatura: {
+          is: { plan_estudio: { id_programa: { in: programas } } },
+        },
       });
     }
     if (consulta.idPrograma) {
       condiciones.push({
-        asignatura: { is: { id_programa: consulta.idPrograma } },
+        asignatura: {
+          is: { plan_estudio: { id_programa: consulta.idPrograma } },
+        },
       });
     }
     if (consulta.idAsignatura) {
@@ -658,14 +664,18 @@ export class RevisionService {
     await this.edicion.consultable(usuario, id);
     const proyecto = await this.prisma.proyecto_docente.findUniqueOrThrow({
       where: { id },
-      select: { asignatura: { select: { id_programa: true } } },
+      select: {
+        asignatura: {
+          select: { plan_estudio: { select: { id_programa: true } } },
+        },
+      },
     });
     const { global, programas } = await this.alcance.alcanceConPermiso(
       usuario.id,
       'proyectos',
       'aprobar',
     );
-    const idPrograma = proyecto.asignatura?.id_programa ?? null;
+    const idPrograma = proyecto.asignatura?.plan_estudio.id_programa ?? null;
     if (!global && (idPrograma === null || !programas.includes(idPrograma))) {
       throw new ForbiddenException(MENSAJE_FUERA_DE_ALCANCE);
     }
@@ -715,7 +725,7 @@ export class RevisionService {
     return this.notificaciones.usuariosConPermiso(
       'proyectos',
       'aprobar',
-      proyecto.asignatura?.id_programa ?? null,
+      proyecto.asignatura?.plan_estudio.id_programa ?? null,
     );
   }
 

@@ -32,7 +32,7 @@ import {
 
 /** Estado inicial de todo proyecto docente (RF-08, p7; códigos de RF-17). */
 export const ESTADO_INICIAL = 'en_diligenciamiento';
-/** `proyecto_docente.origen` de un proyecto creado con el asistente (DBML v2.4). */
+/** `proyecto_docente.origen` de un proyecto creado con el asistente (DBML v2.5). */
 export const ORIGEN_ASISTENTE = 'manual';
 
 export const MENSAJE_SIN_PERIODO =
@@ -79,11 +79,13 @@ export class ProyectosDocentesService {
   ): Promise<ProyectoDocenteDetalleDto> {
     const asignatura = await this.prisma.asignatura.findFirst({
       where: { id: datos.idAsignatura, activo: true },
+      include: { plan_estudio: { select: { id_programa: true } } },
     });
-    if (!asignatura?.id_programa) {
+    // El programa de la asignatura sale de su plan de estudios (modelo v2.5).
+    const idPrograma = asignatura?.plan_estudio.id_programa;
+    if (!asignatura || !idPrograma) {
       throw new NotFoundException(MENSAJE_ASIGNATURA_NO_EXISTE);
     }
-    const idPrograma = asignatura.id_programa;
     await this.asistente.exigirPrograma(usuario.id, idPrograma);
 
     this.validarDocentes(datos);
@@ -252,7 +254,9 @@ export class ProyectosDocentesService {
     const condiciones: Prisma.proyecto_docenteWhereInput[] = [];
     if (programas.length > 0) {
       condiciones.push({
-        asignatura: { is: { id_programa: { in: programas } } },
+        asignatura: {
+          is: { plan_estudio: { id_programa: { in: programas } } },
+        },
       });
     }
     if (usuario.roles.includes(ROL.docente)) {

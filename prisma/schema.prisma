@@ -1,7 +1,7 @@
 // Modelos de URAP para Prisma.
 //
 // La línea base (prisma/migrations/0_init) se obtuvo una sola vez con `prisma db pull` sobre
-// la base creada con docs/URAP_esquema_mysql_v2.4.sql. Desde ahí este archivo se mantiene a
+// la base creada con el DDL de la v2.4 del modelo. Desde ahí este archivo se mantiene a
 // mano: cada cambio empieza en el DBML, se refleja aquí y llega a la base como migración
 // (`npm run db:migrar`). Ningún cambio está terminado hasta que el DBML y la migración digan
 // lo mismo (ver docs/modelo-datos.md).
@@ -19,9 +19,11 @@ datasource db {
   provider = "mysql"
 }
 
+// v2.5: la asignatura cuelga del plan de estudios, no del programa. El programa sale del plan
+// (`plan_estudio.id_programa`) y el código es único dentro del plan.
 model asignatura {
   id                                                                            Int                    @id @default(autoincrement())
-  id_programa                                                                   Int?
+  id_plan_estudio                                                               Int
   codigo_interno                                                                String?                @db.VarChar(255)
   nombre                                                                        String?                @db.VarChar(255)
   semestre                                                                      Int?
@@ -35,13 +37,13 @@ model asignatura {
   activo                                                                        Boolean?               @default(true)
   created_at                                                                    DateTime?              @default(dbgenerated("(now())")) @db.DateTime(0)
   updated_at                                                                    DateTime?              @updatedAt @db.DateTime(0)
-  programa                                                                      programa?              @relation(fields: [id_programa], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "asignatura_ibfk_1")
+  plan_estudio                                                                  plan_estudio           @relation(fields: [id_plan_estudio], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "asignatura_ibfk_1")
   asignatura_rap                                                                asignatura_rap[]
   asignatura_requisito_asignatura_requisito_id_asignaturaToasignatura           asignatura_requisito[] @relation("asignatura_requisito_id_asignaturaToasignatura")
   asignatura_requisito_asignatura_requisito_id_asignatura_requeridaToasignatura asignatura_requisito[] @relation("asignatura_requisito_id_asignatura_requeridaToasignatura")
   proyecto_docente                                                              proyecto_docente[]
 
-  @@unique([id_programa, codigo_interno], map: "asignatura_index_3")
+  @@unique([id_plan_estudio, codigo_interno], map: "asignatura_index_4")
 }
 
 model asignatura_rap {
@@ -463,6 +465,23 @@ model plan_curso {
   proyecto_docente        proyecto_docente? @relation(fields: [id_proyecto_docente], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "plan_curso_ibfk_1")
 }
 
+// v2.5 (RF-04 v1.1): un programa puede tener más de un plan de estudios vigente a la vez; en
+// 2026-1, Administración Industrial tiene el 1702 y el 2502.
+model plan_estudio {
+  id          Int          @id @default(autoincrement())
+  id_programa Int?
+  codigo      String?      @db.VarChar(255)
+  nombre      String?      @db.VarChar(255)
+  /// vigente | en_extincion | cerrado
+  estado      String?      @default("vigente") @db.VarChar(255)
+  created_at  DateTime?    @default(dbgenerated("(now())")) @db.DateTime(0)
+  updated_at  DateTime?    @updatedAt @db.DateTime(0)
+  asignatura  asignatura[]
+  programa    programa?    @relation(fields: [id_programa], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "plan_estudio_ibfk_1")
+
+  @@unique([id_programa, codigo], map: "plan_estudio_index_3")
+}
+
 model programa {
   id                                                             Int                 @id @default(autoincrement())
   id_facultad                                                    Int?
@@ -473,12 +492,12 @@ model programa {
   activo                                                         Boolean?            @default(true)
   created_at                                                     DateTime?           @default(dbgenerated("(now())")) @db.DateTime(0)
   updated_at                                                     DateTime?           @updatedAt @db.DateTime(0)
-  asignatura                                                     asignatura[]
   escala_valoracion_escala_valoracion_id_programaToprograma      escala_valoracion[] @relation("escala_valoracion_id_programaToprograma")
   estudiante                                                     estudiante[]
   facultad                                                       facultad?           @relation(fields: [id_facultad], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "programa_ibfk_1")
   usuario_programa_id_directorTousuario                          usuario?            @relation("programa_id_directorTousuario", fields: [id_director], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "programa_ibfk_2")
   escala_valoracion_programa_id_escala_activaToescala_valoracion escala_valoracion?  @relation("programa_id_escala_activaToescala_valoracion", fields: [id_escala_activa], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "programa_ibfk_3")
+  plan_estudio                                                   plan_estudio[]
   rap                                                            rap[]
   reporte_academico                                              reporte_academico[]
   usuario_usuario_id_programaToprograma                          usuario[]           @relation("usuario_id_programaToprograma")

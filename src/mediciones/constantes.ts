@@ -1,11 +1,11 @@
 /**
  * Valores fijos de la medición de RAP (RF-30 a RF-32). Son enumerados del formato
- * FO-DO/PC-023 que el DBML v2.4 guarda como `varchar` con sus valores en un comentario. Los
+ * FO-DO/PC-023 que el DBML v2.5 guarda como `varchar` con sus valores en un comentario. Los
  * niveles de la escala, el umbral de cumplimiento y el porcentaje esperado NO van aquí: son
  * del programa (`escala_valoracion`, `nivel_escala`) y se leen de la base.
  */
 
-/** `medicion_rap.estado` (DBML v2.4: «borrador | cerrada»). */
+/** `medicion_rap.estado` (DBML v2.5: «borrador | cerrada»). */
 export const ESTADO_MEDICION = {
   borrador: 'borrador',
   cerrada: 'cerrada',
@@ -14,7 +14,7 @@ export const ESTADO_MEDICION = {
 export type EstadoMedicion =
   (typeof ESTADO_MEDICION)[keyof typeof ESTADO_MEDICION];
 
-/** `medicion_rap.tipo_valoracion` (DBML v2.4: «formativa | sumativa»). */
+/** `medicion_rap.tipo_valoracion` (DBML v2.5: «formativa | sumativa»). */
 export const TIPO_VALORACION = {
   formativa: 'formativa',
   sumativa: 'sumativa',
@@ -23,7 +23,7 @@ export const TIPO_VALORACION = {
 export type TipoValoracion =
   (typeof TIPO_VALORACION)[keyof typeof TIPO_VALORACION];
 
-/** `medicion_rap.periodo_toma` (DBML v2.4: «primer | segundo»). */
+/** `medicion_rap.periodo_toma` (DBML v2.5: «primer | segundo»). */
 export const PERIODO_TOMA = {
   primer: 'primer',
   segundo: 'segundo',

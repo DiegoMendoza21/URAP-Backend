@@ -20,7 +20,7 @@ import { permisosInicialesDe } from './matriz-permisos.js';
 import {
   ESCALA,
   FACULTAD,
-  PLAN_DE_ESTUDIOS,
+  PLANES_DE_ESTUDIO,
   PROGRAMA,
   RAPS,
   RUBRICA_RAP_2,
@@ -50,7 +50,7 @@ export interface ResultadoSembrado {
 }
 
 /**
- * Carga los datos base (catálogos, programa, RAP, rúbrica del RAP 2 y plan de estudios), que
+ * Carga los datos base (catálogos, programa, RAP, rúbrica del RAP 2 y planes de estudio), que
  * sirven en cualquier ambiente, y, si se piden, los de demostración: período 2026-2 con su
  * receso, rúbricas provisionales, usuarios ficticios y el recorrido (proyectos en todos los
  * estados, 34 estudiantes ficticios y la medición del caso de RF-31; ver recorrido-demo.ts). Es
@@ -75,7 +75,7 @@ export async function sembrarEn(
   const idPrograma = await sembrarPrograma(tx);
   const idsRap = await sembrarRaps(tx, idPrograma);
   await sembrarRubrica(tx, idPrograma, idsRap, RUBRICA_RAP_2);
-  await sembrarPlanDeEstudios(tx, idPrograma, idsRap);
+  await sembrarPlanesDeEstudio(tx, idPrograma, idsRap);
   let archivos: ArchivoDemo[] = [];
   if (demostracion) {
     const idPeriodo = await sembrarPeriodo(tx);
@@ -354,71 +354,94 @@ async function sembrarRubrica(
 }
 
 /**
- * Plan de estudios, su mapeo curricular con los RAP y, donde el programa la entregó, la ficha
- * de la asignatura con sus prerrequisitos (RF-04, RF-05, RF-08 p5). Casi todas las asignaturas
- * no tienen código SMA, así que el índice único (id_programa, codigo_interno) no evita
- * duplicados: cada asignatura se busca por su nombre dentro del programa antes de crearla.
+ * Planes de estudio del programa (modelo v2.5), sus asignaturas, el mapeo curricular con los
+ * RAP y, donde el programa la entregó, la ficha de la asignatura con sus prerrequisitos (RF-04,
+ * RF-05, RF-08 p5). Cada plan tiene su propia fila de cada asignatura: Comportamiento
+ * organizacional queda dos veces, FP15503 en el 1702 e IX24193 en el 2502. Muchas asignaturas
+ * no tienen código SMA, así que el índice único (id_plan_estudio, codigo_interno) no evita
+ * duplicados: cada asignatura se busca por su nombre dentro de su plan antes de crearla. Los
+ * prerrequisitos se buscan también dentro del mismo plan (HU-03-04).
  */
-async function sembrarPlanDeEstudios(
+async function sembrarPlanesDeEstudio(
   tx: Transaccion,
   idPrograma: number,
   idsRap: ReadonlyMap<number, number>,
 ): Promise<void> {
-  const idsAsignatura = new Map<string, number>();
-  for (const {
-    nombre,
-    semestre,
-    raps,
-    codigo_interno,
-    ficha,
-  } of PLAN_DE_ESTUDIOS) {
-    const datosFicha = ficha && {
-      componente: ficha.componente,
-      tipo_curso: ficha.tipo_curso,
-      creditos: ficha.creditos,
-      horas_tde: ficha.horas_tde,
-      horas_tdp: ficha.horas_tdp,
-      horas_ti: ficha.horas_ti,
-      horas_totales: ficha.horas_tde + ficha.horas_tdp + ficha.horas_ti,
-    };
-    const asignatura =
-      (await tx.asignatura.findFirst({
-        where: { id_programa: idPrograma, nombre },
-      })) ??
-      (await tx.asignatura.create({
-        data: {
-          id_programa: idPrograma,
-          nombre,
-          semestre,
-          codigo_interno,
-          ...datosFicha,
-        },
-      }));
-    idsAsignatura.set(nombre, asignatura.id);
-    for (const numero of raps) {
-      const idRap = obtener(idsRap, numero, `RAP ${numero}`);
-      await tx.asignatura_rap.upsert({
-        where: {
-          id_asignatura_id_rap: { id_asignatura: asignatura.id, id_rap: idRap },
-        },
-        create: { id_asignatura: asignatura.id, id_rap: idRap },
-        update: {},
-      });
-    }
-  }
+  for (const { codigo, nombre, asignaturas } of PLANES_DE_ESTUDIO) {
+    const plan = await tx.plan_estudio.upsert({
+      where: { id_programa_codigo: { id_programa: idPrograma, codigo } },
+      create: { id_programa: idPrograma, codigo, nombre, estado: 'vigente' },
+      update: {},
+    });
 
-  for (const { nombre, ficha } of PLAN_DE_ESTUDIOS) {
-    for (const requerida of ficha?.prerrequisitos ?? []) {
-      const clave = {
-        id_asignatura: obtener(idsAsignatura, nombre, nombre),
-        id_asignatura_requerida: obtener(idsAsignatura, requerida, requerida),
-        tipo: 'prerrequisito',
+    const idsAsignatura = new Map<string, number>();
+    for (const {
+      nombre: nombreAsignatura,
+      semestre,
+      raps,
+      codigo_interno,
+      creditos,
+      ficha,
+    } of asignaturas) {
+      const datosFicha = ficha && {
+        componente: ficha.componente,
+        tipo_curso: ficha.tipo_curso,
+        horas_tde: ficha.horas_tde,
+        horas_tdp: ficha.horas_tdp,
+        horas_ti: ficha.horas_ti,
+        horas_totales: ficha.horas_tde + ficha.horas_tdp + ficha.horas_ti,
       };
-      await tx.asignatura_requisito.upsert({
-        where: { id_asignatura_id_asignatura_requerida_tipo: clave },
-        create: clave,
-        update: {},
-      });
+      const asignatura =
+        (await tx.asignatura.findFirst({
+          where: { id_plan_estudio: plan.id, nombre: nombreAsignatura },
+        })) ??
+        (await tx.asignatura.create({
+          data: {
+            id_plan_estudio: plan.id,
+            nombre: nombreAsignatura,
+            semestre,
+            codigo_interno,
+            creditos,
+            ...datosFicha,
+          },
+        }));
+      idsAsignatura.set(nombreAsignatura, asignatura.id);
+      for (const numero of raps) {
+        const idRap = obtener(idsRap, numero, `RAP ${numero}`);
+        await tx.asignatura_rap.upsert({
+          where: {
+            id_asignatura_id_rap: {
+              id_asignatura: asignatura.id,
+              id_rap: idRap,
+            },
+          },
+          create: { id_asignatura: asignatura.id, id_rap: idRap },
+          update: {},
+        });
+      }
+    }
+
+    for (const { nombre: nombreAsignatura, ficha } of asignaturas) {
+      for (const requerida of ficha?.prerrequisitos ?? []) {
+        const clave = {
+          id_asignatura: obtener(
+            idsAsignatura,
+            nombreAsignatura,
+            nombreAsignatura,
+          ),
+          id_asignatura_requerida: obtener(
+            idsAsignatura,
+            requerida,
+            `${requerida} en el plan ${codigo}`,
+          ),
+          tipo: 'prerrequisito',
+        };
+        await tx.asignatura_requisito.upsert({
+          where: { id_asignatura_id_asignatura_requerida_tipo: clave },
+          create: clave,
+          update: {},
+        });
+      }
     }
   }
 }
@@ -519,6 +542,7 @@ async function contarRegistros(tx: Transaccion): Promise<ResumenSembrado> {
     parametros: await tx.parametro_sistema.count(),
     festivos: await tx.dia_festivo.count(),
     programas: await tx.programa.count(),
+    planes_estudio: await tx.plan_estudio.count(),
     raps: await tx.rap.count(),
     asignaturas: await tx.asignatura.count(),
     asignaturas_rap: await tx.asignatura_rap.count(),

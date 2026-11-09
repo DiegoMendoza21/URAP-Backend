@@ -218,7 +218,9 @@ export class MatriculasService {
       where: { id: idProyecto },
       select: {
         id: true,
-        asignatura: { select: { id_programa: true } },
+        asignatura: {
+          select: { plan_estudio: { select: { id_programa: true } } },
+        },
         proyecto_docente_docente: {
           where: { id_usuario: usuario.id },
           select: { id_usuario: true },
@@ -231,7 +233,7 @@ export class MatriculasService {
     const esAdministrador = await this.alcance.alcanzaPrograma(
       usuario.id,
       [ROL.administrador],
-      proyecto.asignatura?.id_programa ?? null,
+      proyecto.asignatura?.plan_estudio.id_programa ?? null,
     );
     const esDocenteAsignado =
       usuario.roles.includes(ROL.docente) &&
@@ -245,7 +247,7 @@ export class MatriculasService {
     }
     return {
       id: proyecto.id,
-      idPrograma: proyecto.asignatura?.id_programa ?? null,
+      idPrograma: proyecto.asignatura?.plan_estudio.id_programa ?? null,
     };
   }
 

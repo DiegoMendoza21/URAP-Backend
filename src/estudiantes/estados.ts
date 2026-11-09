@@ -1,4 +1,4 @@
-/** Valores de `matricula.estado` (DBML v2.4: «matriculado | retirado»). */
+/** Valores de `matricula.estado` (DBML v2.5: «matriculado | retirado»). */
 export const ESTADO_MATRICULA = {
   matriculado: 'matriculado',
   retirado: 'retirado',

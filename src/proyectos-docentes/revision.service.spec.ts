@@ -90,7 +90,10 @@ function proyecto({
     grupo: 'A',
     estado_proyecto: ESTADOS[estado],
     periodo_academico: { codigo: '2026-2', cerrado },
-    asignatura: { nombre: 'Asignatura ficticia', id_programa: 1 },
+    asignatura: {
+      nombre: 'Asignatura ficticia',
+      plan_estudio: { id_programa: 1 },
+    },
     proyecto_docente_docente: [
       {
         id_usuario: 20,

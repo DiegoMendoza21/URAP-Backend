@@ -53,7 +53,7 @@ const TIPO_PARCIAL = { id: 2, codigo: 'parcial', nombre: 'Parcial' };
 function proyecto(cambios: Record<string, unknown> = {}) {
   return {
     id: 99,
-    asignatura: { id_programa: 10 },
+    asignatura: { plan_estudio: { id_programa: 10 } },
     periodo_academico: {
       id: 7,
       codigo: '2026-2',

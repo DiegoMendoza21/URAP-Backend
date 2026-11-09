@@ -37,7 +37,7 @@ const usuarioDepartamento: UsuarioSesion = {
 
 const asignatura = {
   id: 5,
-  id_programa: ID_PROGRAMA,
+  id_plan_estudio: 3,
   codigo_interno: 'PRB-01',
   nombre: 'Asignatura de prueba',
   semestre: 3,
@@ -49,10 +49,16 @@ const asignatura = {
   horas_ti: null,
   horas_totales: null,
   activo: true,
-  programa: {
-    id: ID_PROGRAMA,
-    nombre: 'Programa de prueba',
-    facultad: { nombre: 'Facultad de prueba' },
+  plan_estudio: {
+    id: 3,
+    id_programa: ID_PROGRAMA,
+    codigo: '2502',
+    nombre: 'Plan de prueba',
+    programa: {
+      id: ID_PROGRAMA,
+      nombre: 'Programa de prueba',
+      facultad: { nombre: 'Facultad de prueba' },
+    },
   },
   asignatura_requisito_asignatura_requisito_id_asignaturaToasignatura: [],
 };
@@ -363,7 +369,11 @@ describe('ProyectosDocentesService', () => {
       expect(prisma.proyecto_docente.count).toHaveBeenCalledWith({
         where: {
           OR: [
-            { asignatura: { is: { id_programa: { in: [ID_PROGRAMA] } } } },
+            {
+              asignatura: {
+                is: { plan_estudio: { id_programa: { in: [ID_PROGRAMA] } } },
+              },
+            },
             { proyecto_docente_docente: { some: { id_usuario: 20 } } },
           ],
         },

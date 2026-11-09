@@ -8,6 +8,10 @@ import { ROL } from '../src/auth/roles.js';
 import { PARAMETRO } from '../src/common/parametros/parametros.service.js';
 import { PrismaService } from '../src/common/prisma/prisma.service.js';
 import { configurarAplicacion } from '../src/configurar-aplicacion.js';
+import {
+  borrarPlanesDePrueba,
+  planDePrueba,
+} from './utilidades/plan-estudio.js';
 
 // Requiere el .env configurado y la base local levantada (npm run db:levantar). Crea sus
 // propios datos ficticios y los borra al terminar. Funciona con o sin el seed.
@@ -118,7 +122,7 @@ describe('Estudiantes matriculados (e2e) · RF-22, HU-09-01', () => {
   async function crearProyecto(idPrograma: number, codigo: string) {
     const asignatura = await prisma.asignatura.create({
       data: {
-        id_programa: idPrograma,
+        id_plan_estudio: await planDePrueba(prisma, idPrograma),
         codigo_interno: `${codigo}-${sufijo}`,
         nombre: `Asignatura ${codigo}`,
       },
@@ -208,6 +212,7 @@ describe('Estudiantes matriculados (e2e) · RF-22, HU-09-01', () => {
       await prisma.usuario.deleteMany({
         where: { id: { in: creados.usuarios } },
       });
+      await borrarPlanesDePrueba(prisma, creados.programas);
       await prisma.programa.deleteMany({
         where: { id: { in: creados.programas } },
       });

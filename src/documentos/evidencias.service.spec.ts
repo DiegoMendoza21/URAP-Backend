@@ -126,7 +126,7 @@ describe('EvidenciasService', () => {
     return {
       id: ID_PROYECTO,
       id_periodo: 7,
-      asignatura: { id_programa: ID_PROGRAMA },
+      asignatura: { plan_estudio: { id_programa: ID_PROGRAMA } },
       periodo_academico: { cerrado: cambios.cerrado ?? false },
       proyecto_docente_rap: (cambios.raps ?? [RAP_1, RAP_2]).map((rap) => ({
         rap,

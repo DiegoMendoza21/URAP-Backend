@@ -18,7 +18,9 @@ import {
 import {
   ESCALA,
   HORAS_POR_CREDITO,
-  PLAN_DE_ESTUDIOS,
+  PLAN_1702,
+  PLAN_2502,
+  PLANES_DE_ESTUDIO,
   RAPS,
   RUBRICA_RAP_2,
 } from './programa.js';
@@ -45,7 +47,17 @@ describe('Datos iniciales', () => {
     ['tipos de sesión', TIPOS_SESION.map(({ codigo }) => codigo)],
     ['tipos de notificación', TIPOS_NOTIFICACION.map(({ codigo }) => codigo)],
     ['parámetros', PARAMETROS.map(({ clave }) => clave)],
-    ['asignaturas', PLAN_DE_ESTUDIOS.map(({ nombre }) => nombre)],
+    ['planes de estudio', PLANES_DE_ESTUDIO.map(({ codigo }) => codigo)],
+    ['asignaturas del plan 1702', PLAN_1702.map(({ nombre }) => nombre)],
+    ['asignaturas del plan 2502', PLAN_2502.map(({ nombre }) => nombre)],
+    [
+      'códigos SMA del plan 1702',
+      PLAN_1702.flatMap(({ codigo_interno }) => codigo_interno ?? []),
+    ],
+    [
+      'códigos SMA del plan 2502',
+      PLAN_2502.flatMap(({ codigo_interno }) => codigo_interno ?? []),
+    ],
     ['usuarios de demostración', USUARIOS_DEMO.map(({ correo }) => correo)],
   ])('no repite códigos en %s', (_, codigos) => {
     expect(repetidos(codigos)).toEqual([]);
@@ -86,16 +98,40 @@ describe('Datos iniciales', () => {
     }
   });
 
-  it('trae las 69 asignaturas del plan de estudios en los semestres I a X', () => {
-    expect(PLAN_DE_ESTUDIOS).toHaveLength(69);
-    const semestres = new Set(PLAN_DE_ESTUDIOS.map(({ semestre }) => semestre));
+  it('trae los dos planes vigentes del programa, 1702 y 2502 (RF-04 v1.1)', () => {
+    expect(
+      PLANES_DE_ESTUDIO.map(({ codigo, asignaturas }) => [
+        codigo,
+        asignaturas.length,
+      ]),
+    ).toEqual([
+      ['1702', 69],
+      ['2502', 36],
+    ]);
+  });
+
+  it('trae las 69 asignaturas del plan 1702 en los semestres I a X', () => {
+    const semestres = new Set(PLAN_1702.map(({ semestre }) => semestre));
     expect([...semestres].sort((a, b) => a - b)).toEqual([
       1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
     ]);
   });
 
+  it('trae las 36 asignaturas del plan 2502 en los semestres 1 a 5, con código y créditos', () => {
+    const semestres = new Set(PLAN_2502.map(({ semestre }) => semestre));
+    expect([...semestres].sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5]);
+    for (const { codigo_interno, creditos } of PLAN_2502) {
+      expect(codigo_interno).toEqual(expect.any(String));
+      expect(creditos).toBeGreaterThan(0);
+    }
+  });
+
+  it('deja el plan 2502 sin mapeo a RAP mientras el programa no lo entregue (SUP-16)', () => {
+    expect(PLAN_2502.flatMap(({ raps }) => raps)).toEqual([]);
+  });
+
   it('trae los 73 vínculos asignatura–RAP del informe 2023-II', () => {
-    const vinculos = PLAN_DE_ESTUDIOS.flatMap(({ raps }) => raps);
+    const vinculos = PLAN_1702.flatMap(({ raps }) => raps);
     expect(vinculos).toHaveLength(73);
     const porRap = RAPS.map(
       ({ numero }) => vinculos.filter((rap) => rap === numero).length,
@@ -103,8 +139,8 @@ describe('Datos iniciales', () => {
     expect(porRap).toEqual([7, 8, 16, 18, 3, 5, 16]);
   });
 
-  it('vincula cada asignatura con al menos un RAP, sin repetirlo', () => {
-    for (const { raps } of PLAN_DE_ESTUDIOS) {
+  it('vincula cada asignatura del plan 1702 con al menos un RAP, sin repetirlo', () => {
+    for (const { raps } of PLAN_1702) {
       expect(raps.length).toBeGreaterThan(0);
       expect(repetidos(raps)).toEqual([]);
     }
@@ -112,7 +148,7 @@ describe('Datos iniciales', () => {
 
   it('relaciona las asignaturas solo con RAP que existen', () => {
     const numeros = RAPS.map(({ numero }) => numero);
-    for (const { raps } of PLAN_DE_ESTUDIOS) {
+    for (const { raps } of PLAN_1702) {
       expect(numeros).toEqual(expect.arrayContaining(raps));
     }
   });
@@ -320,48 +356,33 @@ describe('Datos institucionales de la versión 2 del documento', () => {
     ]);
   });
 
-  it('carga la ficha completa de las cuatro asignaturas de los formatos FO-DO/PC-001', () => {
-    const fichas = PLAN_DE_ESTUDIOS.filter(({ ficha }) => ficha).map(
-      ({ nombre, codigo_interno, ficha }) => ({
-        nombre,
-        codigo_interno: codigo_interno ?? null,
-        ...ficha,
-      }),
+  it('carga la ficha completa de las cinco asignaturas de los formatos FO-DO/PC-001', () => {
+    const fichas = PLANES_DE_ESTUDIO.flatMap(({ codigo, asignaturas }) =>
+      asignaturas
+        .filter(({ ficha }) => ficha)
+        .map(({ nombre, codigo_interno, creditos, ficha }) => ({
+          plan: codigo,
+          nombre,
+          codigo_interno: codigo_interno ?? null,
+          creditos: creditos ?? null,
+          ...ficha,
+        })),
     );
     const comunes = { componente: 'PROFESIONAL', tipo_curso: 'Obligatorio' };
+    // Los dos formatos de Comportamiento organizacional son iguales salvo el código.
+    const comportamiento = {
+      nombre: 'Comportamiento organizacional',
+      ...comunes,
+      creditos: 2,
+      horas_tde: 32,
+      horas_tdp: 0,
+      horas_ti: 64,
+      prerrequisitos: ['Organización y dirección'],
+    };
     expect(fichas).toEqual([
+      { plan: '1702', codigo_interno: 'FP15503', ...comportamiento },
       {
-        nombre: 'Fundamentos de Administración',
-        codigo_interno: 'NC2507',
-        ...comunes,
-        creditos: 3,
-        horas_tde: 48,
-        horas_tdp: 0,
-        horas_ti: 96,
-        prerrequisitos: [],
-      },
-      {
-        nombre: 'Fundamentos de investigación',
-        codigo_interno: 'NC2505',
-        ...comunes,
-        creditos: 3,
-        horas_tde: 48,
-        horas_tdp: 0,
-        horas_ti: 96,
-        prerrequisitos: ['Comprensión y producción de textos II'],
-      },
-      {
-        // Dos códigos posibles y el programa no ha respondido: queda sin código.
-        nombre: 'Comportamiento organizacional',
-        codigo_interno: null,
-        ...comunes,
-        creditos: 2,
-        horas_tde: 32,
-        horas_tdp: 0,
-        horas_ti: 64,
-        prerrequisitos: ['Organización y dirección'],
-      },
-      {
+        plan: '1702',
         nombre: 'Gestión ambiental',
         codigo_interno: 'FP15804',
         ...comunes,
@@ -371,38 +392,84 @@ describe('Datos institucionales de la versión 2 del documento', () => {
         horas_ti: 64,
         prerrequisitos: [],
       },
+      {
+        plan: '2502',
+        nombre: 'Fundamentos de administración',
+        codigo_interno: 'NC2507',
+        ...comunes,
+        creditos: 3,
+        horas_tde: 48,
+        horas_tdp: 0,
+        horas_ti: 96,
+        prerrequisitos: [],
+      },
+      {
+        plan: '2502',
+        nombre: 'Fundamentos de investigación científica',
+        codigo_interno: 'NC2505',
+        ...comunes,
+        creditos: 3,
+        horas_tde: 48,
+        horas_tdp: 0,
+        horas_ti: 96,
+        prerrequisitos: ['Producción y comprensión textual II'],
+      },
+      { plan: '2502', codigo_interno: 'IX24193', ...comportamiento },
     ]);
   });
 
   it('cuadra las horas de cada ficha con sus créditos (RF-04)', () => {
-    for (const { ficha } of PLAN_DE_ESTUDIOS) {
+    for (const { creditos, ficha } of [...PLAN_1702, ...PLAN_2502]) {
       if (ficha) {
+        expect(creditos).toBeDefined();
         expect(ficha.horas_tde + ficha.horas_tdp + ficha.horas_ti).toBe(
-          ficha.creditos * HORAS_POR_CREDITO,
+          (creditos ?? 0) * HORAS_POR_CREDITO,
         );
       }
     }
   });
 
-  it('solo pone prerrequisitos que están en el plan de estudios', () => {
-    const nombres = PLAN_DE_ESTUDIOS.map(({ nombre }) => nombre);
-    for (const { ficha } of PLAN_DE_ESTUDIOS) {
-      expect(nombres).toEqual(
-        expect.arrayContaining(ficha?.prerrequisitos ?? []),
-      );
+  it('solo pone prerrequisitos que están en el mismo plan (HU-03-04)', () => {
+    for (const { asignaturas } of PLANES_DE_ESTUDIO) {
+      const nombres = asignaturas.map(({ nombre }) => nombre);
+      for (const { ficha } of asignaturas) {
+        expect(nombres).toEqual(
+          expect.arrayContaining(ficha?.prerrequisitos ?? []),
+        );
+      }
     }
   });
 
-  it('solo trae los códigos SMA que entregó el programa', () => {
-    expect(
-      PLAN_DE_ESTUDIOS.filter(({ codigo_interno }) => codigo_interno).map(
-        ({ nombre, codigo_interno }) => [nombre, codigo_interno],
-      ),
-    ).toEqual([
-      ['Fundamentos de Administración', 'NC2507'],
-      ['Fundamentos de investigación', 'NC2505'],
-      ['Finanzas a corto plazo', 'FP15502'],
-      ['Gestión ambiental', 'FP15804'],
+  it('trae Comportamiento organizacional en los dos planes, con distinto código (v2.5)', () => {
+    const enCadaPlan = PLANES_DE_ESTUDIO.map(({ codigo, asignaturas }) => {
+      const fila = asignaturas.find(
+        ({ nombre }) => nombre === 'Comportamiento organizacional',
+      );
+      return [codigo, fila?.codigo_interno, fila?.semestre];
+    });
+    expect(enCadaPlan).toEqual([
+      ['1702', 'FP15503', 5],
+      ['2502', 'IX24193', 5],
     ]);
+  });
+
+  it('trae en el plan 1702 solo los códigos SMA de los semestres IV a X', () => {
+    const conCodigo = PLAN_1702.filter(({ codigo_interno }) => codigo_interno);
+    expect(conCodigo).toHaveLength(36);
+    for (const { semestre } of conCodigo) {
+      expect(semestre).toBeGreaterThanOrEqual(4);
+    }
+    // Finanzas a corto plazo trae el código del formato 023, pero no sus créditos.
+    const finanzas = conCodigo.find(
+      ({ nombre }) => nombre === 'Finanzas a corto plazo',
+    );
+    expect(finanzas?.codigo_interno).toBe('FP15502');
+    expect(finanzas?.creditos).toBeUndefined();
+    // Los créditos solo se conocen de las asignaturas que traen código.
+    for (const { codigo_interno, creditos } of PLAN_1702) {
+      if (creditos !== undefined) {
+        expect(codigo_interno).toBeDefined();
+      }
+    }
   });
 });

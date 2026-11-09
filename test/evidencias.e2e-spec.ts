@@ -26,6 +26,10 @@ import {
   borrarMatrizDePrueba,
   matrizDePrueba,
 } from './utilidades/permisos.js';
+import {
+  borrarPlanesDePrueba,
+  planDePrueba,
+} from './utilidades/plan-estudio.js';
 
 /**
  * Almacenamiento de disco en una carpeta temporal, con un interruptor para simular que el
@@ -264,7 +268,7 @@ describe('Evidencias (e2e) · RF-24, HU-10-01', () => {
     creados.programas.push(programa.id);
     const asignatura = await prisma.asignatura.create({
       data: {
-        id_programa: programa.id,
+        id_plan_estudio: await planDePrueba(prisma, programa.id),
         codigo_interno: `EVID-${sufijo}`,
         nombre: 'Asignatura de evidencias',
         semestre: 4,
@@ -370,6 +374,7 @@ describe('Evidencias (e2e) · RF-24, HU-10-01', () => {
       await prisma.usuario.deleteMany({
         where: { id: { in: creados.usuarios } },
       });
+      await borrarPlanesDePrueba(prisma, creados.programas);
       await prisma.programa.deleteMany({
         where: { id: { in: creados.programas } },
       });

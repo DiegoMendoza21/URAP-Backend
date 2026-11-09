@@ -20,6 +20,7 @@ import {
   TIPO_FESTIVO,
 } from '../sesiones/sesiones.service.js';
 import { imagenDemo } from './imagen-demo.js';
+import { CODIGO_PLAN_1702 } from './programa.js';
 import {
   DIAS_SIN_REGISTRAR,
   ESTUDIANTES_DEMO,
@@ -172,9 +173,9 @@ async function leerReferencias(
 
 /**
  * La asignatura de un proyecto de demostración, por su nombre en el plan de estudios. Es la
- * única búsqueda de asignaturas del recorrido, a propósito: con el modelo v2.5 las asignaturas
- * dejan de colgar del programa y cuelgan del plan de estudios (1702 o 2502), y todas las de la
- * demostración son del plan 1702. Cuando entre, se cambia aquí el filtro por ese plan y nada más.
+ * única búsqueda de asignaturas del recorrido. Desde el modelo v2.5 las asignaturas cuelgan del
+ * plan de estudios y varias se repiten en el 1702 y el 2502 (Finanzas a corto plazo,
+ * Macroeconomía, Organización y dirección): todas las de la demostración son del plan 1702.
  */
 async function asignaturaDemo(
   tx: Transaccion,
@@ -182,7 +183,10 @@ async function asignaturaDemo(
   nombre: string,
 ): Promise<number> {
   const asignatura = await tx.asignatura.findFirst({
-    where: { id_programa: idPrograma, nombre },
+    where: {
+      plan_estudio: { id_programa: idPrograma, codigo: CODIGO_PLAN_1702 },
+      nombre,
+    },
     select: { id: true },
   });
   if (!asignatura) {

@@ -201,7 +201,9 @@ export class ReportesService {
         estado: ESTADO_MEDICION.cerrada,
         id_rap: { in: raps.map((rap) => rap.id) },
         proyecto_docente: {
-          is: { asignatura: { is: { id_programa: idPrograma } } },
+          is: {
+            asignatura: { is: { plan_estudio: { id_programa: idPrograma } } },
+          },
         },
       },
       select: SELECCION_MEDICION,

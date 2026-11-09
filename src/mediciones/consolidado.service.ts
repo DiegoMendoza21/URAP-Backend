@@ -33,7 +33,13 @@ export class ConsolidadoService {
           proyecto_docente: {
             select: {
               asignatura: {
-                select: { programa: { select: { id_escala_activa: true } } },
+                select: {
+                  plan_estudio: {
+                    select: {
+                      programa: { select: { id_escala_activa: true } },
+                    },
+                  },
+                },
               },
             },
           },
@@ -59,7 +65,8 @@ export class ConsolidadoService {
     // La escala de cada medición: la de su rúbrica o, si no la indica, la del programa.
     const escalaDe = (medicion: (typeof mediciones)[number]) =>
       medicion.rubrica?.id_escala ??
-      medicion.proyecto_docente?.asignatura?.programa?.id_escala_activa ??
+      medicion.proyecto_docente?.asignatura?.plan_estudio.programa
+        ?.id_escala_activa ??
       null;
     const idsEscala = [
       ...new Set(

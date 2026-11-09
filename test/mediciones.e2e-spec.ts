@@ -21,6 +21,10 @@ import {
   ADVERTENCIA_SIN_META,
 } from '../src/mediciones/consolidado.js';
 import { MOTIVO_SIN_PERIODOS_ANTERIORES } from '../src/reportes/reportes.service.js';
+import {
+  borrarPlanesDePrueba,
+  planDePrueba,
+} from './utilidades/plan-estudio.js';
 
 // Requiere el .env configurado y la base local levantada (npm run db:levantar). Crea sus
 // propios datos ficticios (programa, escala, RAP, rúbrica, curso y 34 estudiantes) y los borra
@@ -134,7 +138,7 @@ describe('Medición de RAP (e2e) · RF-30, HU-11-01 a HU-11-03', () => {
   ): Promise<number> {
     const asignatura = await prisma.asignatura.create({
       data: {
-        id_programa: idPrograma,
+        id_plan_estudio: await planDePrueba(prisma, idPrograma),
         codigo_interno: `${codigo}-${sufijo}`,
         nombre: `Asignatura ${codigo} E2E`,
       },
@@ -384,6 +388,7 @@ describe('Medición de RAP (e2e) · RF-30, HU-11-01 a HU-11-03', () => {
       await prisma.escala_valoracion.deleteMany({
         where: { id: { in: creados.escalas } },
       });
+      await borrarPlanesDePrueba(prisma, creados.programas);
       await prisma.programa.deleteMany({
         where: { id: { in: creados.programas } },
       });
@@ -1040,7 +1045,7 @@ describe('Medición de RAP (e2e) · RF-30, HU-11-01 a HU-11-03', () => {
       creados.periodos.push(anterior.id);
       const asignatura = await prisma.asignatura.create({
         data: {
-          id_programa: idPrograma,
+          id_plan_estudio: await planDePrueba(prisma, idPrograma),
           codigo_interno: `ANT-${sufijo}`,
           nombre: 'Asignatura ANT E2E',
         },

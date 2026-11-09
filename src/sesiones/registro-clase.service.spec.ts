@@ -51,7 +51,10 @@ const TIPO_FESTIVO = {
 function proyecto(cambios: Record<string, unknown> = {}) {
   return {
     id: 99,
-    asignatura: { id_programa: 10, nombre: 'Asignatura de prueba' },
+    asignatura: {
+      plan_estudio: { id_programa: 10 },
+      nombre: 'Asignatura de prueba',
+    },
     periodo_academico: {
       cerrado: false,
       fecha_inicio: aFechaColumna('2026-08-03'),

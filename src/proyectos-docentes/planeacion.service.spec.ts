@@ -116,9 +116,9 @@ describe('EstrategiasService (RF-13)', () => {
           ]),
       },
       proyecto_docente: {
-        findUniqueOrThrow: vi
-          .fn()
-          .mockResolvedValue({ asignatura: { id_programa: 1 } }),
+        findUniqueOrThrow: vi.fn().mockResolvedValue({
+          asignatura: { plan_estudio: { id_programa: 1 } },
+        }),
       },
     };
     const { edicion, auditorias } = edicionFalsa(tx);
