@@ -108,7 +108,10 @@ export class ParametrosService {
    */
   async lista(clave: ClaveParametro): Promise<string[]> {
     const valor = await this.leer(clave);
-    return separarTextos(valor).map((elemento) => elemento.toLowerCase());
+    return valor
+      .split(',')
+      .map((elemento) => elemento.trim().toLowerCase())
+      .filter((elemento) => elemento !== '');
   }
 
   /**

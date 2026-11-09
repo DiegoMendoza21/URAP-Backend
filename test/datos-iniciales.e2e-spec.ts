@@ -43,15 +43,20 @@ describe('Datos base (e2e) · npm run db:sembrar se puede repetir', () => {
     await expect(
       prisma.$transaction(
         async (tx) => {
-          // Una base sembrada antes del catálogo del MEN (RF-13), con un parámetro que el
-          // administrador ya cambió.
-          await sembrarEn(tx);
+          // Como una base sembrada antes del catálogo del MEN (RF-13): sin sus dos parámetros
+          // y con uno que el administrador ya cambió. Se siembra una sola vez: con la base vacía
+          // de la CI, sembrar dos veces dentro de la transacción la acercaba a su tiempo límite.
           await tx.parametro_sistema.deleteMany({
             where: { clave: { in: catalogo } },
           });
-          await tx.parametro_sistema.update({
+          await tx.parametro_sistema.upsert({
             where: { clave: PARAMETRO.alertaDiasAnticipacion },
-            data: { valor: '7' },
+            create: {
+              clave: PARAMETRO.alertaDiasAnticipacion,
+              valor: '7',
+              tipo_dato: 'entero',
+            },
+            update: { valor: '7' },
           });
 
           await sembrarEn(tx);
