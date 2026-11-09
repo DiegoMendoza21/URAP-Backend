@@ -176,6 +176,35 @@ export const TIPOS_NOTIFICACION = [
 ];
 
 /**
+ * RF-13, p2: el catálogo sugerido de estrategias metodológicas. Son los nombres de las dos
+ * tablas del capítulo 2 de «Una mirada a los resultados de aprendizaje» (MEN, 2022), que trae
+ * el apartado 7 de los datos institucionales v3.0. Las de enseñanza las propone y conduce el
+ * docente; las de aprendizaje las ejecuta el estudiante.
+ *
+ * Se siembran como dos parámetros de tipo lista, uno por tabla, para que el administrador los
+ * ajuste (HU-03-07) sin cambiar el modelo: `parametro_sistema.valor` es varchar(255) y las 13
+ * no caben en uno solo. La coma separa los nombres, así que ninguno puede llevarla.
+ */
+export const ESTRATEGIAS_ENSENANZA_MEN = [
+  'Preguntas previas y formulación de propósitos',
+  'Lluvia de ideas',
+  'Matriz C-Q-A',
+  'Ilustraciones',
+  'Ideogramas',
+  'Lectura dirigida',
+  'Resúmenes',
+  'Preguntas intercaladas',
+  'Analogías',
+] as const;
+
+export const ESTRATEGIAS_APRENDIZAJE_MEN = [
+  'Ideograma',
+  'Lectura autorregulada',
+  'Producción de textos',
+  'Portafolio',
+] as const;
+
+/**
  * HU-03-07: parámetros de negocio con sus valores iniciales. El secreto y la vigencia del JWT
  * no van aquí: son variables de entorno (NFR-003).
  */
@@ -235,6 +264,20 @@ export const PARAMETROS = [
     tipo_dato: 'entero',
     descripcion:
       'Filas máximas de una exportación del tablero o de los reportes; por encima se pide restringir los filtros (RF-25, excepción de p5). Valor propuesto, por validar.',
+  },
+  {
+    clave: 'catalogo_estrategias_ensenanza',
+    valor: ESTRATEGIAS_ENSENANZA_MEN.join(', '),
+    tipo_dato: 'lista',
+    descripcion:
+      'Estrategias de enseñanza del MEN que sugiere el punto 4 del proyecto docente, separadas por coma (RF-13).',
+  },
+  {
+    clave: 'catalogo_estrategias_aprendizaje',
+    valor: ESTRATEGIAS_APRENDIZAJE_MEN.join(', '),
+    tipo_dato: 'lista',
+    descripcion:
+      'Estrategias de aprendizaje del MEN que sugiere el punto 4 del proyecto docente, separadas por coma (RF-13).',
   },
 ];
 

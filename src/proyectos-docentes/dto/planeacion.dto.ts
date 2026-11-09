@@ -238,15 +238,44 @@ export class EstrategiaDto {
   descripcion: string;
 }
 
+export class CatalogoEstrategiasDto {
+  @ApiProperty({
+    type: [String],
+    example: ['Lluvia de ideas', 'Matriz C-Q-A'],
+    description:
+      'Estrategias de enseñanza del MEN, que propone y conduce el docente. Salen del ' +
+      'parámetro `catalogo_estrategias_ensenanza`, en su orden.',
+  })
+  ensenanza: string[];
+
+  @ApiProperty({
+    type: [String],
+    example: ['Portafolio'],
+    description:
+      'Estrategias de aprendizaje del MEN, que ejecuta el estudiante. Salen del parámetro ' +
+      '`catalogo_estrategias_aprendizaje`, en su orden.',
+  })
+  aprendizaje: string[];
+}
+
 export class SeccionEstrategiasDto {
   @ApiProperty({ type: [EstrategiaDto], description: 'En orden' })
   estrategias: EstrategiaDto[];
 
   @ApiProperty({
+    type: CatalogoEstrategiasDto,
+    description:
+      'Catálogo sugerido del MEN (RF-13, p2): estrategias que se pueden agregar con un toque. ' +
+      'No incluye las que ya están en el proyecto, y una que esté en los dos grupos sale solo ' +
+      'en el de enseñanza. Si falta uno de los parámetros, su grupo llega vacío.',
+  })
+  catalogo: CatalogoEstrategiasDto;
+
+  @ApiProperty({
     type: [String],
     description:
-      'Catálogo sugerido (RF-13, p2): estrategias que se pueden agregar con un toque. No ' +
-      'incluye las que ya están en el proyecto.',
+      'Estrategias que usan otros proyectos docentes del programa, de la más usada a la menos ' +
+      'usada. No incluye las que ya están en el proyecto ni las del catálogo del MEN.',
   })
   sugeridas: string[];
 }

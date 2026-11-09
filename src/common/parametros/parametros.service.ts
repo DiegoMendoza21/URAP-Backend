@@ -27,6 +27,10 @@ export const PARAMETRO = {
   descripcionCursoLongitudMaxima: 'descripcion_curso_longitud_maxima',
   /** RF-25, p5: filas máximas de una exportación del tablero o de los reportes. */
   reporteExportacionFilasMaxima: 'reporte_exportacion_filas_maxima',
+  /** RF-13, p2: estrategias de enseñanza del catálogo del MEN que sugiere el punto 4. */
+  catalogoEstrategiasEnsenanza: 'catalogo_estrategias_ensenanza',
+  /** RF-13, p2: estrategias de aprendizaje del catálogo del MEN que sugiere el punto 4. */
+  catalogoEstrategiasAprendizaje: 'catalogo_estrategias_aprendizaje',
 } as const;
 
 export type ClaveParametro = (typeof PARAMETRO)[keyof typeof PARAMETRO];
@@ -44,8 +48,9 @@ export interface RangoEntero {
  * peticiones) no van aquí: son variables de entorno.
  *
  * Dos comportamientos ante un parámetro que falta o está mal escrito, según quién lo pide:
- * - `leerEntero` devuelve `null`: la operación sigue sin él (el inicio de sesión no se
- *   bloquea porque falte el número de intentos; el calendario no marca alertas);
+ * - `leerEntero` devuelve `null` y `leerTextos` una lista vacía: la operación sigue sin él (el
+ *   inicio de sesión no se bloquea porque falte el número de intentos; el calendario no marca
+ *   alertas; el punto 4 del proyecto docente no sugiere el catálogo del MEN);
  * - `enteroPositivo` y `lista` responden 500: la operación no puede seguir con seguridad (una
  *   carga de archivos sin tamaño máximo ni tipos permitidos se niega).
  * En los dos casos queda en el registro técnico: es un problema de instalación.
@@ -97,13 +102,35 @@ export class ParametrosService {
     return numero;
   }
 
-  /** Lista separada por comas, con los elementos en minúscula. Si falta, responde 500. */
+  /**
+   * Lista separada por comas, con los elementos en minúscula: es para extensiones de archivo.
+   * Si falta, responde 500.
+   */
   async lista(clave: ClaveParametro): Promise<string[]> {
     const valor = await this.leer(clave);
     return valor
       .split(',')
       .map((elemento) => elemento.trim().toLowerCase())
       .filter((elemento) => elemento !== '');
+  }
+
+  /**
+   * Lista de textos separados por comas, tal como están escritos: conserva las mayúsculas y las
+   * tildes, porque se muestran al usuario. Si falta, devuelve una lista vacía y lo registra como
+   * error técnico: la operación sigue sin él.
+   */
+  async leerTextos(clave: ClaveParametro): Promise<string[]> {
+    const parametro = await this.prisma.parametro_sistema.findUnique({
+      where: { clave },
+      select: { valor: true },
+    });
+    if (parametro?.valor == null) {
+      this.logger.error(
+        `Falta el parámetro «${clave}» en parametro_sistema (ver npm run db:sembrar).`,
+      );
+      return [];
+    }
+    return separarTextos(parametro.valor);
   }
 
   private async leer(clave: ClaveParametro): Promise<string> {
@@ -121,4 +148,12 @@ export class ParametrosService {
     this.logger.error(`El parámetro «${clave}» ${motivo}.`);
     throw new InternalServerErrorException();
   }
+}
+
+/** Los elementos de un valor separado por comas, sin espacios de más y sin vacíos. */
+export function separarTextos(valor: string): string[] {
+  return valor
+    .split(',')
+    .map((elemento) => elemento.trim().replace(/\s+/g, ' '))
+    .filter((elemento) => elemento !== '');
 }
