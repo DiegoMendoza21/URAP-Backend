@@ -1,3 +1,7 @@
+-- SQL dump generated using DBML (dbml.dbdiagram.io)
+-- Database: MySQL
+-- Generated at: 2026-11-07T21:28:52.991Z
+
 CREATE TABLE `rol` (
   `id` integer PRIMARY KEY AUTO_INCREMENT,
   `nombre` varchar(255) UNIQUE,
@@ -87,9 +91,19 @@ CREATE TABLE `programa` (
   `updated_at` datetime
 );
 
-CREATE TABLE `asignatura` (
+CREATE TABLE `plan_estudio` (
   `id` integer PRIMARY KEY AUTO_INCREMENT,
   `id_programa` integer,
+  `codigo` varchar(255),
+  `nombre` varchar(255),
+  `estado` varchar(255) DEFAULT 'vigente',
+  `created_at` datetime DEFAULT (now()),
+  `updated_at` datetime
+);
+
+CREATE TABLE `asignatura` (
+  `id` integer PRIMARY KEY AUTO_INCREMENT,
+  `id_plan_estudio` integer NOT NULL,
   `codigo_interno` varchar(255),
   `nombre` varchar(255),
   `semestre` integer,
@@ -537,35 +551,37 @@ CREATE INDEX `sesion_index_1` ON `sesion` (`id_usuario`, `revocada_en`);
 
 CREATE UNIQUE INDEX `programa_index_2` ON `programa` (`id_facultad`, `nombre`);
 
-CREATE UNIQUE INDEX `asignatura_index_3` ON `asignatura` (`id_programa`, `codigo_interno`);
+CREATE UNIQUE INDEX `plan_estudio_index_3` ON `plan_estudio` (`id_programa`, `codigo`);
 
-CREATE UNIQUE INDEX `dia_festivo_index_4` ON `dia_festivo` (`fecha`);
+CREATE UNIQUE INDEX `asignatura_index_4` ON `asignatura` (`id_plan_estudio`, `codigo_interno`);
 
-CREATE UNIQUE INDEX `rap_index_5` ON `rap` (`id_programa`, `codigo`);
+CREATE UNIQUE INDEX `dia_festivo_index_5` ON `dia_festivo` (`fecha`);
 
-CREATE UNIQUE INDEX `indicador_rap_index_6` ON `indicador_rap` (`id_rap`, `numero`);
+CREATE UNIQUE INDEX `rap_index_6` ON `rap` (`id_programa`, `codigo`);
 
-CREATE UNIQUE INDEX `nivel_escala_index_7` ON `nivel_escala` (`id_escala`, `valor`);
+CREATE UNIQUE INDEX `indicador_rap_index_7` ON `indicador_rap` (`id_rap`, `numero`);
 
-CREATE UNIQUE INDEX `rubrica_index_8` ON `rubrica` (`id_rap`, `version`);
+CREATE UNIQUE INDEX `nivel_escala_index_8` ON `nivel_escala` (`id_escala`, `valor`);
 
-CREATE UNIQUE INDEX `rubrica_descriptor_index_9` ON `rubrica_descriptor` (`id_rubrica`, `id_indicador`, `id_nivel`);
+CREATE UNIQUE INDEX `rubrica_index_9` ON `rubrica` (`id_rap`, `version`);
 
-CREATE UNIQUE INDEX `lider_rap_index_10` ON `lider_rap` (`id_rap`, `id_usuario`, `id_periodo`);
+CREATE UNIQUE INDEX `rubrica_descriptor_index_10` ON `rubrica_descriptor` (`id_rubrica`, `id_indicador`, `id_nivel`);
 
-CREATE UNIQUE INDEX `proyecto_docente_index_11` ON `proyecto_docente` (`id_asignatura`, `id_periodo`, `grupo`);
+CREATE UNIQUE INDEX `lider_rap_index_11` ON `lider_rap` (`id_rap`, `id_usuario`, `id_periodo`);
 
-CREATE UNIQUE INDEX `contenido_programatico_index_12` ON `contenido_programatico` (`id_proyecto_docente`, `semana`);
+CREATE UNIQUE INDEX `proyecto_docente_index_12` ON `proyecto_docente` (`id_asignatura`, `id_periodo`, `grupo`);
 
-CREATE UNIQUE INDEX `sesion_clase_index_13` ON `sesion_clase` (`id_proyecto_docente`, `fecha`);
+CREATE UNIQUE INDEX `contenido_programatico_index_13` ON `contenido_programatico` (`id_proyecto_docente`, `semana`);
 
-CREATE UNIQUE INDEX `matricula_index_14` ON `matricula` (`id_proyecto_docente`, `id_estudiante`);
+CREATE UNIQUE INDEX `sesion_clase_index_14` ON `sesion_clase` (`id_proyecto_docente`, `fecha`);
 
-CREATE UNIQUE INDEX `medicion_rap_index_15` ON `medicion_rap` (`id_proyecto_docente`, `id_rap`, `tipo_valoracion`, `anio_toma`);
+CREATE UNIQUE INDEX `matricula_index_15` ON `matricula` (`id_proyecto_docente`, `id_estudiante`);
 
-CREATE UNIQUE INDEX `medicion_indicador_index_16` ON `medicion_indicador` (`id_medicion`, `id_indicador`);
+CREATE UNIQUE INDEX `medicion_rap_index_16` ON `medicion_rap` (`id_proyecto_docente`, `id_rap`, `tipo_valoracion`, `anio_toma`);
 
-CREATE UNIQUE INDEX `valoracion_estudiante_index_17` ON `valoracion_estudiante` (`id_medicion_indicador`, `id_matricula`);
+CREATE UNIQUE INDEX `medicion_indicador_index_17` ON `medicion_indicador` (`id_medicion`, `id_indicador`);
+
+CREATE UNIQUE INDEX `valoracion_estudiante_index_18` ON `valoracion_estudiante` (`id_medicion_indicador`, `id_matricula`);
 
 ALTER TABLE `usuario_rol` ADD FOREIGN KEY (`id_usuario`) REFERENCES `usuario` (`id`);
 
@@ -593,7 +609,9 @@ ALTER TABLE `programa` ADD FOREIGN KEY (`id_director`) REFERENCES `usuario` (`id
 
 ALTER TABLE `programa` ADD FOREIGN KEY (`id_escala_activa`) REFERENCES `escala_valoracion` (`id`);
 
-ALTER TABLE `asignatura` ADD FOREIGN KEY (`id_programa`) REFERENCES `programa` (`id`);
+ALTER TABLE `plan_estudio` ADD FOREIGN KEY (`id_programa`) REFERENCES `programa` (`id`);
+
+ALTER TABLE `asignatura` ADD FOREIGN KEY (`id_plan_estudio`) REFERENCES `plan_estudio` (`id`);
 
 ALTER TABLE `asignatura_requisito` ADD FOREIGN KEY (`id_asignatura`) REFERENCES `asignatura` (`id`);
 
@@ -649,7 +667,7 @@ ALTER TABLE `proyecto_docente_rap` ADD FOREIGN KEY (`id_rap`) REFERENCES `rap` (
 
 ALTER TABLE `proyecto_docente_rap` ADD FOREIGN KEY (`id_rubrica`) REFERENCES `rubrica` (`id`);
 
-ALTER TABLE `proyecto_docente` ADD FOREIGN KEY (`id`) REFERENCES `plan_curso` (`id_proyecto_docente`);
+ALTER TABLE `plan_curso` ADD FOREIGN KEY (`id_proyecto_docente`) REFERENCES `proyecto_docente` (`id`);
 
 ALTER TABLE `rac` ADD FOREIGN KEY (`id_proyecto_docente`) REFERENCES `proyecto_docente` (`id`);
 
@@ -748,4 +766,3 @@ ALTER TABLE `reporte_academico` ADD FOREIGN KEY (`id_generado_por`) REFERENCES `
 ALTER TABLE `auditoria` ADD FOREIGN KEY (`id_usuario`) REFERENCES `usuario` (`id`);
 
 ALTER TABLE `parametro_sistema` ADD FOREIGN KEY (`id_actualizado_por`) REFERENCES `usuario` (`id`);
-

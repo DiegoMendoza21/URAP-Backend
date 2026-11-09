@@ -1,6 +1,6 @@
 # URAP — Backlog de épicas e historias de usuario
 
-Versión 2.1 — Alineada a los requisitos v1.1 (RF-01 a RF-32). Generado el 2026-11-03 desde `Backlog_Epicas_Historias_URAP_v2.1.xlsx`, que es la fuente oficial.
+Versión 2.2 — Alineada a los requisitos v1.2 (RF-01 a RF-32). Generado el 2026-11-07 desde `Backlog_Epicas_Historias_URAP_v2.2.xlsx`, que es la fuente oficial.
 
 **Este archivo dice QUÉ construir y en qué orden.** El detalle de cada requisito (secuencia normal, excepciones, tiempos de respuesta) está en `docs/requisitos-funcionales.md`: cada historia indica su RF.
 
@@ -145,15 +145,15 @@ No implementes una historia sin leer antes su RF completo.
 
 #### HU-03-01 · RF-04 · Alta · Sprint 1
 
-**Administrador.** Como administrador, quiero registrar facultades y programas para configurar la estructura académica de la institución.
+**Administrador.** Como administrador, quiero registrar facultades, programas y sus planes de estudio para configurar la estructura académica de la institución.
 
-*Criterios de aceptación:* Permite crear y editar facultades y programas; valida unicidad del nombre del programa dentro de la facultad; permite registrar el director del programa y el decano de la facultad.
+*Criterios de aceptación:* Permite crear y editar facultades, programas y planes de estudio; valida unicidad del nombre del programa dentro de la facultad y del código del plan dentro del programa; admite varios planes vigentes en un mismo programa (en 2026-1, el 1702 y el 2502), cada uno con su estado: vigente, en extinción o cerrado; permite registrar el director del programa y el decano de la facultad.
 
 #### HU-03-02 · RF-04 · Alta · Sprint 2
 
-**Administrador.** Como administrador, quiero registrar las asignaturas con toda su información académica para que el sistema pueda autocompletar el proyecto docente.
+**Administrador.** Como administrador, quiero registrar las asignaturas de cada plan de estudios con toda su información académica para que el sistema pueda autocompletar el proyecto docente.
 
-*Criterios de aceptación:* Registra código, nombre, semestre, componente, tipo de curso, créditos y horas TDE, TDP y TI; valida unicidad del código dentro del programa; no permite eliminar una asignatura con proyectos asociados, solo inactivarla.
+*Criterios de aceptación:* Registra el plan de estudios, código, nombre, semestre, componente, tipo de curso, créditos y horas TDE, TDP y TI; valida unicidad del código dentro del plan y admite el mismo código en planes distintos; no permite eliminar una asignatura con proyectos asociados, solo inactivarla.
 
 *Depende de:* HU-03-01
 
@@ -169,7 +169,7 @@ No implementes una historia sin leer antes su RF completo.
 
 **Administrador.** Como administrador, quiero registrar prerrequisitos y correquisitos de las asignaturas para que aparezcan en el proyecto docente.
 
-*Criterios de aceptación:* Permite asociar una asignatura con otras del mismo programa indicando si es prerrequisito o correquisito; evita referencias circulares directas.
+*Criterios de aceptación:* Permite asociar una asignatura con otras del mismo plan de estudios indicando si es prerrequisito o correquisito; evita referencias circulares directas.
 
 *Depende de:* HU-03-02
 

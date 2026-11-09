@@ -1,6 +1,6 @@
 # URAP — Requisitos funcionales (RF-01 a RF-32)
 
-Generado desde `Requisitos_URAP_v1.1.xlsx`. El Excel es la fuente oficial.
+Generado desde `Requisitos_URAP_v1.2.xlsx`. El Excel es la fuente oficial.
 
 Cada requisito define la secuencia normal, las excepciones y los tiempos de respuesta esperados. **Antes de implementar un endpoint o una pantalla, lee el RF correspondiente completo**, incluidas sus excepciones: buena parte de las reglas de negocio están ahí y no en el modelo de datos.
 
@@ -60,7 +60,7 @@ q1. El inicio de sesión debe completarse en un tiempo menor o igual a 3 segundo
 **Versión:** 1.0 (10/09/2026)
 
 **Fuentes:** Elicitación con actores del programa de Administración Industrial  
-Sesión de diseño con la Dra. Ingrid Blanco Hernández
+Sesión de diseño con una docente del programa
 
 **Objetivos asociados:** OBJ-06: Administrar usuarios, roles y acceso seguro a la información
 
@@ -112,7 +112,7 @@ q2. Los listados deben presentarse paginados para no superar los 4 segundos de c
 **Versión:** 1.0 (10/09/2026)
 
 **Fuentes:** Elicitación con actores del programa de Administración Industrial  
-Sesión de diseño con la Dra. Ingrid Blanco Hernández
+Sesión de diseño con una docente del programa
 
 **Objetivos asociados:** OBJ-06: Administrar usuarios, roles y acceso seguro a la información
 
@@ -158,11 +158,12 @@ q1. La aplicación de los permisos debe ser verificada por el backend en cada so
 
 ## RF-04 — Parametrización de la estructura académica
 
-**Versión:** 1.0 (10/09/2026)
+**Versión:** 1.1 (07/11/2026)
 
 **Fuentes:** Formato FO-DO/PC-001 v05 «Proyecto docente (pregrado presencial)»  
 Elicitación con el departamento académico y docentes del programa  
-Producto 1: Arquitectura de negocio URAP (reglas de negocio RN-01 a RN-15)
+Producto 1: Arquitectura de negocio URAP (reglas de negocio RN-01 a RN-15)  
+Programación académica por programa 2026-1 (SMA, reporte RAK152)
 
 **Objetivos asociados:** OBJ-01: Centralizar la creación y la planeación del proyecto docente  
 OBJ-05: Supervisar el cumplimiento del diligenciamiento y generar reportes
@@ -171,14 +172,14 @@ OBJ-05: Supervisar el cumplimiento del diligenciamiento y generar reportes
 RF-08: Creación del proyecto docente  
 NFR-012: Escalabilidad funcional a otros programas
 
-**Descripción:** El sistema debe permitir registrar y mantener la estructura académica: facultades, programas, asignaturas y períodos académicos. De cada asignatura se registran código, nombre, semestre, componente, tipo de curso, número de créditos, horas de trabajo independiente (TI), horas de acompañamiento directo teóricas (TDE) y prácticas (TDP), prerrequisitos y correquisitos.
+**Descripción:** El sistema debe permitir registrar y mantener la estructura académica: facultades, programas, planes de estudio, asignaturas y períodos académicos. Un programa puede tener más de un plan de estudios vigente a la vez, y cada asignatura pertenece a un plan. De cada asignatura se registran código, nombre, semestre, componente, tipo de curso, número de créditos, horas de trabajo independiente (TI), horas de acompañamiento directo teóricas (TDE) y prácticas (TDP), prerrequisitos y correquisitos.
 
 **Precondición:** El usuario debe estar autenticado con rol Administrador o Departamento académico.
 
 **Secuencia normal**
 
 p1. El usuario ingresa al módulo de estructura académica.
-p2. El usuario selecciona el nivel que desea administrar: facultad, programa, asignatura o período.
+p2. El usuario selecciona el nivel que desea administrar: facultad, programa, plan de estudios, asignatura o período.
 p3. El usuario registra o edita la información del elemento seleccionado.
 p4. El sistema valida la unicidad del código y la coherencia de las horas con los créditos.
 p5. El sistema guarda la información y la deja disponible para la creación de proyectos docentes.
@@ -187,7 +188,7 @@ p5. El sistema guarda la información y la deja disponible para la creación de 
 
 **Excepciones**
 
-p4. Si el código de la asignatura ya existe en el programa, el sistema informa la duplicidad.
+p4. Si el código de la asignatura ya existe en el mismo plan de estudios, el sistema informa la duplicidad; el mismo código sí puede repetirse en planes distintos.
 p4. Si la suma de horas TDE, TDP y TI no corresponde al total declarado, el sistema advierte al usuario.
 p5. El sistema no permite eliminar una asignatura o un período con proyectos docentes asociados; solo permite inactivarlos.
 
@@ -205,7 +206,7 @@ q1. El guardado de un registro no debe superar los 3 segundos.
 
 **Estabilidad:** Alta
 
-**Comentarios:** La estructura por facultad y programa permite escalar la solución a otros programas de la Universidad sin rediseñar el modelo de datos.
+**Comentarios:** La estructura por facultad y programa permite escalar la solución a otros programas de la Universidad sin rediseñar el modelo de datos. v1.1: la programación académica 2026-1 del programa muestra dos planes vigentes al mismo tiempo, el 1702 y el 2502, con códigos distintos para la misma asignatura (Comportamiento organizacional es FP15503 en uno e IX24193 en el otro). Por eso el código se valida dentro del plan y no del programa.
 
 ---
 
@@ -215,7 +216,7 @@ q1. El guardado de un registro no debe superar los 3 segundos.
 
 **Fuentes:** Formato FO-DO/PC-023 v00 «Medición de resultado de aprendizaje del programa por asignatura» (Valoración y Rúbrica)  
 Matriz de consistencia de resultados de aprendizaje del programa de Administración Industrial (RAP 1 a RAP 7)  
-Sesión de diseño con la Dra. Ingrid Blanco Hernández  
+Sesión de diseño con una docente del programa  
 Ministerio de Educación Nacional (2021). Una mirada a los resultados de aprendizaje
 
 **Objetivos asociados:** OBJ-04: Gestionar los resultados de aprendizaje, las rúbricas y sus evidencias
@@ -268,7 +269,7 @@ q1. La consulta del catálogo de RAP de un programa no debe superar los 3 segund
 
 **Fuentes:** Formato FO-DO/PC-023 v00 «Medición de resultado de aprendizaje del programa por asignatura» (Valoración y Rúbrica)  
 Matriz de consistencia de resultados de aprendizaje del programa de Administración Industrial (RAP 1 a RAP 7)  
-Sesión de diseño con la Dra. Ingrid Blanco Hernández  
+Sesión de diseño con una docente del programa  
 Ministerio de Educación Nacional (2021). Una mirada a los resultados de aprendizaje
 
 **Objetivos asociados:** OBJ-04: Gestionar los resultados de aprendizaje, las rúbricas y sus evidencias
@@ -321,7 +322,7 @@ q1. El guardado de la rúbrica no debe superar los 4 segundos.
 
 **Fuentes:** Formato FO-DO/PC-023 v00 «Medición de resultado de aprendizaje del programa por asignatura» (Valoración y Rúbrica)  
 Matriz de consistencia de resultados de aprendizaje del programa de Administración Industrial (RAP 1 a RAP 7)  
-Sesión de diseño con la Dra. Ingrid Blanco Hernández  
+Sesión de diseño con una docente del programa  
 Ministerio de Educación Nacional (2021). Una mirada a los resultados de aprendizaje
 
 **Objetivos asociados:** OBJ-04: Gestionar los resultados de aprendizaje, las rúbricas y sus evidencias
@@ -430,7 +431,7 @@ q2. La creación del proyecto docente debe completarse en menos de 5 segundos.
 **Versión:** 1.0 (10/09/2026)
 
 **Fuentes:** Elicitación con actores del programa de Administración Industrial  
-Sesión de diseño con la Dra. Ingrid Blanco Hernández
+Sesión de diseño con una docente del programa
 
 **Objetivos asociados:** OBJ-01: Centralizar la creación y la planeación del proyecto docente
 
@@ -583,7 +584,7 @@ q1. El guardado no debe superar los 3 segundos.
 
 **Fuentes:** Formato FO-DO/PC-023 v00 «Medición de resultado de aprendizaje del programa por asignatura» (Valoración y Rúbrica)  
 Matriz de consistencia de resultados de aprendizaje del programa de Administración Industrial (RAP 1 a RAP 7)  
-Sesión de diseño con la Dra. Ingrid Blanco Hernández  
+Sesión de diseño con una docente del programa  
 Ministerio de Educación Nacional (2021). Una mirada a los resultados de aprendizaje
 
 **Objetivos asociados:** OBJ-02: Diligenciar el proyecto docente conforme al formato institucional  
@@ -1033,7 +1034,7 @@ q2. La carga del calendario del curso no debe superar los 4 segundos.
 **Versión:** 1.0 (10/09/2026)
 
 **Fuentes:** Elicitación con actores del programa de Administración Industrial  
-Sesión de diseño con la Dra. Ingrid Blanco Hernández
+Sesión de diseño con una docente del programa
 
 **Objetivos asociados:** OBJ-03: Registrar y controlar la ejecución real de las clases
 
@@ -1132,7 +1133,7 @@ q1. La carga de la lista de estudiantes del grupo no debe superar los 3 segundos
 **Versión:** 1.0 (10/09/2026)
 
 **Fuentes:** Elicitación con actores del programa de Administración Industrial  
-Sesión de diseño con la Dra. Ingrid Blanco Hernández
+Sesión de diseño con una docente del programa
 
 **Objetivos asociados:** OBJ-03: Registrar y controlar la ejecución real de las clases  
 OBJ-05: Supervisar el cumplimiento del diligenciamiento y generar reportes
@@ -1235,7 +1236,7 @@ q1. El tiempo de carga depende del tamaño del archivo y de la conexión del usu
 **Versión:** 1.0 (10/09/2026)
 
 **Fuentes:** Elicitación con actores del programa de Administración Industrial  
-Sesión de diseño con la Dra. Ingrid Blanco Hernández
+Sesión de diseño con una docente del programa
 
 **Objetivos asociados:** OBJ-05: Supervisar el cumplimiento del diligenciamiento y generar reportes
 
@@ -1286,7 +1287,7 @@ q2. La exportación consolidada no debe superar los 10 segundos.
 **Versión:** 1.0 (10/09/2026)
 
 **Fuentes:** Elicitación con actores del programa de Administración Industrial  
-Sesión de diseño con la Dra. Ingrid Blanco Hernández
+Sesión de diseño con una docente del programa
 
 **Objetivos asociados:** OBJ-03: Registrar y controlar la ejecución real de las clases  
 OBJ-05: Supervisar el cumplimiento del diligenciamiento y generar reportes

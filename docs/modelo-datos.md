@@ -1,8 +1,8 @@
 # URAP — Modelo de datos
 
-Fuente de verdad del diseño: **`docs/URAP_modelo_datos_v2.4.dbml`** (51 tablas, 91 claves
+Fuente de verdad del diseño: **`docs/URAP_modelo_datos_v2.5.dbml`** (52 tablas, 92 claves
 foráneas). Se puede visualizar pegándolo en dbdiagram.io. El DDL MySQL generado está en
-`docs/URAP_esquema_mysql_v2.4.sql`.
+`docs/URAP_esquema_mysql_v2.5.sql`.
 
 ## Qué manda sobre qué
 
@@ -27,7 +27,7 @@ escribe en el DBML y se lleva a la base con una migración de Prisma.
 | Grupo | Tablas | Requisitos |
 |---|---|---|
 | Seguridad | `rol`, `usuario`, `usuario_rol`, `sesion`, `modulo`, `permiso`, `rol_permiso` | RF-01 a RF-03 |
-| Estructura académica | `facultad`, `programa`, `asignatura`, `asignatura_requisito`, `periodo_academico`, `dia_festivo` | RF-04, RF-19 |
+| Estructura académica | `facultad`, `programa`, `plan_estudio`, `asignatura`, `asignatura_requisito`, `periodo_academico`, `dia_festivo` | RF-04, RF-19 |
 | Resultados de aprendizaje | `rap`, `asignatura_rap`, `indicador_rap`, `escala_valoracion`, `nivel_escala`, `rubrica`, `rubrica_descriptor`, `lider_rap` | RF-05 a RF-07 |
 | Proyecto docente | `estado_proyecto`, `proyecto_docente`, `proyecto_docente_docente`, `proyecto_docente_rap`, `plan_curso`, `rac`, `rac_rap`, `evaluacion_rac`, `estrategia_metodologica`, `contenido_programatico`, `bibliografia` | RF-08 a RF-16 |
 | Revisión | `revision_proyecto`, `observacion_revision` | RF-17, RF-18 |
@@ -49,6 +49,16 @@ el backend.
 Un token es autocontenido: sin registro, el servidor no tiene cómo rechazarlo después del
 logout. Cada token emitido se registra por su `jti` y el guard verifica que la sesión siga
 vigente. Sirve además para que el administrador revise los accesos al sistema.
+
+**La asignatura cuelga del plan de estudios, no del programa** (v2.5).
+Un programa puede tener varios planes vigentes a la vez: en 2026-1, Administración Industrial
+programó grupos del plan 1702 (niveles 6 a 10 y rezagados) y del plan 2502 (niveles 1 a 5).
+La misma asignatura puede tener un código distinto en cada plan (Comportamiento
+organizacional: FP15503 en el 1702, IX24193 en el 2502), y un mismo código (inglés, núcleo
+común) puede estar en los dos. Por eso el código es único **por plan**, y cada plan tiene su
+propia fila de la asignatura, con su semestre, sus requisitos y su mapeo a RAP. El proyecto
+docente no cambia: al apuntar a una asignatura, ya sabe a qué plan pertenece. Los RAP siguen
+siendo del programa mientras el programa no confirme lo contrario (SUP-16).
 
 **`proyecto_docente` es único por `(id_asignatura, id_periodo, grupo)`,** no por docente.
 Un proyecto puede tener hasta tres docentes (`proyecto_docente_docente`), como en el formato
@@ -96,6 +106,15 @@ poder ampliar la vigencia de un token desde una pantalla de la aplicación.
   `tipo_notificacion`); los enumerados fijos van como `varchar` con los valores en un
   comentario (`tipo_valoracion`, `componente`, `tipo_curso`).
 
+## Migración de la v2.4 a la v2.5
+
+Si `asignatura.id_programa` ya existe en la base, la migración va en tres pasos dentro de la
+misma migración de Prisma: crear `plan_estudio` y agregar `asignatura.id_plan_estudio` como
+nulable; crear el plan 1702 de cada programa existente y asignarle todas sus asignaturas, que
+son las del mapeo del informe 2023-II; y solo entonces volver la columna obligatoria, cambiar
+el índice único a `(id_plan_estudio, codigo_interno)` y eliminar `asignatura.id_programa`. Las
+consultas que filtraban asignaturas por programa pasan a hacerlo a través del plan.
+
 ## Pendientes del modelo
 
 - `medicion_rap.tamano_cohorte`: el formato FO-DO/PC-023 trae la columna pero su fórmula la
@@ -105,3 +124,5 @@ poder ampliar la vigencia de un token desde una pantalla de la aplicación.
 - La lista de estudiantes matriculados se carga por archivo mientras no exista integración con
   el sistema de información académica (supuesto SUP-03). Sin ella no funcionan RF-22, RF-27
   ni RF-30.
+- Si el programa confirma que el plan 2502 tiene RAP propios, distintos de los del 1702
+  (SUP-16), `rap` tendría que colgar también del plan. Hoy cuelga del programa.

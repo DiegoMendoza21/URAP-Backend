@@ -20,6 +20,9 @@ Fuentes:
   estudiantes: ese archivo no entra al repositorio, ni siquiera a `docs/fuentes/`.** Aquí solo
   están sus datos agregados.
 - `Acuerdo No. 46 del 26 de mayo de 2026` — Consejo Académico, calendario académico 2026-2.
+- `Programación académica por programa 2026-1` — SMA, reporte RAK152 del 27/01/2026. **Trae
+  las cédulas de los docentes: no entra al repositorio, y ninguna cédula se copia a ningún
+  archivo.** Aquí solo están códigos, nombres de asignatura, créditos y planes.
 
 Al final está **lo que todavía no existe** y hay que pedirle al programa. No lo inventes.
 
@@ -216,7 +219,8 @@ RF-32, de todas las mediciones cerradas de ese RAP en el período.
 
 ### Caso de verificación real para RF-31
 
-La medición del RAP 2 en Finanzas de corto plazo (FP15502), primer período de 2024, valoración
+La medición del RAP 2 en Finanzas de corto plazo (FP15502, plan 1702), primer período de 2024,
+valoración
 formativa, 34 estudiantes, dio estos conteos:
 
 | Indicador | Principiante | En Desarrollo | Competente | Ejemplar | Nivel 3 + 4 |
@@ -234,123 +238,185 @@ docente valoró al grupo completo.
 
 ---
 
-## 4. Plan de estudios y mapeo curricular
+## 4. Planes de estudio y mapeo curricular
 
-69 asignaturas en 10 semestres, cada una tributando a uno o más RAP, para un total de 73
-vínculos asignatura–RAP. Esta es la tabla de `asignatura` y de `asignatura_rap` del seed.
-Los dos números cuadran con el informe 2023-II, que menciona «69 asignaturas que tributan a los
-RAP del programa» y contabiliza 73 vínculos.
+**El programa tiene dos planes de estudio vigentes al mismo tiempo.** La programación académica
+2026-1 del SMA (reporte RAK152, 27/01/2026) programa grupos del **plan 1702** en los semestres
+6 a 10, en las electivas y en dos grupos de rezagados de 4 y 5, y del **plan 2502** en los
+semestres 1 a 5. Cada estudiante cursa su plan, y la misma asignatura puede tener un código
+distinto en cada uno: Comportamiento organizacional es FP15503 en el 1702 e IX24193 en el 2502.
+Por eso el modelo v2.5 agrega `plan_estudio` y la asignatura cuelga del plan: el seed carga los
+dos planes del programa, cada uno con sus asignaturas. Si un mismo código aparece en los dos
+planes, son dos filas, una por plan.
 
-| Sem. | Asignatura | RAP |
-|---|---|---|
-| I | Fundamentos de economía | 2 |
-| I | Fundamentos de contabilidad | 2 |
-| I | Fundamentos de Administración | 3 |
-| I | Matemáticas I | 1 |
-| I | Comprensión y producción de textos I | 7 |
-| I | Cátedra institucional | 7 |
-| I | Curso libre I | 7 |
-| II | Fundamentos de costos | 2 |
-| II | Teoría general de la administración | 3 |
-| II | Matemáticas II | 1 |
-| II | Estadística I | 1 |
-| II | Comprensión y producción de textos II | 7 |
-| II | Humanidades I | 7 |
-| II | Derecho constitucional | 7 |
-| III | Planeación y control | 3 |
-| III | Ética | 7 |
-| III | Matemáticas III | 1 |
-| III | Estadística II | 1 |
-| III | Fundamentos de investigación | 1, 7 |
-| III | Humanidades II | 7 |
-| III | Curso libre II | 7 |
-| IV | Microeconomía | 2 |
-| IV | Organización y dirección | 3, 7 |
-| IV | Matemática financiera | 2 |
-| IV | Lógica y programación | 3 |
-| IV | Investigación aplicada | 1, 7 |
-| IV | Curso libre III | 7 |
-| IV | Curso libre IV (Dibujo técnico) | 4 |
-| V | Macroeconomía | 2 |
-| V | Finanzas a corto plazo | 2 |
-| V | Comportamiento organizacional | 6 |
-| V | Química industrial | 4 |
-| V | Sistemas de producción | 4 |
-| V | Informática aplicada | 3 |
-| V | Legislación laboral | 6 |
-| V | Curso libre V | 7 |
-| VI | Mercados | 5 |
-| VI | Finanzas y negocios internacionales | 2 |
-| VI | Administración del talento humano | 6 |
-| VI | Procesos industriales | 4 |
-| VI | Estudio del trabajo | 4 |
-| VI | Procesos de manufactura | 4 |
-| VI | Curso libre VI | 7 |
-| VII | Emprendimiento e innovación | 5 |
-| VII | Investigación de operaciones I | 4 |
-| VII | Gestión de la cadena de suministros | 3 |
-| VII | Planeación y organización de la producción | 4 |
-| VII | Taller de manufactura | 4 |
-| VII | Seguridad y salud en el trabajo | 3, 6 |
-| VIII | Electiva I (Estudios prospectivos) | 3 |
-| VIII | Electiva I GPO (Control estadístico de la calidad) | 4 |
-| VIII | Preparación y evaluación de proyectos | 5 |
-| VIII | Investigación de operaciones II | 4 |
-| VIII | Control de la producción | 4 |
-| VIII | Gestión de la calidad | 3 |
-| VIII | Gestión ambiental | 3 |
-| IX | Electiva II (Administración de la calidad) | 3 |
-| IX | Electiva II GPO (Mejoramiento de procesos) | 4 |
-| IX | Electiva III (Sistemas de información gerencial) | 3 |
-| IX | Electiva III GPO (Simulación de procesos) | 4 |
-| IX | Electiva IV (Administración de sueldos y salarios) | 6 |
-| IX | Electiva IV GPO (Tópicos avanzados de productividad) | 4 |
-| IX | Electiva V (Gestión logística del comercio internacional) | 3 |
-| IX | Electiva V GPO (Administración de mantenimiento industrial) | 4 |
-| IX | Electiva VI (Sistemas para la gestión de recursos empresariales) | 3 |
-| IX | Electiva VI GPO (Diseño de planta) | 4 |
-| X | Electiva VII (Sistemas integrados de gestión) | 3 |
-| X | Electiva VII GPO (Diseño de producto) | 4 |
-| X | Prácticas profesionales | 7 |
+### Plan 1702: asignaturas y mapeo a RAP
+
+Es el plan del informe 2023-II y de la matriz de consistencia, y **el único cuyo mapeo a RAP
+conocemos**: 69 asignaturas en 10 semestres y 73 vínculos asignatura–RAP (el informe menciona
+«69 asignaturas que tributan a los RAP del programa»). Es la tabla de `asignatura` y de
+`asignatura_rap` del plan 1702. Código y créditos salen de la programación 2026-1 y de los
+formatos diligenciados; donde dice «—», ese semestre del 1702 ya no tuvo grupos en 2026-1 y el
+dato hay que pedirlo.
+
+| Sem. | Asignatura | Código | Créd. | RAP |
+|---|---|---|---|---|
+| I | Fundamentos de economía | — | — | 2 |
+| I | Fundamentos de contabilidad | — | — | 2 |
+| I | Fundamentos de Administración | — | — | 3 |
+| I | Matemáticas I | — | — | 1 |
+| I | Comprensión y producción de textos I | — | — | 7 |
+| I | Cátedra institucional | — | — | 7 |
+| I | Curso libre I | — | — | 7 |
+| II | Fundamentos de costos | — | — | 2 |
+| II | Teoría general de la administración | — | — | 3 |
+| II | Matemáticas II | — | — | 1 |
+| II | Estadística I | — | — | 1 |
+| II | Comprensión y producción de textos II | — | — | 7 |
+| II | Humanidades I | — | — | 7 |
+| II | Derecho constitucional | — | — | 7 |
+| III | Planeación y control | — | — | 3 |
+| III | Ética | — | — | 7 |
+| III | Matemáticas III | — | — | 1 |
+| III | Estadística II | — | — | 1 |
+| III | Fundamentos de investigación | — | — | 1, 7 |
+| III | Humanidades II | — | — | 7 |
+| III | Curso libre II | — | — | 7 |
+| IV | Microeconomía | — | — | 2 |
+| IV | Organización y dirección | — | — | 3, 7 |
+| IV | Matemática financiera | — | — | 2 |
+| IV | Lógica y programación | FP15404 | 3 | 3 |
+| IV | Investigación aplicada | — | — | 1, 7 |
+| IV | Curso libre III | — | — | 7 |
+| IV | Curso libre IV (Dibujo técnico) | — | — | 4 |
+| V | Macroeconomía | — | — | 2 |
+| V | Finanzas a corto plazo | FP15502 | — | 2 |
+| V | Comportamiento organizacional | FP15503 | 2 | 6 |
+| V | Química industrial | — | — | 4 |
+| V | Sistemas de producción | — | — | 4 |
+| V | Informática aplicada | FP15506 | 3 | 3 |
+| V | Legislación laboral | — | — | 6 |
+| V | Curso libre V | — | — | 7 |
+| VI | Mercados | FP15601 | 3 | 5 |
+| VI | Finanzas y negocios internacionales | FP15602 | 3 | 2 |
+| VI | Administración del talento humano | FP15603 | 3 | 6 |
+| VI | Procesos industriales | FP15604 | 3 | 4 |
+| VI | Estudio del trabajo | FP15605 | 3 | 4 |
+| VI | Procesos de manufactura | FP15606 | 3 | 4 |
+| VI | Curso libre VI | — | — | 7 |
+| VII | Emprendimiento e innovación | FP17701 | 3 | 5 |
+| VII | Investigación de operaciones I | FP15702 | 3 | 4 |
+| VII | Gestión de la cadena de suministros | FP15703 | 2 | 3 |
+| VII | Planeación y organización de la producción | FP15704 | 3 | 4 |
+| VII | Taller de manufactura | FP15705 | 2 | 4 |
+| VII | Seguridad y salud en el trabajo | FP15712 | 2 | 3, 6 |
+| VIII | Electiva I (Estudios prospectivos) | 4917013 | 4 | 3 |
+| VIII | Electiva I GPO (Control estadístico de la calidad) | 4917014 | 4 | 4 |
+| VIII | Preparación y evaluación de proyectos | FP15801 | 3 | 5 |
+| VIII | Investigación de operaciones II | FP15802 | 3 | 4 |
+| VIII | Control de la producción | FP15803 | 3 | 4 |
+| VIII | Gestión de la calidad | FP17801 | 3 | 3 |
+| VIII | Gestión ambiental | FP15804 | 2 | 3 |
+| IX | Electiva II (Administración de la calidad) | 4917021 | 4 | 3 |
+| IX | Electiva II GPO (Mejoramiento de procesos) | 4917022 | 4 | 4 |
+| IX | Electiva III (Sistemas de información gerencial) | 4917023 | 4 | 3 |
+| IX | Electiva III GPO (Simulación de procesos) | 4917204 | 4 | 4 |
+| IX | Electiva IV (Administración de sueldos y salarios) | 4917025 | 4 | 6 |
+| IX | Electiva IV GPO (Tópicos avanzados de productividad) | 4917026 | 4 | 4 |
+| IX | Electiva V (Gestión logística del comercio internacional) | 4917027 | 4 | 3 |
+| IX | Electiva V GPO (Administración de mantenimiento industrial) | 4917028 | 4 | 4 |
+| IX | Electiva VI (Sistemas para la gestión de recursos empresariales) | 4917029 | 4 | 3 |
+| IX | Electiva VI GPO (Diseño de planta) | 4917010 | 4 | 4 |
+| X | Electiva VII (Sistemas integrados de gestión) | 4917011 | 4 | 3 |
+| X | Electiva VII GPO (Diseño de producto) | 4917012 | 4 | 4 |
+| X | Prácticas profesionales | 4949920 | 8 | 7 |
 
 El programa tiene dos líneas de electivas, la general y la GPO (Gestión de Producción y
-Operaciones). Las electivas de IX aparecen sin número de semestre explícito en el informe
-original y se ubicaron en IX por el mapeo curricular; confirmar antes de usarlo como dato
-definitivo del plan de estudios.
+Operaciones). Las electivas (4917xxx) y la práctica (4949920) salen en el reporte sin plan
+(«[Pensum:XXXX]»); por sus nombres son las del 1702, valen 4 créditos y la práctica 8. Las de IX
+aparecen sin número de semestre en el informe original y se ubicaron en IX por el mapeo
+curricular; confírmalo con el plan oficial.
+
+### Plan 2502: lo que muestra la programación 2026-1
+
+Solo semestres 1 a 5, porque la primera cohorte del 2502 todavía no llega al 6. Trae asignaturas
+que no existen en el 1702 (Inglés I a V, Analítica de datos I y II, Desarrollo del espíritu
+emprendedor, Costos) y **no tiene mapeo a RAP conocido**. Hasta que llegue, sus asignaturas van
+al seed sin filas en `asignatura_rap`, y el asistente de RF-08 deja elegir entre todos los RAP
+del programa. Que el 2502 use los mismos RAP 1 a 7 es un supuesto (SUP-16).
+
+| Sem. | Código | Asignatura | Créd. |
+|---|---|---|---|
+| 1 | FN23003 | Inglés I | 2 |
+| 1 | FN72726 | Cátedra institucional | 2 |
+| 1 | FN72727 | Producción y comprensión textual I | 2 |
+| 1 | NC2501 | Matemática I | 4 |
+| 1 | NC2507 | Fundamentos de administración | 3 |
+| 1 | NC2508 | Fundamentos de contabilidad | 3 |
+| 1 | NC2509 | Fundamentos de economía | 3 |
+| 2 | FN24033 | Inglés II | 2 |
+| 2 | FN24047 | Humanidades | 2 |
+| 2 | FN72732 | Producción y comprensión textual II | 2 |
+| 2 | IX24100 | Costos | 2 |
+| 2 | IX24165 | Teoría general de la administración | 3 |
+| 2 | NC2502 | Matemática II | 4 |
+| 2 | NC2503 | Estadística I | 3 |
+| 2 | NC2506 | Derecho constitucional | 2 |
+| 3 | CFBD294 | Matemáticas III | 4 |
+| 3 | FN24035 | Inglés III | 2 |
+| 3 | FN72725 | Ética | 2 |
+| 3 | IX24182 | Planeación y control | 3 |
+| 3 | IX25263 | Desarrollo del espíritu emprendedor | 2 |
+| 3 | NC2504 | Estadística II | 3 |
+| 3 | NC2505 | Fundamentos de investigación científica | 3 |
+| 4 | CFBD297 | Investigación aplicada | 3 |
+| 4 | FN24036 | Inglés IV | 2 |
+| 4 | IX24184 | Organización y dirección | 3 |
+| 4 | IX24185 | Matemática financiera | 3 |
+| 4 | IX24186 | Analítica de datos I | 3 |
+| 4 | IX24187 | Dibujo técnico - expresión gráfica | 2 |
+| 4 | NC2510 | Microeconomía I | 3 |
+| 5 | FN24037 | Inglés V | 2 |
+| 5 | IX24188 | Química industrial | 3 |
+| 5 | IX24189 | Finanzas a corto plazo | 3 |
+| 5 | IX24190 | Analítica de datos II | 3 |
+| 5 | IX24191 | Sistema de producción | 2 |
+| 5 | IX24192 | Macroeconomía | 2 |
+| 5 | IX24193 | Comportamiento organizacional | 2 |
+
+El reporte no separa las horas TDE, TDP y TI: trae horas semanales (HRS) e intensidad (INT),
+cuya relación con el formato no está documentada, así que esas columnas no se llenan con él.
+También trae la ponderación de cada corte: 30 %, 30 % y 40 % en casi todas las asignaturas,
+20 %, 20 %, 20 % y 40 % en algunos grupos de inglés, y todo el peso en el tercer corte para
+Taller de manufactura y la práctica. Es dato del sistema académico, útil para el punto 5 del
+proyecto docente; no lo conviertas en validación mientras RF-14 no la pida.
 
 ### Asignaturas con datos completos
 
-Cuatro asignaturas traen todos los campos del punto 1 en los formatos FO-DO/PC-001 que diligenció
-el programa. Con ellas el asistente de RF-08 se puede probar de punta a punta con datos reales:
-el paso 5 autocompleta exactamente estos campos.
+Cinco asignaturas traen todos los campos del punto 1 en los formatos FO-DO/PC-001 diligenciados.
+Con ellas el asistente de RF-08 se puede probar de punta a punta con datos reales: el paso 5
+autocompleta exactamente estos campos.
 
-| Asignatura | Código | Componente | Tipo | Créd. | TDE | TDP | TI | Total | Prerrequisito |
-|---|---|---|---|---|---|---|---|---|---|
-| Fundamentos de administración | NC2507 | Profesional | Obligatorio | 3 | 48 | 0 | 96 | 144 | — |
-| Fundamentos de investigación científica | NC2505 | Profesional | Obligatorio | 3 | 48 | 0 | 96 | 144 | Comprensión y producción de textos II |
-| Comportamiento organizacional | FP15503 o IX24193 | Profesional | Obligatorio | 2 | 32 | 0 | 64 | 96 | Organización y dirección |
-| Gestión ambiental | FP15804 | Profesional | Obligatorio | 2 | 32 | 0 | 64 | 96 | — |
+| Plan | Asignatura | Código | Componente | Tipo | Créd. | TDE | TDP | TI | Total | Prerrequisito |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 2502 | Fundamentos de administración | NC2507 | Profesional | Obligatorio | 3 | 48 | 0 | 96 | 144 | — |
+| 2502 | Fundamentos de investigación científica | NC2505 | Profesional | Obligatorio | 3 | 48 | 0 | 96 | 144 | Producción y comprensión textual II |
+| 2502 | Comportamiento organizacional | IX24193 | Profesional | Obligatorio | 2 | 32 | 0 | 64 | 96 | Organización y dirección |
+| 1702 | Comportamiento organizacional | FP15503 | Profesional | Obligatorio | 2 | 32 | 0 | 64 | 96 | Organización y dirección |
+| 1702 | Gestión ambiental | FP15804 | Profesional | Obligatorio | 2 | 32 | 0 | 64 | 96 | — |
 
-Ninguna tiene correquisitos. Las cuatro cumplen la regla de 48 horas por crédito que valida
-`asignatura.horas_totales`, y en las cuatro TDE = 16 h y TI = 32 h por crédito; no generalices esa
+Ninguna tiene correquisitos. Las cinco cumplen la regla de 48 horas por crédito que valida
+`asignatura.horas_totales`, y en las cinco TDE = 16 h y TI = 32 h por crédito; no generalices esa
 proporción, porque las asignaturas prácticas (talleres, química, dibujo técnico) tendrán TDP.
 
-Tres observaciones. **Comportamiento organizacional aparece con dos códigos** en dos formatos del
-mismo programa y con la misma docente: no elijas uno, está preguntado al programa. El formato
-nombra «Fundamentos de investigación científica» a la que el mapeo curricular llama «Fundamentos
-de investigación» (III semestre); con el prerrequisito de Comprensión y producción de textos II
-encaja, pero confírmalo con el plan de estudios. Y los formatos traen nombres y correos reales de
-docentes: no los copies al seed.
+**Los dos formatos de Comportamiento organizacional son idénticos salvo el código**: la misma
+docente, el mismo contenido, uno por plan. Es la mejor prueba del modelo v2.5: dos filas de
+asignatura con distinto plan y código, y cada proyecto docente apuntando a la suya. El formato
+de Fundamentos de investigación científica llama a su prerrequisito «Comprensión y producción de
+textos II»; en el plan 2502 esa asignatura se llama Producción y comprensión textual II
+(FN72732). Y los formatos traen nombres y correos reales de docentes: no los copies al seed.
 
-El formato 023 de 2024-1 trae además el código de **Finanzas de corto plazo: FP15502**
-(V semestre). Eso orienta el caso de Comportamiento organizacional: FP15502 y FP15503, las dos de
-V semestre, y FP15804, de VIII, siguen el patrón FP15 + semestre + consecutivo, mientras que
-IX24193 no se parece a ningún otro código del programa. Lo más probable es que el vigente sea
-FP15503, pero sigue preguntado: no lo asumas en el seed.
-
-El código va en `asignatura.codigo_interno`, único por programa. Que una asignatura tenga dos
-códigos sugiere que cambian entre versiones del plan de estudios: no lo uses como identificador
-estable en ninguna relación ni en ninguna URL.
+El código va en `asignatura.codigo_interno`, único dentro del plan. No lo uses como
+identificador estable en ninguna relación ni en ninguna URL: cambia de un plan a otro.
 
 ---
 
@@ -450,12 +516,13 @@ Esto sí es lo único que falta. No lo inventes ni lo deduzcas.
    generarán las sesiones de la prueba beta. Los festivos nacionales no hay que pedirlos: se
    cargan en `dia_festivo` con origen `ley`.
 
-3. **El plan de estudios completo.** De las 65 asignaturas sin formato diligenciado falta todo
-   el punto 1: código SMA (salvo Finanzas de corto plazo, FP15502), créditos, horas TDE, TDP y
-   TI, componente, tipo de curso, prerrequisitos y correquisitos, que son los campos que el
-   asistente de RF-08 completa en el paso 5. Además, cuál de los dos códigos de Comportamiento
-   organizacional está vigente. Hasta que llegue, las asignaturas sin datos van al seed solo con
-   nombre, semestre y RAP, y el asistente debe mostrar el campo vacío, no un valor inventado.
+3. **Los planes de estudio oficiales.** Del 2502, completo (semestres 1 a 10); del 1702, lo que
+   falta (sobre todo los semestres I a V, que ya no tuvieron grupos en 2026-1). De cada
+   asignatura: código SMA, créditos, horas TDE, TDP y TI, componente, tipo de curso,
+   prerrequisitos y correquisitos, que son los campos que el asistente de RF-08 completa en el
+   paso 5. Además, el mapeo de las asignaturas del 2502 a los RAP, si el 2502 usa los mismos
+   RAP 1 a 7 (SUP-16), y la regla de transición: qué cohortes siguen en el 1702 y hasta cuándo.
+   Hasta que llegue, lo que falta se muestra vacío en el asistente, nunca con un valor inventado.
 
 4. **Las rúbricas de los RAP 1, 3, 4, 5, 6 y 7.** Solo tenemos la del RAP 2 (apartado 2).
 
@@ -465,6 +532,6 @@ Esto sí es lo único que falta. No lo inventes ni lo deduzcas.
 
 Ya no hace falta preguntar dos cosas que estaban en esta lista. **Nivel o nota** quedó resuelto
 por el instructivo del formato y por la medición real de 2024-1: se registra el nivel (apartado
-3). Y **«cohorte» (SUP-15)** dejó de bloquear: en esa medición, muestra y cohorte fueron iguales
+3). Y **«cohorte» (SUP-14)** dejó de bloquear: en esa medición, muestra y cohorte fueron iguales
 (34, el grupo completo), así que `medicion_rap.tamano_cohorte` toma por defecto el tamaño de la
 muestra y ningún cálculo lo usa.

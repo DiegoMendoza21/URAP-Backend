@@ -1,5 +1,5 @@
 // =====================================================================
-// URAP - Modelo de datos v2.4
+// URAP - Modelo de datos v2.5
 // Sistema de informacion para el seguimiento, control y analisis de los
 // proyectos docentes del programa de Administracion Industrial - UdeC
 //
@@ -24,9 +24,13 @@
 //  11. v2.4 (04/11/2026): todas las marcas de tiempo pasan de timestamp a
 //      datetime. MySQL limita timestamp al 19-01-2038 y el modelo ya usaba
 //      datetime en el resto de las columnas de fecha; ahora es homogeneo.
+//  12. v2.5 (07/11/2026): planes de estudio (plan_estudio). La programacion
+//      academica 2026-1 del SMA muestra dos planes vigentes en el mismo
+//      programa (1702 y 2502), con codigos distintos para la misma asignatura.
+//      asignatura pasa a colgar del plan y su codigo es unico por plan.
 //
 // Trazabilidad: cada bloque indica el requisito (RF/NFR) que lo sustenta
-// en Requisitos_URAP_v1.0.xlsx
+// en Requisitos_URAP_v1.2.xlsx
 // =====================================================================
 
 
@@ -156,12 +160,33 @@ Table programa {
   }
 }
 
-Table asignatura {
+// v2.5 - RF-04 v1.1: un programa puede tener mas de un plan de estudios vigente
+// a la vez. En 2026-1 Administracion Industrial programa grupos del plan 1702
+// (niveles 6 a 10 y rezagados) y del plan 2502 (niveles 1 a 5), segun la
+// programacion academica del SMA. La misma asignatura puede tener un codigo
+// distinto en cada plan: Comportamiento organizacional es FP15503 en el 1702 e
+// IX24193 en el 2502. Por eso la asignatura cuelga del plan, no del programa.
+Table plan_estudio {
   id integer [primary key, increment]
   id_programa integer
-  codigo_interno varchar  // Ej: FP15503
+  codigo varchar          // codigo del SMA: 1702, 2502
   nombre varchar
-  semestre integer        // NUEVO: nivel del plan de estudios (I a X)
+  estado varchar [default: 'vigente'] // vigente | en_extincion | cerrado
+  // en_extincion = ya no recibe cohortes nuevas, pero todavia tiene grupos
+  created_at datetime [default: `now()`]
+  updated_at datetime
+
+  indexes {
+    (id_programa, codigo) [unique]
+  }
+}
+
+Table asignatura {
+  id integer [primary key, increment]
+  id_plan_estudio integer [not null] // v2.5: reemplaza id_programa; el programa sale del plan
+  codigo_interno varchar  // codigo SMA, unico dentro del plan. Ej: IX24193 (plan 2502)
+  nombre varchar
+  semestre integer        // nivel dentro de SU plan (I a X); cambia entre planes
   componente varchar      // NUEVO: BASICO | PROFESIONAL | COMPLEMENTARIO
   tipo_curso varchar      // NUEVO: Obligatorio | Electivo
   creditos integer
@@ -174,11 +199,14 @@ Table asignatura {
   updated_at datetime
 
   indexes {
-    (id_programa, codigo_interno) [unique]
+    (id_plan_estudio, codigo_interno) [unique]
+    // Un mismo codigo (ingles, nucleo comun) puede estar en los dos planes:
+    // es una fila por plan, cada una con su semestre, requisitos y mapeo a RAP.
   }
 }
 
 // NUEVO - RF-04: prerrequisitos y correquisitos del formato (punto 1)
+// v2.5: ambas asignaturas deben pertenecer al mismo plan (lo valida el backend)
 Table asignatura_requisito {
   id_asignatura integer
   id_asignatura_requerida integer
@@ -238,6 +266,8 @@ Table rap {
 
 // NUEVO - RF-05: mapeo curricular. Que asignaturas contribuyen a cada RAP.
 // Es independiente de los RAC: existe aunque no haya proyecto docente creado.
+// v2.5: como la asignatura pertenece a un plan, el mapeo es por plan. Los RAP
+// siguen siendo del programa (SUP-16: confirmar que el plan 2502 usa los mismos).
 Table asignatura_rap {
   id_asignatura integer
   id_rap integer
@@ -803,7 +833,8 @@ Ref: facultad.id_decano > usuario.id
 Ref: programa.id_facultad > facultad.id
 Ref: programa.id_director > usuario.id
 Ref: programa.id_escala_activa > escala_valoracion.id
-Ref: asignatura.id_programa > programa.id
+Ref: plan_estudio.id_programa > programa.id
+Ref: asignatura.id_plan_estudio > plan_estudio.id
 Ref: asignatura_requisito.id_asignatura > asignatura.id
 Ref: asignatura_requisito.id_asignatura_requerida > asignatura.id
 
@@ -922,6 +953,7 @@ TableGroup seguridad {
 TableGroup estructura_academica {
   facultad
   programa
+  plan_estudio
   asignatura
   asignatura_requisito
   periodo_academico
