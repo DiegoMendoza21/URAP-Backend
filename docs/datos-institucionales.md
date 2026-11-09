@@ -1,25 +1,27 @@
 # Datos institucionales reales — Administración Industrial
 
-Datos oficiales del programa, extraídos de documentos institucionales. **No son provisionales:
-son los valores reales.** El seed del backend los carga en `src/datos-iniciales/` (`programa.ts`
-como datos base y `demostracion.ts` como datos de demostración).
+**Versión 3.0 — 8 de noviembre de 2026.** Los cambios de cada versión están al final, apartado por
+apartado. **Este archivo es público:** no lleva nombres de personas, cédulas ni correos; a las
+personas se las nombra por su función.
 
-Los dos repositorios son públicos. Por eso esta copia no nombra a ninguna persona: los
-responsables de las fuentes y la asignación de líderes y docentes se describen por su función
-(Ley 1581 de 2012).
+Datos oficiales del programa, extraídos de documentos institucionales. **No son provisionales:
+estos son los valores reales.** Úsalos en el seed y en los catálogos base en lugar de textos
+inventados.
 
 Fuentes:
 
-- `Matriz Consistencia RAP` — Vicerrectoría de Docencia, Desarrollo Profesoral.
-  Responsables: dos docentes del programa, los líderes del RAP 3.
+- `Matriz Consistencia RAP` — Vicerrectoría de Docencia, Desarrollo Profesoral. Responsable: la
+  dirección del programa.
 - `INFORME EVALUACIÓN RAP 2023-II — Administración Industrial`.
 - `Producto 1 — Arquitectura del Negocio URAP` (revisado, v2), Tablas 16 y 17.
 - `FO-DO/PC-023 v00` — Medición de resultado de aprendizaje del programa por asignatura.
 - `FO-DO/PC-023 diligenciado` — medición del RAP 2 en Finanzas de corto plazo, primer período
-  de 2024, entregado por la docente que diligenció la medición. **Contiene los nombres reales de 34
+  de 2024, entregado por la dirección del programa. **Contiene los nombres reales de 34
   estudiantes: ese archivo no entra al repositorio, ni siquiera a `docs/fuentes/`.** Aquí solo
   están sus datos agregados.
 - `Acuerdo No. 46 del 26 de mayo de 2026` — Consejo Académico, calendario académico 2026-2.
+- `Una mirada a los resultados de aprendizaje` — Ministerio de Educación Nacional (2022),
+  capítulo 2: las tablas de estrategias de enseñanza y de aprendizaje del apartado 7.
 - `Programación académica por programa 2026-1` — SMA, reporte RAK152 del 27/01/2026. **Trae
   las cédulas de los docentes: no entra al repositorio, y ninguna cédula se copia a ningún
   archivo.** Aquí solo están códigos, nombres de asignatura, créditos y planes.
@@ -40,7 +42,7 @@ roles». Esta es la matriz que faltaba para HU-01-03.
 |---|---|---|---|---|---|---|
 | Usuarios y roles | ADM | — | — | C | C | — |
 | Estructura académica | ADM | C | C | C | C | C |
-| Proyectos docentes | ADM/C | E propios | C | R/A/C | C | C publicados |
+| Proyectos docentes | ADM/C* | E propios | C | R/A/C | C | C publicados |
 | Plan de curso | ADM/C | R/E propios | C | A/C | C | C publicado |
 | RAP y RAC | ADM | R/E RAC propios | C RAP asignados | A/C | C | C autorizado |
 | Registro de clases | ADM/C | R/E propios | C | C | C | — |
@@ -54,28 +56,31 @@ Estudiante = ACT-04. ACT-07 son sistemas externos y no es un rol con credenciale
 
 **Corrección de la fila «Proyectos docentes» (v2 del Producto 1).** La versión original decía
 Docente `R/E propios` y Departamento `A/C`, que es el supuesto inicial del equipo antes de la
-sesión con la docente que diligenció la medición del RAP 2. Lo correcto es Docente `E propios` y Departamento `R/A/C`:
+sesión de diseño con la dirección del programa. Lo correcto es Docente `E propios` y Departamento `R/A/C`:
 el proyecto docente lo crea el departamento académico (RF-08 asistente, RF-09 duplicación,
 RF-10 carga desde Excel; HU-05-01 a HU-05-06) y el docente lo diligencia (RF-11 a RF-16). La
 consecuencia para los guards es directa: **crear, duplicar y cargar desde Excel son del
-Departamento** (y del Administrador por `ADM`); **el Docente no puede crear un proyecto docente
+Departamento**; **el Docente no puede crear un proyecto docente
 por ninguna vía**, solo editar aquellos en los que figura en `proyecto_docente_docente`. Si el
 seed de permisos de HU-01-03 le dio al Docente un permiso de creación sobre proyectos, hay que
 quitárselo. Las filas «Plan de curso» y «RAP y RAC» no cambian: ahí el `R` del Docente es
 registrar contenidos y RAC dentro de su proyecto, que sí le corresponde.
 
-**Decisión del 2026-11-07 (URAP-34): el Administrador tampoco crea proyectos docentes.** Aunque
-`ADM` incluye crear, RF-08 deja la creación al Departamento y el asistente no le ofrece programas
-al Administrador. La matriz inicial le quita `crear` en el módulo de proyectos docentes
-(`EXCLUSIONES` en `src/datos-iniciales/matriz-permisos.ts`), así que crear, duplicar y cargar
-desde Excel quedan solo para el Departamento.
+**\* Excepción del Administrador (v3.0).** En «Proyectos docentes», `ADM` no incluye crear ni
+aprobar: la creación es del Departamento (RF-08) y la aprobación, de la revisión del
+Departamento (RF-18). Es una excepción explícita de la matriz, decidida en el desarrollo y ya
+implementada. El Administrador conserva el resto de la administración del módulo.
 
 **Importante sobre la granularidad.** Esta matriz es por módulo, no por endpoint. Define el
 marco y resuelve los casos de alcance («propios», «RAP asignados», «publicados»), que es lo
 difícil. El detalle por operación sale del requisito funcional correspondiente: la matriz dice
 que el Docente registra y edita *sus* proyectos, y el RF-11 dice en qué estados puede hacerlo.
 Si la matriz y un RF se contradicen, para y pregunta: casi siempre significa que hay una
-decisión pendiente, no un error de transcripción.
+decisión pendiente, no un error de transcripción. Cuatro casos ya se resolvieron así y se
+controlan por rol, porque el RF es más estrecho que el módulo: los matriculados los ven solo el
+Administrador y los docentes del curso (datos personales, Ley 1581); las mediciones, el docente,
+el líder RAP y el Departamento; el seguimiento, el Administrador, el Departamento y la Dirección;
+y los reportes, los roles del programa.
 
 **Los alcances condicionados no son adjetivos, son filtros.** «R/E propios» significa que el
 guard tiene que comprobar que el usuario está en `proyecto_docente_docente`, no solo que tenga
@@ -420,32 +425,26 @@ identificador estable en ninguna relación ni en ninguna URL: cambia de un plan 
 
 ---
 
-## 5. Líderes de RAP y docentes vinculados
+## 5. Líderes de RAP: patrones para el seed y las pruebas
 
-El informe 2023-II trae la asignación vigente en ese período: quién lidera cada RAP y qué docente
-dictó cada asignatura evaluada. **Esta copia no trae los nombres** y el seed no los carga: los
-usuarios de demostración son ficticios (`*.demo@urap.local`). Lo que sí sirve para el diseño es
-la forma de la asignación:
+La asignación real de líderes es un dato del programa que cambia cada período: se carga en
+`lider_rap` desde la aplicación y no va en este archivo. De la asignación de 2023-II (informe de
+evaluación) interesan los patrones, porque son los casos que el modelo de roles tiene que
+soportar y que conviene reproducir con usuarios ficticios:
 
-| RAP | Líderes | Asignaturas evaluadas en 2023-II |
-|---|---|---|
-| 1 | 1 | Matemáticas III; Investigación aplicada |
-| 2 | 1 | Finanzas a corto plazo; Finanzas y negocios internacionales |
-| 3 | 2 | Organización y dirección; Gestión ambiental; Electiva II (Administración de la calidad); Electiva VII (Sistemas integrados de gestión) |
-| 4 | 2 | Investigación de operaciones II; Electiva II GPO (Mejoramiento de procesos); Planeación y organización de la producción; Electiva VII GPO (Diseño de producto) |
-| 5 | 2 | Mercados; Emprendimiento e innovación; Preparación y evaluación de proyectos |
-| 6 | 1 | Administración del talento humano; Electiva IV (Administración de sueldos y salarios) |
-| 7 | 2 | Comprensión y producción de textos II; Organización y dirección; Investigación aplicada |
+- **Un RAP puede tener dos líderes.** En 2023-II los tenían los RAP 3, 4, 5 y 7.
+- **Una persona puede liderar dos RAP.** El RAP 7 lo compartían el líder del RAP 5 y el del RAP 6.
+- **Un líder puede dictar asignaturas que tributan a su propio RAP.** Pasaba en los RAP 3, 4, 5 y
+  6.
+- **Un líder puede dictar una asignatura que se mide para otro RAP.** El líder del RAP 1 dictaba
+  una electiva medida para el RAP 3.
+- **Un docente puede tener asignaturas medidas para varios RAP y además liderar uno.** El docente
+  de Investigación aplicada (medida para los RAP 1 y 7) lideraba el RAP 4.
+- **Una asignatura puede medirse para dos RAP.** Organización y dirección (RAP 3 y 7) e
+  Investigación aplicada (RAP 1 y 7).
 
-Dos cosas que el modelo tiene que soportar:
-
-- **Un RAP puede tener dos líderes, y una persona puede liderar varios RAP y además dictar
-  asignaturas.** En 2023-II, una de las líderes del RAP 3 dictaba Organización y dirección, que
-  tributa a los RAP 3 y 7; otras personas lideraban dos RAP o lideraban uno y dictaban
-  asignaturas de otro. Es el caso de varios roles por usuario (`usuario_rol`) y de varios líderes
-  por RAP (`lider_rap`).
-- **La asignación es de 2023-II y puede haber cambiado.** Hay que confirmarla con el programa
-  antes de cualquier demostración ante él.
+Los seis usuarios de demostración pueden cubrir estos casos sin necesidad de nombres reales. Si
+el programa entrega la asignación vigente, se carga por la aplicación, no por el seed.
 
 ---
 
@@ -501,37 +500,99 @@ y ese calendario todavía no lo tenemos.
 
 ---
 
-## 7. Lo que todavía NO existe y hay que pedirle al programa
+## 7. Catálogo de estrategias metodológicas (RF-13)
 
-Esto sí es lo único que falta. No lo inventes ni lo deduzcas.
+RF-13 permite seleccionar estrategias de un «catálogo sugerido», y su comentario remite a las
+estrategias de enseñanza y de aprendizaje descritas por el Ministerio de Educación Nacional. Son
+las dos tablas del capítulo 2 de *Una mirada a los resultados de aprendizaje* (MEN, 2022), que a su
+vez se basan en Camacho y Díaz (2013). **Esta es la «lista del MEN»: ya no hay que pedirla.** Las
+descripciones están resumidas; el nombre es el del documento.
 
-1. **El valor del porcentaje esperado.** El formato tiene la casilla y el modelo tiene el campo
-   (ver apartado 3); falta el número que fija el programa, y saber si es el mismo para los siete
-   RAP o distinto para cada uno. En la medición real de 2024-1 quedó en cero. Sin valor por
-   defecto: un 70 % de relleno se vuelve dato real en cuanto alguien vea la pantalla. También
-   falta que el programa confirme la regla de «un solo número por RAP» del apartado 3, o que
-   prefiera exigir la meta a cada indicador.
+**Estrategias de enseñanza** (las propone y conduce el docente):
 
-2. **El calendario académico 2027-1**, cuando el Consejo Académico lo apruebe. Es con el que se
-   generarán las sesiones de la prueba beta. Los festivos nacionales no hay que pedirlos: se
-   cargan en `dia_festivo` con origen `ley`.
+| Estrategia | En qué consiste |
+|---|---|
+| Preguntas previas y formulación de propósitos | Plantear preguntas sobre el tema y formular el propósito que se busca alcanzar. |
+| Lluvia de ideas | Los estudiantes expresan lo que saben de un tema antes de abordarlo y lo socializan con el grupo. |
+| Matriz C-Q-A | Tres preguntas: qué conozco y qué quiero aprender (antes) y qué aprendí (después). |
+| Ilustraciones | Fotografías y medios gráficos que representan la realidad con distintos grados de fidelidad. |
+| Ideogramas | Esquemas de relaciones entre conceptos: mapa mental, mapa conceptual, diagrama de flujo o mentefacto. |
+| Lectura dirigida | El docente fija los parámetros y las herramientas para cada nivel de lectura: global, lineal y crítica. |
+| Resúmenes | Síntesis breve y precisa del contenido, preparada por el docente. |
+| Preguntas intercaladas | Preguntas a lo largo de la clase o del texto para mantener la atención y orientar el estudio. |
+| Analogías | Comparación entre elementos para relacionar lo nuevo con lo que el estudiante ya conoce. |
 
-3. **Los planes de estudio oficiales.** Del 2502, completo (semestres 1 a 10); del 1702, lo que
-   falta (sobre todo los semestres I a V, que ya no tuvieron grupos en 2026-1). De cada
-   asignatura: código SMA, créditos, horas TDE, TDP y TI, componente, tipo de curso,
-   prerrequisitos y correquisitos, que son los campos que el asistente de RF-08 completa en el
-   paso 5. Además, el mapeo de las asignaturas del 2502 a los RAP, si el 2502 usa los mismos
-   RAP 1 a 7 (SUP-16), y la regla de transición: qué cohortes siguen en el 1702 y hasta cuándo.
-   Hasta que llegue, lo que falta se muestra vacío en el asistente, nunca con un valor inventado.
+**Estrategias de aprendizaje** (las ejecuta el estudiante):
 
-4. **Las rúbricas de los RAP 1, 3, 4, 5, 6 y 7.** Solo tenemos la del RAP 2 (apartado 2).
+| Estrategia | En qué consiste |
+|---|---|
+| Ideograma | El estudiante construye un esquema de relaciones entre conceptos. |
+| Lectura autorregulada | El estudiante regula su proceso lector: formula hipótesis, las contrasta con el texto y evalúa la información. |
+| Producción de textos | Resumen, reseña, ensayo y otros textos que exigen sintetizar información y argumentar. |
+| Portafolio | Colección sistemática y organizada de los productos del estudiante, según las metas establecidas. |
 
-5. **La lista de estudiantes matriculados por curso (SUP-03).** Sigue sin origen definido y de
-   ella dependen RF-22, RF-27 y RF-30. Nunca uses nombres reales de estudiantes en seeds,
-   fixtures ni capturas: Ley 1581 de 2012.
+**Cómo se carga sin tocar el modelo** (el modelo se congela el 15 de noviembre): como un
+`parametro_sistema` de tipo JSON, por ejemplo `catalogo_estrategias_rf13`, que el Administrador
+puede editar. Las sugerencias de RF-13 son este catálogo más las estrategias que ya usaron otros
+proyectos del programa, que es lo que hoy está implementado.
 
-Ya no hace falta preguntar dos cosas que estaban en esta lista. **Nivel o nota** quedó resuelto
-por el instructivo del formato y por la medición real de 2024-1: se registra el nivel (apartado
-3). Y **«cohorte» (SUP-14)** dejó de bloquear: en esa medición, muestra y cohorte fueron iguales
-(34, el grupo completo), así que `medicion_rap.tamano_cohorte` toma por defecto el tamaño de la
-muestra y ningún cálculo lo usa.
+---
+
+## 8. Lo que todavía NO existe y hay que pedirle al programa
+
+Esto sí es lo único que falta. No lo inventes ni lo deduzcas: mientras no llegue, la aplicación
+dice «no definido». La última columna dice si la respuesta cambiaría el modelo; como el modelo se
+congela el 15 de noviembre, lo que lo cambie y llegue después queda para después de la entrega.
+
+| # | Pregunta | Mientras tanto | ¿Cambia el modelo? |
+|---|---|---|---|
+| 1 | Meta de cumplimiento (porcentaje esperado) y si es la misma para los siete RAP | «Meta no definida» | Solo si es distinta por RAP |
+| 2 | Si se confirma la regla del logro del RAP (apartado 3) o se exige la meta a cada indicador | Regla del apartado 3 | No: una función |
+| 3 | Si un miembro del Departamento puede aprobar un proyecto en el que es docente responsable; RF-18 no lo prohíbe | Propuesta: no permitirlo | No: una regla y un parámetro |
+| 4 | Qué es un proyecto «publicado», que es lo que ve el Estudiante (RF-27) | Propuesta: aprobado o en ejecución | Solo si exige publicar a mano |
+| 5 | Los planes oficiales 1702 y 2502, con código, créditos y horas (TDE, TDP y TI) de cada asignatura. Del 1702 faltan código y créditos de 33 asignaturas: todas las de I a III, casi todas las de IV y V y una de VI | Campos vacíos | No |
+| 6 | Si el plan 2502 tiene RAP propios (SUP-16) y qué asignaturas del 2502 tributan a cada RAP | RAP del programa; asignaturas del 2502 sin vínculo | Solo si tiene RAP propios |
+| 7 | Las rúbricas de los RAP 1, 3, 4, 5, 6 y 7 | Textos «PROVISIONAL —» | No |
+| 8 | El calendario académico 2027-1 | — | No |
+| 9 | De dónde sale la lista de matriculados (SUP-03) | Carga por archivo | Puede |
+| 10 | Qué significa «cohorte» en el FO-DO/PC-023 (SUP-14) | Igual a la muestra | No |
+
+Sobre la 3, la propuesta tiene respaldo propio: separar quien elabora de quien aprueba es un
+principio de control interno (Ley 87 de 1993), y en el programa el caso es real, porque quienes
+dirigen el programa también dictan asignaturas. Si no hay otra persona con el rol, el
+Administrador reasigna la revisión.
+
+Ya no hace falta preguntar dos cosas. **Nivel o nota** quedó resuelto por el instructivo del
+formato y por la medición real de 2024-1: se registra el nivel (apartado 3). **La lista del MEN de
+estrategias** está en el apartado 7. Y la 10, **«cohorte»**, no bloquea nada: en esa medición,
+muestra y cohorte fueron iguales (34, el grupo completo), así que `medicion_rap.tamano_cohorte`
+toma por defecto el tamaño de la muestra y ningún cálculo lo usa.
+
+---
+
+## Registro de cambios
+
+**v3.0 — 8 de noviembre de 2026**
+
+- *Encabezado y fuentes:* versión y regla de privacidad del archivo. Se quitan los nombres de los
+  responsables y de quien entregó la medición; se agrega el libro del MEN como fuente del
+  apartado 7.
+- *Apartado 1:* excepción del Administrador en «Proyectos docentes» (no crea ni aprueba). Se
+  corrige la nota anterior, que le atribuía la creación «por ADM». Se registran los cuatro casos
+  controlados por rol. Sin nombres.
+- *Apartado 5:* se reemplaza la tabla de líderes y docentes de 2023-II, que tenía nombres, por los
+  patrones que sirven para el seed y las pruebas.
+- *Apartado 7 (nuevo):* catálogo de estrategias metodológicas del MEN para RF-13.
+- *Apartado 8 (antes 7):* lista consolidada de preguntas con el parte de Claude Code del 8 de
+  noviembre, cada una con qué hace la aplicación mientras tanto y si cambiaría el modelo. Se
+  agregan la autoaprobación y el significado de «publicado». La pregunta de los planes precisa
+  qué falta del 1702: 33 asignaturas de los semestres I a VI, no solo las de I a III. La de RF-13
+  sale de la lista porque la responde el apartado 7.
+- *Apartados 2, 3, 4 y 6:* sin cambios de contenido.
+
+**v2.0 — 7 de noviembre de 2026 (tarde).** Dos planes de estudio vigentes (1702 y 2502), código y
+créditos de los semestres IV a X del 1702, las 36 asignaturas del 2502 y la ponderación por corte.
+
+**v1.x — 6 y 7 de noviembre de 2026.** Primera versión, corrección de la Tabla 17, calendario
+2026-2, rúbrica real del RAP 2, cómo se mide el cumplimiento, regla del logro del RAP y caso de
+verificación de RF-31.

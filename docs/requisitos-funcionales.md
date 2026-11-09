@@ -60,7 +60,7 @@ q1. El inicio de sesión debe completarse en un tiempo menor o igual a 3 segundo
 **Versión:** 1.0 (10/09/2026)
 
 **Fuentes:** Elicitación con actores del programa de Administración Industrial  
-Sesión de diseño con una docente del programa
+Sesión de diseño con la dirección del programa
 
 **Objetivos asociados:** OBJ-06: Administrar usuarios, roles y acceso seguro a la información
 
@@ -112,7 +112,7 @@ q2. Los listados deben presentarse paginados para no superar los 4 segundos de c
 **Versión:** 1.0 (10/09/2026)
 
 **Fuentes:** Elicitación con actores del programa de Administración Industrial  
-Sesión de diseño con una docente del programa
+Sesión de diseño con la dirección del programa
 
 **Objetivos asociados:** OBJ-06: Administrar usuarios, roles y acceso seguro a la información
 
@@ -216,7 +216,7 @@ q1. El guardado de un registro no debe superar los 3 segundos.
 
 **Fuentes:** Formato FO-DO/PC-023 v00 «Medición de resultado de aprendizaje del programa por asignatura» (Valoración y Rúbrica)  
 Matriz de consistencia de resultados de aprendizaje del programa de Administración Industrial (RAP 1 a RAP 7)  
-Sesión de diseño con una docente del programa  
+Sesión de diseño con la dirección del programa  
 Ministerio de Educación Nacional (2021). Una mirada a los resultados de aprendizaje
 
 **Objetivos asociados:** OBJ-04: Gestionar los resultados de aprendizaje, las rúbricas y sus evidencias
@@ -269,7 +269,7 @@ q1. La consulta del catálogo de RAP de un programa no debe superar los 3 segund
 
 **Fuentes:** Formato FO-DO/PC-023 v00 «Medición de resultado de aprendizaje del programa por asignatura» (Valoración y Rúbrica)  
 Matriz de consistencia de resultados de aprendizaje del programa de Administración Industrial (RAP 1 a RAP 7)  
-Sesión de diseño con una docente del programa  
+Sesión de diseño con la dirección del programa  
 Ministerio de Educación Nacional (2021). Una mirada a los resultados de aprendizaje
 
 **Objetivos asociados:** OBJ-04: Gestionar los resultados de aprendizaje, las rúbricas y sus evidencias
@@ -322,7 +322,7 @@ q1. El guardado de la rúbrica no debe superar los 4 segundos.
 
 **Fuentes:** Formato FO-DO/PC-023 v00 «Medición de resultado de aprendizaje del programa por asignatura» (Valoración y Rúbrica)  
 Matriz de consistencia de resultados de aprendizaje del programa de Administración Industrial (RAP 1 a RAP 7)  
-Sesión de diseño con una docente del programa  
+Sesión de diseño con la dirección del programa  
 Ministerio de Educación Nacional (2021). Una mirada a los resultados de aprendizaje
 
 **Objetivos asociados:** OBJ-04: Gestionar los resultados de aprendizaje, las rúbricas y sus evidencias
@@ -431,7 +431,7 @@ q2. La creación del proyecto docente debe completarse en menos de 5 segundos.
 **Versión:** 1.0 (10/09/2026)
 
 **Fuentes:** Elicitación con actores del programa de Administración Industrial  
-Sesión de diseño con una docente del programa
+Sesión de diseño con la dirección del programa
 
 **Objetivos asociados:** OBJ-01: Centralizar la creación y la planeación del proyecto docente
 
@@ -584,7 +584,7 @@ q1. El guardado no debe superar los 3 segundos.
 
 **Fuentes:** Formato FO-DO/PC-023 v00 «Medición de resultado de aprendizaje del programa por asignatura» (Valoración y Rúbrica)  
 Matriz de consistencia de resultados de aprendizaje del programa de Administración Industrial (RAP 1 a RAP 7)  
-Sesión de diseño con una docente del programa  
+Sesión de diseño con la dirección del programa  
 Ministerio de Educación Nacional (2021). Una mirada a los resultados de aprendizaje
 
 **Objetivos asociados:** OBJ-02: Diligenciar el proyecto docente conforme al formato institucional  
@@ -1034,7 +1034,7 @@ q2. La carga del calendario del curso no debe superar los 4 segundos.
 **Versión:** 1.0 (10/09/2026)
 
 **Fuentes:** Elicitación con actores del programa de Administración Industrial  
-Sesión de diseño con una docente del programa
+Sesión de diseño con la dirección del programa
 
 **Objetivos asociados:** OBJ-03: Registrar y controlar la ejecución real de las clases
 
@@ -1133,7 +1133,7 @@ q1. La carga de la lista de estudiantes del grupo no debe superar los 3 segundos
 **Versión:** 1.0 (10/09/2026)
 
 **Fuentes:** Elicitación con actores del programa de Administración Industrial  
-Sesión de diseño con una docente del programa
+Sesión de diseño con la dirección del programa
 
 **Objetivos asociados:** OBJ-03: Registrar y controlar la ejecución real de las clases  
 OBJ-05: Supervisar el cumplimiento del diligenciamiento y generar reportes
@@ -1236,7 +1236,7 @@ q1. El tiempo de carga depende del tamaño del archivo y de la conexión del usu
 **Versión:** 1.0 (10/09/2026)
 
 **Fuentes:** Elicitación con actores del programa de Administración Industrial  
-Sesión de diseño con una docente del programa
+Sesión de diseño con la dirección del programa
 
 **Objetivos asociados:** OBJ-05: Supervisar el cumplimiento del diligenciamiento y generar reportes
 
@@ -1287,7 +1287,7 @@ q2. La exportación consolidada no debe superar los 10 segundos.
 **Versión:** 1.0 (10/09/2026)
 
 **Fuentes:** Elicitación con actores del programa de Administración Industrial  
-Sesión de diseño con una docente del programa
+Sesión de diseño con la dirección del programa
 
 **Objetivos asociados:** OBJ-03: Registrar y controlar la ejecución real de las clases  
 OBJ-05: Supervisar el cumplimiento del diligenciamiento y generar reportes
