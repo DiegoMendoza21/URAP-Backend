@@ -158,14 +158,18 @@ export class RevisionController {
     summary:
       'Verificación antes de aprobar o devolver (RF-18; HU-07-03 y HU-07-04)',
     description:
-      'Si el usuario puede aprobar o devolver el proyecto ahora y, si no, por qué: no lo ' +
-      'aprueba en el programa, es docente del proyecto con la separación de funciones ' +
-      'encendida (`revision_bloquear_autoaprobacion`) o el proyecto no está enviado a revisión.',
+      'Si el usuario puede aprobar o devolver el proyecto ahora y, si no, por qué: es docente ' +
+      'del proyecto con la separación de funciones encendida ' +
+      '(`revision_bloquear_autoaprobacion`) o el proyecto no está enviado a revisión. El ' +
+      'alcance se comprueba como en la aprobación y la devolución: 404 si no ve el proyecto y ' +
+      '403 si no lo aprueba en su programa.',
   })
   @ApiOkResponse({ type: VerificacionRevisionDto })
   @ApiForbiddenResponse({
     type: RespuestaErrorDto,
-    description: 'Ninguno de los roles del usuario aprueba proyectos docentes',
+    description:
+      'Ninguno de los roles del usuario aprueba proyectos docentes, o no los aprueba en el ' +
+      'programa del proyecto',
   })
   @ApiNotFoundResponse(NO_EXISTE)
   verificarRevision(

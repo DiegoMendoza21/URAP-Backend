@@ -90,20 +90,6 @@ export const MENSAJE_PROYECTO_PROPIO =
 /** El mismo caso, como aviso de la bandeja y de la pantalla de revisión. */
 export const MOTIVO_PROYECTO_PROPIO =
   'Usted es docente de este proyecto: debe revisarlo otra persona del Departamento.';
-
-/** Por qué alguien no puede aprobar ni devolver un proyecto: el error (403) y el aviso. */
-interface Impedimento {
-  error: string;
-  motivo: string;
-}
-const FUERA_DE_ALCANCE: Impedimento = {
-  error: MENSAJE_FUERA_DE_ALCANCE,
-  motivo: MENSAJE_FUERA_DE_ALCANCE,
-};
-const PROYECTO_PROPIO: Impedimento = {
-  error: MENSAJE_PROYECTO_PROPIO,
-  motivo: MOTIVO_PROYECTO_PROPIO,
-};
 export const MENSAJE_OBSERVACION_NO_EXISTE =
   'La observación no existe o no pertenece a la última devolución del proyecto.';
 export const MENSAJE_OBSERVACIONES_SOLO_DEVUELTO =
@@ -412,22 +398,23 @@ export class RevisionService {
 
   /**
    * RF-18: si el usuario puede aprobar o devolver el proyecto ahora y, si no, por qué. La
-   * pantalla de revisión lo consulta para mostrar el aviso en lugar de las decisiones. Aplica
-   * las mismas reglas que `aprobar` y `devolver`, en el mismo orden: primero quién revisa,
-   * después el estado.
+   * pantalla de revisión lo consulta para decidir si muestra las decisiones. El alcance se
+   * comprueba como en `aprobar` y `devolver` (404 si no ve el proyecto, 403 si no lo aprueba en
+   * su programa), así que no revela el estado de un proyecto ajeno. Después, en el mismo orden
+   * que esas acciones, la separación de funciones y el estado: `puedeRevisar` es verdadero solo
+   * si los dos lo permiten, y `motivo` dice cuál no.
    */
   async verificarRevision(
     usuario: UsuarioSesion,
     id: number,
   ): Promise<VerificacionRevisionDto> {
-    const visible = await this.edicion.consultable(usuario, id);
-    const impedimento = await this.impedimentoRevision(usuario, visible);
+    const visible = await this.exigirAlcanceRevision(usuario, id);
     const estado = aEstado(visible.estado_proyecto);
-    const motivo =
-      impedimento?.motivo ??
-      (estado?.codigo === ESTADO.enviado
+    const motivo = (await this.esProyectoPropioBloqueado(usuario, visible))
+      ? MOTIVO_PROYECTO_PROPIO
+      : estado?.codigo === ESTADO.enviado
         ? null
-        : mensajeNoRevisable(estado?.nombre ?? 'sin estado'));
+        : mensajeNoRevisable(estado?.nombre ?? 'sin estado');
     return { idProyecto: id, estado, puedeRevisar: motivo === null, motivo };
   }
 
@@ -732,56 +719,61 @@ export class RevisionService {
   }
 
   /**
-   * Quien aprueba o devuelve: ve el proyecto (si no, 404 sin revelar que existe) y no tiene
-   * impedimento (si lo tiene, 403). El guard ya exigió el permiso.
+   * Quien aprueba o devuelve: tiene alcance sobre el proyecto y no es docente de él mientras la
+   * separación de funciones esté encendida (si lo es, 403).
    */
   private async exigirRevisable(
     usuario: UsuarioSesion,
     id: number,
   ): Promise<void> {
-    const visible = await this.edicion.consultable(usuario, id);
-    const impedimento = await this.impedimentoRevision(usuario, visible);
-    if (impedimento) {
-      throw new ForbiddenException(impedimento.error);
+    const visible = await this.exigirAlcanceRevision(usuario, id);
+    if (await this.esProyectoPropioBloqueado(usuario, visible)) {
+      throw new ForbiddenException(MENSAJE_PROYECTO_PROPIO);
     }
   }
 
   /**
-   * Por qué el usuario no puede aprobar ni devolver el proyecto, sin mirar su estado, o nulo si
-   * puede. Primero el alcance: no tiene `proyectos.aprobar` en el programa del proyecto.
-   * Después la separación de funciones: es docente del proyecto y el parámetro está encendido.
+   * Alcance de quien revisa: ve el proyecto (si no, 404 sin revelar que existe) y tiene
+   * `proyectos.aprobar` en su programa (si no, 403). El guard ya exigió el permiso; aquí se
+   * comprueba el alcance.
    */
-  private async impedimentoRevision(
+  private async exigirAlcanceRevision(
     usuario: UsuarioSesion,
-    proyecto: ProyectoConAcceso,
-  ): Promise<Impedimento | null> {
-    const { asignatura } = await this.prisma.proyecto_docente.findUniqueOrThrow(
-      {
-        where: { id: proyecto.id },
-        select: {
-          asignatura: {
-            select: { plan_estudio: { select: { id_programa: true } } },
-          },
+    id: number,
+  ): Promise<ProyectoConAcceso> {
+    const visible = await this.edicion.consultable(usuario, id);
+    const proyecto = await this.prisma.proyecto_docente.findUniqueOrThrow({
+      where: { id },
+      select: {
+        asignatura: {
+          select: { plan_estudio: { select: { id_programa: true } } },
         },
       },
-    );
+    });
     const { global, programas } = await this.alcance.alcanceConPermiso(
       usuario.id,
       'proyectos',
       'aprobar',
     );
-    const idPrograma = asignatura?.plan_estudio.id_programa ?? null;
+    const idPrograma = proyecto.asignatura?.plan_estudio.id_programa ?? null;
     if (!global && (idPrograma === null || !programas.includes(idPrograma))) {
-      return FUERA_DE_ALCANCE;
+      throw new ForbiddenException(MENSAJE_FUERA_DE_ALCANCE);
     }
-    // El parámetro se lee solo si hace falta: casi nunca revisa un docente del proyecto.
-    if (
+    return visible;
+  }
+
+  /**
+   * RF-18 · Separación de funciones: es docente del proyecto y el parámetro está encendido. El
+   * parámetro se lee solo si es docente: casi nunca revisa un docente del proyecto.
+   */
+  private async esProyectoPropioBloqueado(
+    usuario: UsuarioSesion,
+    proyecto: ProyectoConAcceso,
+  ): Promise<boolean> {
+    return (
       esDocenteDelProyecto(usuario, proyecto.proyecto_docente_docente) &&
       (await this.bloquearProyectosPropios())
-    ) {
-      return PROYECTO_PROPIO;
-    }
-    return null;
+    );
   }
 
   /**

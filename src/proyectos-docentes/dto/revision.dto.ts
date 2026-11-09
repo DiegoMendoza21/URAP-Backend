@@ -183,9 +183,10 @@ export class VerificacionRevisionDto {
   @ApiProperty({
     example: false,
     description:
-      'Si el usuario puede aprobar o devolver el proyecto ahora (RF-18): lo aprueba en el ' +
-      'programa, no es docente del proyecto mientras `revision_bloquear_autoaprobacion` ' +
-      'esté encendido (separación de funciones) y el proyecto está «Enviado a revisión».',
+      'Si el usuario puede aprobar o devolver el proyecto ahora (RF-18). Es verdadero solo si ' +
+      'el proyecto está «Enviado a revisión» y el usuario no es docente de él mientras ' +
+      '`revision_bloquear_autoaprobacion` esté encendido (separación de funciones). Es la ' +
+      'única señal para mostrar las decisiones.',
   })
   puedeRevisar: boolean;
 
@@ -195,7 +196,8 @@ export class VerificacionRevisionDto {
     nullable: true,
     type: String,
     description:
-      'Por qué no puede revisarlo, en lenguaje del usuario; nulo si puede',
+      'Cuál de las dos condiciones falla, en lenguaje del usuario: es docente del proyecto, o ' +
+      'el proyecto no está enviado a revisión. Si fallan las dos, la primera. Nulo si puede.',
   })
   motivo: string | null;
 }

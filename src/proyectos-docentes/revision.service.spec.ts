@@ -548,43 +548,72 @@ describe('RevisionService', () => {
       ]);
     });
 
-    it('la verificación de la pantalla de revisión aplica las mismas reglas, en el mismo orden', async () => {
-      const propio = crear({ actual: enviado() });
-      await expect(
-        propio.servicio.verificarRevision(revisorCodocente, 7),
-      ).resolves.toEqual({
-        idProyecto: 7,
-        estado: { codigo: 'enviado', nombre: 'Enviado a revisión' },
-        puedeRevisar: false,
-        motivo: MOTIVO_PROYECTO_PROPIO,
-      });
-      await expect(
-        propio.servicio.verificarRevision(revisor, 7),
-      ).resolves.toMatchObject({ puedeRevisar: true, motivo: null });
-
-      const apagado = crear({ actual: enviado(), parametro: { valor: 'no' } });
-      await expect(
-        apagado.servicio.verificarRevision(revisorCodocente, 7),
-      ).resolves.toMatchObject({ puedeRevisar: true, motivo: null });
-
-      const devuelto = crear({ actual: proyecto({ estado: 'devuelto' }) });
-      await expect(
-        devuelto.servicio.verificarRevision(revisor, 7),
-      ).resolves.toMatchObject({
-        puedeRevisar: false,
-        motivo: mensajeNoRevisable('Devuelto con observaciones'),
+    describe('verificación de la pantalla de revisión', () => {
+      it('puede revisar: enviado y no es docente del proyecto', async () => {
+        const { servicio } = crear({ actual: enviado() });
+        await expect(servicio.verificarRevision(revisor, 7)).resolves.toEqual({
+          idProyecto: 7,
+          estado: { codigo: 'enviado', nombre: 'Enviado a revisión' },
+          puedeRevisar: true,
+          motivo: null,
+        });
       });
 
-      // Quien no aprueba en el programa lo sabe antes que cualquier otra cosa.
-      const otroPrograma = crear({
-        actual: enviado(),
-        alcance: { global: false, programas: [2] },
+      it('no puede: es docente del proyecto con la regla encendida', async () => {
+        const { servicio } = crear({ actual: enviado() });
+        await expect(
+          servicio.verificarRevision(revisorCodocente, 7),
+        ).resolves.toEqual({
+          idProyecto: 7,
+          estado: { codigo: 'enviado', nombre: 'Enviado a revisión' },
+          puedeRevisar: false,
+          motivo: MOTIVO_PROYECTO_PROPIO,
+        });
       });
-      await expect(
-        otroPrograma.servicio.verificarRevision(revisorCodocente, 7),
-      ).resolves.toMatchObject({
-        puedeRevisar: false,
-        motivo: MENSAJE_FUERA_DE_ALCANCE,
+
+      it('con la regla apagada, el docente del proyecto puede', async () => {
+        const { servicio } = crear({
+          actual: enviado(),
+          parametro: { valor: 'no' },
+        });
+        await expect(
+          servicio.verificarRevision(revisorCodocente, 7),
+        ).resolves.toMatchObject({ puedeRevisar: true, motivo: null });
+      });
+
+      it('no puede: el proyecto no está enviado a revisión', async () => {
+        const { servicio } = crear({
+          actual: proyecto({ estado: 'devuelto' }),
+        });
+        await expect(
+          servicio.verificarRevision(revisor, 7),
+        ).resolves.toMatchObject({
+          puedeRevisar: false,
+          motivo: mensajeNoRevisable('Devuelto con observaciones'),
+        });
+      });
+
+      it('si fallan las dos, el motivo es el de la aprobación: primero el proyecto propio', async () => {
+        const { servicio } = crear({
+          actual: proyecto({ estado: 'devuelto' }),
+        });
+        await expect(
+          servicio.verificarRevision(revisorResponsable, 7),
+        ).resolves.toMatchObject({
+          puedeRevisar: false,
+          motivo: MOTIVO_PROYECTO_PROPIO,
+        });
+      });
+
+      it('fuera de su programa responde 403, como la aprobación, sin revelar el estado', async () => {
+        const { servicio, prisma } = crear({
+          actual: enviado(),
+          alcance: { global: false, programas: [2] },
+        });
+        await expect(
+          servicio.verificarRevision(revisorCodocente, 7),
+        ).rejects.toThrow(new ForbiddenException(MENSAJE_FUERA_DE_ALCANCE));
+        expect(prisma.parametro_sistema.findUnique).not.toHaveBeenCalled();
       });
     });
   });

@@ -16,6 +16,7 @@ import {
   MENSAJE_PROYECTO_PROPIO,
   MENSAJE_SECCIONES_INCOMPLETAS,
   MENSAJE_SOLO_RESPONSABLE,
+  mensajeNoRevisable,
   MOTIVO_PROYECTO_PROPIO,
 } from '../src/proyectos-docentes/revision.service.js';
 import {
@@ -971,6 +972,34 @@ describe('Revisión y aprobación del proyecto docente (e2e) · RF-17, RF-18, HU
       );
     });
 
+    it('la verificación de la pantalla de revisión: 200 con el motivo, 403 sin permiso y 404 fuera de alcance', async () => {
+      await fijar('si');
+      const verificacion = ruta(propio, 'revision');
+      const propia = await como('mixtoDocente').get(verificacion).expect(200);
+      expect(propia.body).toEqual({
+        idProyecto: propio,
+        estado: { codigo: 'enviado', nombre: 'Enviado a revisión' },
+        puedeRevisar: false,
+        motivo: MOTIVO_PROYECTO_PROPIO,
+      });
+      const ajena = await como('departamento').get(verificacion).expect(200);
+      expect(ajena.body).toMatchObject({ puedeRevisar: true, motivo: null });
+
+      // Sin `proyectos.aprobar`: el guard responde 403 aunque vea el proyecto.
+      await como('docente').get(verificacion).expect(403);
+      await como('administrador').get(verificacion).expect(403);
+      // Lo ve como Líder RAP, pero aprueba solo en otro programa: 403, como la aprobación.
+      const otroAlcance = await como('mixto').get(verificacion).expect(403);
+      expect(otroAlcance.body).toMatchObject({
+        mensaje: MENSAJE_FUERA_DE_ALCANCE,
+      });
+      // De otro programa: no lo ve, 404 sin revelar su estado.
+      const ajeno = await como('departamentoOtro')
+        .get(verificacion)
+        .expect(404);
+      expect(ajeno.body).not.toHaveProperty('puedeRevisar');
+    });
+
     it('encendido: quien es docente del proyecto no lo aprueba ni lo devuelve (403)', async () => {
       await fijar('si');
       for (const id of [propio, comoCodocente]) {
@@ -1000,6 +1029,14 @@ describe('Revisión y aprobación del proyecto docente (e2e) · RF-17, RF-18, HU
         .post(ruta(comoCodocente, 'aprobacion'))
         .expect(200);
       expect(await estadoDe(comoCodocente)).toBe('aprobado');
+      // Ya aprobado, la verificación lo dice con el motivo del estado.
+      const { body } = await como('departamento')
+        .get(ruta(comoCodocente, 'revision'))
+        .expect(200);
+      expect(body).toMatchObject({
+        puedeRevisar: false,
+        motivo: mensajeNoRevisable('Aprobado'),
+      });
     });
 
     it('apagado: el docente del proyecto lo revisa como antes', async () => {
@@ -1011,6 +1048,10 @@ describe('Revisión y aprobación del proyecto docente (e2e) · RF-17, RF-18, HU
           motivo: null,
         }),
       ]);
+      const { body } = await como('mixtoDocente')
+        .get(ruta(propio, 'revision'))
+        .expect(200);
+      expect(body).toMatchObject({ puedeRevisar: true, motivo: null });
       await como('mixtoDocente')
         .post(ruta(propio, 'devolucion'), devolucion)
         .expect(200);
