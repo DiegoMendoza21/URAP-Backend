@@ -92,7 +92,7 @@ registran hasta siete días antes de sembrar: conviene sembrar cerca del día de
 
 Faltan datos reales del programa: el porcentaje esperado, el calendario 2027-1, la ficha de las
 otras 65 asignaturas y las rúbricas de los RAP 1 y 3 a 7 (lista completa en
-`docs/datos-institucionales.md`, apartado 7).
+`docs/datos-institucionales.md`, apartado 8).
 
 ### Bases locales sembradas con una versión anterior de los datos
 
