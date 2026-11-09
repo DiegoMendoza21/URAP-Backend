@@ -531,7 +531,7 @@ descripciones están resumidas; el nombre es el del documento.
 | Producción de textos | Resumen, reseña, ensayo y otros textos que exigen sintetizar información y argumentar. |
 | Portafolio | Colección sistemática y organizada de los productos del estudiante, según las metas establecidas. |
 
-**Cómo se carga sin tocar el modelo** (el modelo se congela el 15 de noviembre): como un
+**Cómo se carga sin tocar el modelo** (el modelo se congela el 18 de noviembre): como un
 `parametro_sistema` de tipo JSON, por ejemplo `catalogo_estrategias_rf13`, que el Administrador
 puede editar. Las sugerencias de RF-13 son este catálogo más las estrategias que ya usaron otros
 proyectos del programa, que es lo que hoy está implementado.
@@ -542,7 +542,7 @@ proyectos del programa, que es lo que hoy está implementado.
 
 Esto sí es lo único que falta. No lo inventes ni lo deduzcas: mientras no llegue, la aplicación
 dice «no definido». La última columna dice si la respuesta cambiaría el modelo; como el modelo se
-congela el 15 de noviembre, lo que lo cambie y llegue después queda para después de la entrega.
+congela el 18 de noviembre, lo que lo cambie y llegue después queda para después de la entrega.
 
 | # | Pregunta | Mientras tanto | ¿Cambia el modelo? |
 |---|---|---|---|
