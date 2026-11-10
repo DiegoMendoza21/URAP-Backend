@@ -132,6 +132,16 @@ export class VariablesEntorno {
   ALMACENAMIENTO_DIRECTORIO?: string;
 }
 
+/**
+ * Parámetro de `DATABASE_URL` con la ruta del certificado de la CA del servidor MySQL. Es el
+ * nombre que usa el CLI de Prisma, así que la misma URL sirve para `migrate deploy` y para la
+ * API. Con él, la conexión va cifrada y verificada (NFR-006).
+ */
+export const PARAMETRO_CERTIFICADO_CA = 'sslcert';
+
+export const MENSAJE_BASE_SIN_TLS =
+  'En producción, DATABASE_URL debe terminar en ?sslcert=<ruta del certificado de la CA del servidor> (y sslaccept=strict): la conexión con la base va cifrada (NFR-006). Ver docs/despliegue.md.';
+
 /** Carpeta del almacenamiento documental cuando ALMACENAMIENTO_DIRECTORIO no está definida. */
 export const ALMACENAMIENTO_DIRECTORIO_DESARROLLO = 'almacenamiento';
 
@@ -143,11 +153,30 @@ export function validarVariablesEntorno(
   });
   const errores = validateSync(variables, { skipMissingProperties: false });
 
-  if (errores.length > 0) {
-    const detalle = errores
-      .flatMap((error) => Object.values(error.constraints ?? {}))
-      .join('; ');
-    throw new Error(`Variables de entorno inválidas: ${detalle}`);
+  const mensajes = errores.flatMap((error) =>
+    Object.values(error.constraints ?? {}),
+  );
+  if (
+    variables.NODE_ENV === Entorno.Produccion &&
+    typeof variables.DATABASE_URL === 'string' &&
+    !conCertificadoCa(variables.DATABASE_URL)
+  ) {
+    mensajes.push(MENSAJE_BASE_SIN_TLS);
+  }
+  if (mensajes.length > 0) {
+    throw new Error(`Variables de entorno inválidas: ${mensajes.join('; ')}`);
   }
   return variables;
+}
+
+/** Si la URL de la base trae la ruta del certificado de la CA (`sslcert`). */
+function conCertificadoCa(textoUrl: string): boolean {
+  try {
+    return Boolean(
+      new URL(textoUrl).searchParams.get(PARAMETRO_CERTIFICADO_CA),
+    );
+  } catch {
+    // Una URL mal formada ya la rechaza la regla de DATABASE_URL.
+    return true;
+  }
 }

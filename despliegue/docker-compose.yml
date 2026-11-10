@@ -1,0 +1,67 @@
+# Despliegue de URAP en un servidor con Docker (guía en docs/despliegue.md).
+#
+#   Internet ──HTTPS──▶ caddy ──▶ frontend (Next.js) ──▶ backend (API) ──TLS──▶ MySQL (RDS)
+#
+# Solo Caddy publica puertos: el navegador habla con Next.js, y Next.js reenvía al backend con
+# el token de la sesión. El backend no queda expuesto a internet.
+#
+# Se corre desde esta carpeta, con los dos repositorios clonados uno al lado del otro:
+#   /srv/urap/URAP-Backend    (este repositorio)
+#   /srv/urap/URAP-Frontend
+# Las variables van en despliegue/.env (plantilla en despliegue/.env.example), que nunca va al
+# repositorio.
+
+name: urap-despliegue
+
+services:
+  backend:
+    build:
+      context: ..
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PUERTO: '3001'
+      ALMACENAMIENTO_DIRECTORIO: /datos/almacenamiento
+      # Un balanceador delante de Next.js: Caddy (ver .env.example del backend).
+      PROXIES_CONFIABLES: '1'
+      CORS_ORIGENES: https://${DOMINIO:?Defina DOMINIO en despliegue/.env}
+    volumes:
+      # Evidencias y documentos soporte: en el disco del servidor, fuera del contenedor, para
+      # que no se borren en cada despliegue (NFR-007).
+      - ${URAP_ALMACENAMIENTO:-/srv/urap/almacenamiento}:/datos/almacenamiento
+      # Certificado de la CA de la base (Amazon RDS), para la conexión cifrada (NFR-006).
+      - ${URAP_CERTIFICADOS:-/srv/urap/certificados}:/certificados:ro
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ${URAP_FRONTEND:-../../URAP-Frontend}
+    environment:
+      NODE_ENV: production
+      URL_API: http://backend:3001/api
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  caddy:
+    # Obtiene y renueva solo el certificado HTTPS de DOMINIO (Let's Encrypt).
+    image: caddy:2.10.2-alpine
+    environment:
+      DOMINIO: ${DOMINIO:?Defina DOMINIO en despliegue/.env}
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_datos:/data
+      - caddy_configuracion:/config
+    depends_on:
+      - frontend
+    restart: unless-stopped
+
+volumes:
+  # Los certificados que emite Let's Encrypt: si se pierden, Caddy los vuelve a pedir.
+  caddy_datos:
+  caddy_configuracion:

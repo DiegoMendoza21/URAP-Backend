@@ -148,6 +148,13 @@ El tamaño máximo (`archivo_tamano_maximo_mb`) y los tipos permitidos de las ev
 se comprueba con el contenido del archivo, no con su nombre. Para pasar a Amazon S3 basta con
 otro adaptador de la interfaz `AlmacenamientoDocumental` (`src/documentos/almacenamiento/`).
 
+## Despliegue
+
+`docs/despliegue.md` explica cómo desplegar URAP con HTTPS en AWS: el frontend, la API y Caddy
+en un servidor EC2 con Docker (`Dockerfile` y `despliegue/`), y MySQL 8.4 en Amazon RDS con
+copias de seguridad diarias. En producción, la conexión con la base va cifrada: `DATABASE_URL`
+lleva la CA del servidor en `sslcert`, y sin ella la API no arranca.
+
 ## Pruebas y calidad
 
 ```bash

@@ -1,0 +1,12 @@
+# Proxy con HTTPS delante del frontend (NFR-006). Caddy pide y renueva el certificado de
+# DOMINIO con Let's Encrypt; para eso el dominio debe apuntar a la IP del servidor y los
+# puertos 80 y 443 deben estar abiertos.
+#
+# Caddy no confía en un X-Forwarded-For que mande el navegador: lo reemplaza por la IP real del
+# cliente. Next.js lo reenvía tal cual al backend, que confía en un proxy (PROXIES_CONFIABLES=1).
+
+{$DOMINIO} {
+	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000"
+	reverse_proxy frontend:3000
+}
