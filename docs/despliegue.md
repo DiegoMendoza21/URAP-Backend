@@ -107,7 +107,7 @@ sudo apt-get update
 sudo apt-get install -y docker.io docker-compose-v2 git
 sudo usermod -aG docker ubuntu
 sudo mkdir -p /srv/urap/almacenamiento /srv/urap/certificados
-sudo chown ubuntu:ubuntu /srv/urap
+sudo chown ubuntu:ubuntu /srv/urap /srv/urap/certificados
 # El backend corre como el usuario node (uid 1000) dentro del contenedor.
 sudo chown 1000:1000 /srv/urap/almacenamiento
 ```
