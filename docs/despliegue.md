@@ -151,6 +151,10 @@ GRANT ALL PRIVILEGES ON urap.* TO 'urap'@'%';
 EXIT;
 ```
 
+Cambie `CONTRASENA-DE-LA-APLICACION` por la contraseña nueva antes de ejecutar el `CREATE USER`:
+use solo letras y números, de 16 caracteres o más. Si ya creó el usuario con el texto de
+ejemplo, cámbiela con `ALTER USER 'urap'@'%' IDENTIFIED BY 'la-nueva';`.
+
 `REQUIRE SSL` hace que la base rechace cualquier conexión de ese usuario sin cifrar.
 
 ## 7. Variables
@@ -169,6 +173,17 @@ Complete:
   Si la contraseña tiene `@ : / ? #`, escríbalos codificados (`%40`, `%3A`, `%2F`, `%3F`, `%23`).
 - `JWT_SECRETO`: el resultado de `openssl rand -base64 48`.
 - `CONTRASENA_USUARIOS_DEMO`: solo si va a cargar los datos de demostración (paso 8).
+
+Cada línea ya trae el nombre de la variable y el `=`: escriba o pegue **solo el valor**
+después del `=`. Si pega la línea completa, queda `DATABASE_URL=DATABASE_URL=mysql://…` y
+`prisma migrate deploy` responde `P1013 … The scheme is not recognized`. Para revisarlo sin
+mostrar la contraseña:
+
+```bash
+grep -n 'DATABASE_URL' .env | sed -E 's#(urap:)[^@]*@#\1****@#' | cat -A
+```
+
+Debe salir una sola línea, que empiece por `DATABASE_URL=mysql://` y termine en `strict$`.
 
 La API no arranca si falta una variable o si `DATABASE_URL` no lleva `sslcert`: lo dice en el
 registro (`docker compose logs backend`).
