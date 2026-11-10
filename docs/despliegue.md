@@ -28,8 +28,9 @@ Los pasos 1 a 4 se hacen una sola vez en la consola de AWS. Los 5 a 8, por SSH e
 
 ## 0. Antes de empezar
 
-1. **Región.** Elija una y úsela para todo (arriba a la derecha en la consola). Esta guía usa
-   `us-east-1` (Norte de Virginia).
+1. **Región.** Cree la base y el servidor en la misma región (arriba a la derecha en la
+   consola), para que se vean entre sí. Las cuentas nuevas suelen quedar en una región fija;
+   esta guía usa `us-east-2` (Ohio) en los ejemplos, y cualquier otra sirve igual.
 2. **Alerta de gastos.** En *Billing and Cost Management → Budgets*, cree un presupuesto
    mensual pequeño (por ejemplo, 5 USD) con aviso al correo. El plan gratuito descuenta de los
    créditos, y la alerta avisa antes de que algo cueste.
@@ -55,7 +56,7 @@ Los pasos 1 a 4 se hacen una sola vez en la consola de AWS. Los 5 a 8, por SSH e
 | Backup | Automated backups **activadas**, con la mayor retención que permita la plantilla |
 
 Al terminar (tarda unos minutos), copie el **Endpoint** de la base: algo como
-`urap.abc123xyz.us-east-1.rds.amazonaws.com`.
+`urap.abc123xyz.us-east-2.rds.amazonaws.com`.
 
 ## 2. Servidor en EC2
 
