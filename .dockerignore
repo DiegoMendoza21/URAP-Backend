@@ -1,0 +1,16 @@
+# Lo que no entra a la imagen de Docker: se reconstruye adentro o no debe salir del equipo.
+node_modules
+dist
+coverage
+*.tsbuildinfo
+src/generated
+.env
+.env.*
+!.env.example
+despliegue/.env
+almacenamiento
+.git
+.github
+.claude
+docs
+test

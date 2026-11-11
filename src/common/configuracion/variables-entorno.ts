@@ -132,6 +132,23 @@ export class VariablesEntorno {
   ALMACENAMIENTO_DIRECTORIO?: string;
 }
 
+/**
+ * Parámetro de `DATABASE_URL` con la ruta del certificado de la CA del servidor MySQL. Es el
+ * nombre que usa el CLI de Prisma, así que la misma URL sirve para `migrate deploy` y para la
+ * API. Con él, la conexión va cifrada y verificada (NFR-006).
+ */
+export const PARAMETRO_CERTIFICADO_CA = 'sslcert';
+
+export const MENSAJE_BASE_SIN_TLS =
+  'En producción, DATABASE_URL debe terminar en ?sslcert=<ruta del certificado de la CA del servidor>&sslaccept=strict: la conexión con la base va cifrada y verificada (NFR-006). Ver docs/despliegue.md.';
+
+/**
+ * Sin el valor de la URL, que lleva la contraseña: este mensaje termina en el registro del
+ * contenedor.
+ */
+export const MENSAJE_URL_BASE_ILEGIBLE =
+  'DATABASE_URL no se puede leer: revise que la contraseña no tenga @ : / ? # sin codificar (%40, %3A, %2F, %3F, %23).';
+
 /** Carpeta del almacenamiento documental cuando ALMACENAMIENTO_DIRECTORIO no está definida. */
 export const ALMACENAMIENTO_DIRECTORIO_DESARROLLO = 'almacenamiento';
 
@@ -143,11 +160,36 @@ export function validarVariablesEntorno(
   });
   const errores = validateSync(variables, { skipMissingProperties: false });
 
-  if (errores.length > 0) {
-    const detalle = errores
-      .flatMap((error) => Object.values(error.constraints ?? {}))
-      .join('; ');
-    throw new Error(`Variables de entorno inválidas: ${detalle}`);
+  const mensajes = errores.flatMap((error) =>
+    Object.values(error.constraints ?? {}),
+  );
+  if (typeof variables.DATABASE_URL === 'string') {
+    // Una URL que no se puede leer se rechaza aquí, con un mensaje fijo: si llegara a
+    // `new URL()` en PrismaService, Node imprimiría el error con la URL y su contraseña.
+    if (!URL.canParse(variables.DATABASE_URL)) {
+      mensajes.push(MENSAJE_URL_BASE_ILEGIBLE);
+    } else if (
+      variables.NODE_ENV === Entorno.Produccion &&
+      !conTlsVerificado(variables.DATABASE_URL)
+    ) {
+      mensajes.push(MENSAJE_BASE_SIN_TLS);
+    }
+  }
+  if (mensajes.length > 0) {
+    throw new Error(`Variables de entorno inválidas: ${mensajes.join('; ')}`);
   }
   return variables;
+}
+
+/**
+ * Si la URL de la base pide la conexión cifrada y verificada: la ruta de la CA (`sslcert`) y
+ * `sslaccept=strict`. La API verifica el certificado aunque falte `sslaccept`, pero el CLI de
+ * Prisma (`migrate deploy`) usa la misma URL y, sin `strict`, acepta cualquier certificado.
+ */
+function conTlsVerificado(textoUrl: string): boolean {
+  const parametros = new URL(textoUrl).searchParams;
+  return (
+    Boolean(parametros.get(PARAMETRO_CERTIFICADO_CA)) &&
+    parametros.get('sslaccept') === 'strict'
+  );
 }
