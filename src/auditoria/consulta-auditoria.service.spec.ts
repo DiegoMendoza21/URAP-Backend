@@ -22,10 +22,7 @@ describe('ConsultaAuditoriaService · HU-14-02 y HU-14-03', () => {
     },
   };
   const auditoria = { registrar: vi.fn() };
-  const servicio = new ConsultaAuditoriaService(
-    prisma as unknown as PrismaService,
-    auditoria as unknown as AuditoriaService,
-  );
+  let servicio: ConsultaAuditoriaService;
 
   const fila = {
     id: 40,
@@ -52,6 +49,10 @@ describe('ConsultaAuditoriaService · HU-14-02 y HU-14-03', () => {
     };
 
   beforeEach(() => {
+    servicio = new ConsultaAuditoriaService(
+      prisma as unknown as PrismaService,
+      auditoria as unknown as AuditoriaService,
+    );
     prisma.auditoria.count.mockReset().mockResolvedValue(1);
     prisma.auditoria.findMany.mockReset().mockResolvedValue([fila]);
     prisma.auditoria.findUnique.mockReset().mockResolvedValue(fila);
@@ -288,6 +289,29 @@ describe('ConsultaAuditoriaService · HU-14-02 y HU-14-03', () => {
       expect(auditoria.registrar).not.toHaveBeenCalled();
     });
 
+    it('varias consultas simultáneas de la misma persona dejan una sola', async () => {
+      await comoUsuario(() =>
+        Promise.all([
+          servicio.listar(consulta()),
+          servicio.listar(consulta({ pagina: 2 })),
+          servicio.obtener(40),
+        ]),
+      );
+      await comoUsuario(() => servicio.listar(consulta()));
+
+      expect(prisma.auditoria.findFirst).toHaveBeenCalledTimes(1);
+      expect(auditoria.registrar).toHaveBeenCalledTimes(1);
+    });
+
+    it('pasada la hora vuelve a dejar constancia', async () => {
+      vi.useFakeTimers({ now: new Date('2026-11-10T15:00:00.000Z') });
+      await comoUsuario(() => servicio.listar(consulta()));
+      vi.setSystemTime(new Date('2026-11-10T16:00:01.000Z'));
+      await comoUsuario(() => servicio.listar(consulta()));
+
+      expect(auditoria.registrar).toHaveBeenCalledTimes(2);
+    });
+
     it('el detalle también la deja si no hay una reciente', async () => {
       await comoUsuario(() => servicio.obtener(40));
 
@@ -312,6 +336,11 @@ describe('ConsultaAuditoriaService · HU-14-02 y HU-14-03', () => {
       expect(pagina.elementos).toHaveLength(1);
       expect(registrarError).toHaveBeenCalledTimes(1);
       expect(auditoria.registrar).not.toHaveBeenCalled();
+
+      // Y la siguiente consulta lo vuelve a intentar.
+      prisma.auditoria.findFirst.mockResolvedValue(null);
+      await comoUsuario(() => servicio.listar(consulta()));
+      expect(auditoria.registrar).toHaveBeenCalledTimes(1);
     });
   });
 });

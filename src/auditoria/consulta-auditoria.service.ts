@@ -69,6 +69,13 @@ type RegistroLeido = Prisma.auditoriaGetPayload<{
 export class ConsultaAuditoriaService {
   private readonly logger = new Logger(ConsultaAuditoriaService.name);
 
+  /**
+   * Cuándo dejó este proceso la última constancia de cada persona. La pantalla hace varias
+   * peticiones casi a la vez: sin esto, todas comprobarían la base antes de que la primera
+   * escribiera y cada una dejaría su constancia.
+   */
+  private readonly ultimaConstancia = new Map<number, number>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditoria: AuditoriaService,
@@ -119,15 +126,24 @@ export class ConsultaAuditoriaService {
     if (idUsuario === undefined) {
       return;
     }
+    const ventanaMs = MINUTOS_ENTRE_CONSTANCIAS * 60 * 1000;
+    const ahora = Date.now();
+    if (
+      ahora - (this.ultimaConstancia.get(idUsuario) ?? -Infinity) <
+      ventanaMs
+    ) {
+      return;
+    }
+    // Se anota antes de consultar la base, para que las peticiones simultáneas no pasen.
+    this.ultimaConstancia.set(idUsuario, ahora);
     try {
+      // La base decide entre procesos y después de un reinicio.
       const reciente = await this.prisma.auditoria.findFirst({
         where: {
           id_usuario: idUsuario,
           accion: 'consulta_sensible' satisfies AccionAuditoria,
           tabla_afectada: ENTIDAD_CONSULTA_AUDITORIA,
-          fecha: {
-            gte: new Date(Date.now() - MINUTOS_ENTRE_CONSTANCIAS * 60 * 1000),
-          },
+          fecha: { gte: new Date(ahora - ventanaMs) },
         },
         select: { id: true },
       });
@@ -139,6 +155,8 @@ export class ConsultaAuditoriaService {
         'No se pudo comprobar la última constancia de consulta de la auditoría.',
         error instanceof Error ? error.stack : String(error),
       );
+      // Sin constancia escrita: la siguiente consulta lo vuelve a intentar.
+      this.ultimaConstancia.delete(idUsuario);
       return;
     }
     await this.auditoria.registrar({
