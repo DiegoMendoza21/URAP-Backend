@@ -4,7 +4,14 @@
 # Lleva todas las dependencias, también las de desarrollo, porque en el servidor se corren con
 # la misma imagen las migraciones (`prisma migrate deploy`) y el sembrado de datos.
 
-FROM node:26-bookworm-slim AS construccion
+# Base de las dos etapas: la imagen slim no trae openssl, y el CLI de Prisma lo busca para
+# elegir su motor. Sin él, `prisma migrate deploy` avisa que no detecta la versión de libssl.
+FROM node:26-bookworm-slim AS base
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
+
+FROM base AS construccion
 WORKDIR /app
 # Primero lo que necesita `npm ci`: su postinstall genera el cliente de Prisma desde el esquema.
 COPY package.json package-lock.json prisma7.config.ts ./
@@ -14,7 +21,7 @@ COPY tsconfig.json tsconfig.build.json nest-cli.json ./
 COPY src ./src
 RUN npm run build
 
-FROM node:26-bookworm-slim
+FROM base
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=construccion /app/package.json /app/package-lock.json /app/prisma7.config.ts ./
