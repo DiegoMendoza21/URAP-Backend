@@ -86,7 +86,7 @@ describe('Revisión y aprobación del proyecto docente (e2e) · RF-17, RF-18, HU
   const ruta = (id: number, sufijoRuta: string) =>
     `/proyectos-docentes/${id}/${sufijoRuta}`;
 
-  /** El rol del sistema con sus permisos de la Tabla 17: la autorización los exige (HU-01-03). */
+  /** El rol del sistema con sus permisos de la Tabla 11: la autorización los exige (HU-01-03). */
   async function rolPorNombre(nombre: string): Promise<number> {
     const existente = await prisma.rol.findUnique({ where: { nombre } });
     const id =

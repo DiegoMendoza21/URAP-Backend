@@ -154,7 +154,7 @@ describe('Opciones autorizadas por la matriz de permisos (e2e) · HU-01-03', () 
   });
 
   it('con dos roles, abre lo que permite cualquiera de los dos', async () => {
-    // `proyectos.crear` viene del Departamento: el Docente solo no lo tiene (Tabla 17 v2).
+    // `proyectos.crear` viene del Departamento: el Docente solo no lo tiene (Tabla 11, fila corregida).
     await con(tokenDosRoles)
       .get('/proyectos-docentes/asistente/programas')
       .expect(200);

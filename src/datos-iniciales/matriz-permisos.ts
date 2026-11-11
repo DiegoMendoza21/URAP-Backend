@@ -1,7 +1,7 @@
 import type { CodigoModulo, CodigoPermiso, NombreRol } from './catalogos.js';
 
 /**
- * Matriz inicial de permisos por rol: Producto 1, Tabla 17 «Matriz general de permisos por
+ * Matriz inicial de permisos por rol: Producto 1, Tabla 11 «Matriz general de permisos por
  * rol», copiada en docs/datos-institucionales.md (apartado 1). El seed la carga en
  * `rol_permiso` solo para los roles que todavía no tienen permisos; después la ajusta el
  * administrador (HU-02-06).
@@ -42,7 +42,7 @@ export const MATRIZ_PERMISOS_INICIAL: Record<
   'Docente responsable': {
     usuarios: '—',
     estructura: 'C',
-    // Tabla 17 v2: E y no R/E. El proyecto lo crea el Departamento (RF-08, RF-09, RF-10);
+    // Tabla 11, fila corregida: E y no R/E. El proyecto lo crea el Departamento (RF-08, RF-09, RF-10);
     // el Docente solo diligencia los que tiene asignados.
     proyectos: 'E', // propios
     plan_curso: 'R/E', // propios
@@ -109,7 +109,7 @@ const PERMISOS_POR_LETRA: Record<string, CodigoPermiso[]> = {
   '—': [],
 };
 
-/** Permisos de una celda de la Tabla 17, sin repetir. Lanza si la celda no es válida. */
+/** Permisos de una celda de la Tabla 11, sin repetir. Lanza si la celda no es válida. */
 export function permisosDeCelda(celda: CeldaMatriz): CodigoPermiso[] {
   const permisos = new Set<CodigoPermiso>();
   for (const letra of celda.split('/').map((parte) => parte.trim())) {

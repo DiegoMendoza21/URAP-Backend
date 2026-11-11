@@ -1,6 +1,6 @@
 # URAP — Objetivos del sistema y actores
 
-Generado desde `Requisitos_URAP_v1.2.xlsx`. El Excel es la fuente oficial; este markdown existe para consulta rápida durante el desarrollo.
+Generado desde `Requisitos_URAP_v1.4.xlsx`. El Excel es la fuente oficial; este markdown existe para consulta rápida durante el desarrollo.
 
 ## OBJ-01 — Centralizar la creación y la planeación del proyecto docente
 
@@ -94,8 +94,8 @@ Producto 1: Arquitectura de negocio URAP (regla RN-07)
 
 **Fuentes:** Formato FO-DO/PC-023 v00 «Medición de resultado de aprendizaje del programa por asignatura» (Valoración y Rúbrica)  
 Matriz de consistencia de resultados de aprendizaje del programa de Administración Industrial (RAP 1 a RAP 7)  
-Sesión de diseño con la dirección del programa  
-Ministerio de Educación Nacional (2021). Una mirada a los resultados de aprendizaje
+Sesión de diseño con una docente del programa  
+Ministerio de Educación Nacional (2022). Una mirada a los resultados de aprendizaje
 
 **Descripción:** Administrar el catálogo de RAP de cada programa académico, sus rúbricas de evaluación y la escala de valoración propia de cada programa, y conservar la trazabilidad entre los RAC declarados en cada proyecto docente, los RAP a los que contribuyen y las evidencias que respaldan su desarrollo.
 

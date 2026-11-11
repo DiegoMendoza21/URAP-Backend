@@ -39,14 +39,14 @@ export type NombreRol = (typeof ROLES)[number]['nombre'];
 
 /**
  * Módulos y permisos de la matriz de RF-03, con los códigos del modelo de datos (DBML v2.5).
- * La asignación inicial de permisos a cada rol está en matriz-permisos.ts (Tabla 17 del
+ * La asignación inicial de permisos a cada rol está en matriz-permisos.ts (Tabla 11 del
  * Producto 1); el administrador la ajusta después con HU-02-06.
  */
 export const MODULOS = [
   { codigo: 'usuarios', nombre: 'Usuarios y roles', orden: 1 },
   { codigo: 'estructura', nombre: 'Estructura académica', orden: 2 },
   { codigo: 'proyectos', nombre: 'Proyectos docentes', orden: 3 },
-  // Producto 1, Tabla 17: el plan de curso tiene su propia fila en la matriz de permisos
+  // Producto 1, Tabla 11: el plan de curso tiene su propia fila en la matriz de permisos
   // (el Departamento registra el proyecto docente, pero solo aprueba el plan de curso).
   { codigo: 'plan_curso', nombre: 'Plan de curso', orden: 4 },
   { codigo: 'rap', nombre: 'Resultados de aprendizaje', orden: 5 },

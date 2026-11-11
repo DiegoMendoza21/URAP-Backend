@@ -66,7 +66,7 @@ describe('Diligenciamiento del proyecto docente (e2e) · RF-11, RF-12, HU-06-01 
     };
   };
 
-  /** El rol del sistema con sus permisos de la Tabla 17: la autorización los exige (HU-01-03). */
+  /** El rol del sistema con sus permisos de la Tabla 11: la autorización los exige (HU-01-03). */
   async function rolPorNombre(nombre: string): Promise<number> {
     const existente = await prisma.rol.findUnique({ where: { nombre } });
     const id =

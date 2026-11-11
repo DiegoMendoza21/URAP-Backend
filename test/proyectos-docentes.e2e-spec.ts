@@ -63,7 +63,7 @@ describe('Proyectos docentes (e2e) · RF-08, HU-05-01 a HU-05-03', () => {
         .send(cuerpo),
   });
 
-  /** El rol del sistema con sus permisos de la Tabla 17: la autorización los exige (HU-01-03). */
+  /** El rol del sistema con sus permisos de la Tabla 11: la autorización los exige (HU-01-03). */
   async function rolPorNombre(nombre: string): Promise<number> {
     const existente = await prisma.rol.findUnique({ where: { nombre } });
     const id =
@@ -632,7 +632,7 @@ describe('Proyectos docentes (e2e) · RF-08, HU-05-01 a HU-05-03', () => {
     });
 
     it('el Estudiante entra a la bandeja pero no ve proyectos: solo verá los publicados (RF-27)', async () => {
-      // Tabla 17: el Estudiante tiene «C publicados» en proyectos docentes (HU-01-03). La
+      // Tabla 11: el Estudiante tiene «C publicados» en proyectos docentes (HU-01-03). La
       // publicación todavía no existe, así que el alcance del servicio no le muestra ninguno.
       const { body } = await como('estudiante')
         .get('/proyectos-docentes')

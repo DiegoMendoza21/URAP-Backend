@@ -92,7 +92,7 @@ describe('Registro de clase (e2e) · RF-20 y RF-22, HU-08-04 y HU-09-02', () => 
   const rutaSesion = (idProyecto: number, idSesion: number) =>
     `/proyectos-docentes/${idProyecto}/sesiones/${idSesion}`;
 
-  /** El rol del sistema con sus permisos de la Tabla 17: la autorización los exige (HU-01-03). */
+  /** El rol del sistema con sus permisos de la Tabla 11: la autorización los exige (HU-01-03). */
   async function rolPorNombre(nombre: string): Promise<number> {
     const existente = await prisma.rol.findUnique({ where: { nombre } });
     const id =
