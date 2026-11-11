@@ -56,7 +56,6 @@ describe('Datos iniciales', () => {
     ['parámetros', PARAMETROS.map(({ clave }) => clave)],
     ['planes de estudio', PLANES_DE_ESTUDIO.map(({ codigo }) => codigo)],
     ['asignaturas del plan 1702', PLAN_1702.map(({ nombre }) => nombre)],
-    ['asignaturas del plan 2502', PLAN_2502.map(({ nombre }) => nombre)],
     [
       'códigos SMA del plan 1702',
       PLAN_1702.flatMap(({ codigo_interno }) => codigo_interno ?? []),
@@ -68,6 +67,36 @@ describe('Datos iniciales', () => {
     ['usuarios de demostración', USUARIOS_DEMO.map(({ correo }) => correo)],
   ])('no repite códigos en %s', (_, codigos) => {
     expect(repetidos(codigos)).toEqual([]);
+  });
+
+  it('en el plan 2502 solo se repite un nombre: las cuatro «Formación humana», con códigos distintos', () => {
+    // La malla del SMA trae cuatro asignaturas con ese nombre y no dice cuál es cuál. Cualquier
+    // otro nombre repetido es una fila copiada por error.
+    const nombres = PLAN_2502.map(({ nombre }) => nombre);
+    expect([...new Set(repetidos(nombres))]).toEqual(['Formación humana']);
+    expect(
+      PLAN_2502.filter(({ nombre }) => nombre === 'Formación humana').map(
+        ({ semestre, codigo_interno }) => [semestre, codigo_interno],
+      ),
+    ).toEqual([
+      [5, 'FC72731'],
+      [7, 'FC72737'],
+      [7, 'FC72738'],
+      [8, 'FC72739'],
+    ]);
+  });
+
+  it('un nombre solo se repite dentro de un plan entre asignaturas con código', () => {
+    // El sembrado busca por código a la que lo tiene y por nombre a la que no: una asignatura
+    // sin código con un nombre repetido no se podría distinguir de la otra.
+    for (const { asignaturas } of PLANES_DE_ESTUDIO) {
+      const nombres = asignaturas.map(({ nombre }) => nombre);
+      for (const { nombre, codigo_interno } of asignaturas) {
+        if (nombres.filter((otro) => otro === nombre).length > 1) {
+          expect(codigo_interno).toEqual(expect.any(String));
+        }
+      }
+    }
   });
 
   it('solo deja editar el proyecto en diligenciamiento o devuelto (RF-17)', () => {
@@ -113,7 +142,7 @@ describe('Datos iniciales', () => {
       ]),
     ).toEqual([
       ['1702', 69],
-      ['2502', 36],
+      ['2502', 74],
     ]);
   });
 
@@ -124,12 +153,139 @@ describe('Datos iniciales', () => {
     ]);
   });
 
-  it('trae las 36 asignaturas del plan 2502 en los semestres 1 a 5, con código y créditos', () => {
+  it('trae las 74 asignaturas del plan 2502 en los semestres 1 a 10, con código y créditos', () => {
     const semestres = new Set(PLAN_2502.map(({ semestre }) => semestre));
-    expect([...semestres].sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5]);
+    expect([...semestres].sort((a, b) => a - b)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+    ]);
     for (const { codigo_interno, creditos } of PLAN_2502) {
       expect(codigo_interno).toEqual(expect.any(String));
       expect(creditos).toBeGreaterThan(0);
+    }
+  });
+
+  it('cuadra los créditos del plan 2502 por semestre: 203 con las dos líneas de electivas', () => {
+    const porSemestre = Array.from({ length: 10 }, (_, i) =>
+      PLAN_2502.filter(({ semestre }) => semestre === i + 1).reduce(
+        (suma, { creditos }) => suma + (creditos ?? 0),
+        0,
+      ),
+    );
+    expect(porSemestre).toEqual([19, 20, 19, 19, 19, 20, 19, 22, 30, 16]);
+    expect(porSemestre.reduce((a, b) => a + b, 0)).toBe(203);
+  });
+
+  describe('asignaturas del plan 2502 que salen de la malla del SMA', () => {
+    /** FC72731 del semestre 5 y los semestres 6 a 10 completos. */
+    const deLaMalla = PLAN_2502.filter(
+      ({ semestre, codigo_interno }) =>
+        semestre >= 6 || codigo_interno === 'FC72731',
+    );
+    const conCodigo = (...codigos: string[]) =>
+      PLAN_2502.filter(({ codigo_interno }) =>
+        codigos.includes(codigo_interno ?? ''),
+      );
+
+    it('son 38, sin horas, sin prerrequisitos y sin mapeo a RAP', () => {
+      expect(deLaMalla).toHaveLength(38);
+      for (const { ficha, raps } of deLaMalla) {
+        expect(ficha).toBeUndefined();
+        expect(raps).toEqual([]);
+      }
+    });
+
+    it('las de los semestres 1 a 5 que ya estaban no cambian', () => {
+      const anteriores = PLAN_2502.filter((fila) => !deLaMalla.includes(fila));
+      expect(anteriores).toHaveLength(36);
+      // Sin formato diligenciado siguen sin componente ni tipo de curso.
+      for (const { ficha, componente, tipo_curso } of anteriores) {
+        if (!ficha) {
+          expect(componente).toBeUndefined();
+          expect(tipo_curso).toBeUndefined();
+        }
+      }
+      expect(conCodigo('NC2505')[0]?.ficha?.componente).toBe('PROFESIONAL');
+    });
+
+    it('las electivas I a VII llevan el nombre de la malla y son de tipo «Electivo»', () => {
+      const electivas = deLaMalla.filter(
+        ({ tipo_curso }) => tipo_curso === 'Electivo',
+      );
+      expect(electivas.map(({ codigo_interno }) => codigo_interno)).toEqual(
+        Array.from(
+          { length: 14 },
+          (_, i) => `IX242${String(7 + i).padStart(2, '0')}`,
+        ),
+      );
+      for (const { nombre, creditos, componente } of electivas) {
+        expect(nombre).toMatch(
+          /^Electiva (I|II|III|IV|V|VI|VII) - (GA|GP|GPO)$/,
+        );
+        expect(creditos).toBe(3);
+        expect(componente).toBe('PROFESIONAL');
+      }
+    });
+
+    it('Electiva VIII va con su nombre, 5 créditos y sin componente ni tipo de curso', () => {
+      expect(conCodigo('IX24221', 'IX24228')).toEqual([
+        {
+          semestre: 10,
+          codigo_interno: 'IX24221',
+          nombre: 'Electiva VIII - GA',
+          creditos: 5,
+          raps: [],
+        },
+        {
+          semestre: 10,
+          codigo_interno: 'IX24228',
+          nombre: 'Electiva VIII - GP',
+          creditos: 5,
+          raps: [],
+        },
+      ]);
+    });
+
+    it('las cuatro «Formación humana» son complementarias y no llevan número', () => {
+      const formacion = conCodigo('FC72731', 'FC72737', 'FC72738', 'FC72739');
+      expect(formacion).toHaveLength(4);
+      for (const { nombre, creditos, componente, tipo_curso } of formacion) {
+        expect(nombre).toBe('Formación humana');
+        expect(creditos).toBe(2);
+        expect(componente).toBe('COMPLEMENTARIO');
+        expect(tipo_curso).toBeUndefined();
+      }
+    });
+
+    it('las demás traen el componente del plan de estudios público', () => {
+      const componentes = new Map<string, number>();
+      for (const { componente } of deLaMalla) {
+        const clave = componente ?? 'sin componente';
+        componentes.set(clave, (componentes.get(clave) ?? 0) + 1);
+      }
+      // 31 profesionales (17 obligatorias y 14 electivas), Inglés VI, cuatro de formación
+      // humana y las dos Electiva VIII.
+      expect(Object.fromEntries(componentes)).toEqual({
+        PROFESIONAL: 31,
+        BASICO: 1,
+        COMPLEMENTARIO: 4,
+        'sin componente': 2,
+      });
+      expect(conCodigo('FN24038')[0]).toMatchObject({
+        nombre: 'Inglés VI',
+        componente: 'BASICO',
+      });
+    });
+  });
+
+  it('una asignatura con ficha lleva el componente y el tipo de curso en la ficha, no fuera', () => {
+    for (const { ficha, componente, tipo_curso } of [
+      ...PLAN_1702,
+      ...PLAN_2502,
+    ]) {
+      if (ficha) {
+        expect(componente).toBeUndefined();
+        expect(tipo_curso).toBeUndefined();
+      }
     }
   });
 
@@ -464,13 +620,16 @@ describe('Datos institucionales de la versión 2 del documento', () => {
     }
   });
 
-  it('solo pone prerrequisitos que están en el mismo plan (HU-03-04)', () => {
+  it('solo pone prerrequisitos que están en el mismo plan, una sola vez (HU-03-04)', () => {
     for (const { asignaturas } of PLANES_DE_ESTUDIO) {
       const nombres = asignaturas.map(({ nombre }) => nombre);
       for (const { ficha } of asignaturas) {
-        expect(nombres).toEqual(
-          expect.arrayContaining(ficha?.prerrequisitos ?? []),
-        );
+        for (const requerida of ficha?.prerrequisitos ?? []) {
+          // Los prerrequisitos van por nombre: uno repetido en el plan sería ambiguo.
+          expect(nombres.filter((nombre) => nombre === requerida)).toEqual([
+            requerida,
+          ]);
+        }
       }
     }
   });

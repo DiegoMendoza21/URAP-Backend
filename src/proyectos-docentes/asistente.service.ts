@@ -65,7 +65,9 @@ export class AsistenteService {
   /**
    * Paso 2: asignaturas activas del programa, de todos sus planes de estudio. Cada una lleva
    * su plan, porque la misma asignatura puede estar en dos planes con códigos distintos
-   * (modelo v2.5). Van ordenadas por plan y, dentro de él, por semestre.
+   * (modelo v2.5). Van ordenadas por plan y, dentro de él, por semestre y por nombre. Dos con
+   * el mismo nombre en un semestre (las «Formación humana» del 2502) van por código, para que
+   * no cambien de lugar de una consulta a otra.
    */
   async asignaturas(
     idUsuario: number,
@@ -79,6 +81,7 @@ export class AsistenteService {
         { plan_estudio: { codigo: 'asc' } },
         { semestre: 'asc' },
         { nombre: 'asc' },
+        { codigo_interno: 'asc' },
       ],
     });
     return filas.map((asignatura) => ({

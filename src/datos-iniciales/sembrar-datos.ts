@@ -18,8 +18,10 @@ import {
 } from './demostracion.js';
 import { permisosInicialesDe } from './matriz-permisos.js';
 import {
+  type AsignaturaPlan,
   ESCALA,
   FACULTAD,
+  type PlanEstudioSemilla,
   PLANES_DE_ESTUDIO,
   PROGRAMA,
   RAPS,
@@ -380,56 +382,50 @@ async function sembrarRubrica(
  * Planes de estudio del programa (modelo v2.5), sus asignaturas, el mapeo curricular con los
  * RAP y, donde el programa la entregó, la ficha de la asignatura con sus prerrequisitos (RF-04,
  * RF-05, RF-08 p5). Cada plan tiene su propia fila de cada asignatura: Comportamiento
- * organizacional queda dos veces, FP15503 en el 1702 e IX24193 en el 2502. Muchas asignaturas
- * no tienen código SMA, así que el índice único (id_plan_estudio, codigo_interno) no evita
- * duplicados: cada asignatura se busca por su nombre dentro de su plan antes de crearla. Los
- * prerrequisitos se buscan también dentro del mismo plan (HU-03-04).
+ * organizacional queda dos veces, FP15503 en el 1702 e IX24193 en el 2502.
+ *
+ * Una asignatura que ya está sembrada no se crea otra vez ni se modifica (`buscarAsignatura`).
+ * Los prerrequisitos se buscan por nombre dentro del mismo plan (HU-03-04).
  */
-async function sembrarPlanesDeEstudio(
+export async function sembrarPlanesDeEstudio(
   tx: Transaccion,
   idPrograma: number,
   idsRap: ReadonlyMap<number, number>,
+  planes: readonly PlanEstudioSemilla[] = PLANES_DE_ESTUDIO,
 ): Promise<void> {
-  for (const { codigo, nombre, asignaturas } of PLANES_DE_ESTUDIO) {
+  for (const { codigo, nombre, asignaturas } of planes) {
     const plan = await tx.plan_estudio.upsert({
       where: { id_programa_codigo: { id_programa: idPrograma, codigo } },
       create: { id_programa: idPrograma, codigo, nombre, estado: 'vigente' },
       update: {},
     });
 
-    const idsAsignatura = new Map<string, number>();
-    for (const {
-      nombre: nombreAsignatura,
-      semestre,
-      raps,
-      codigo_interno,
-      creditos,
-      ficha,
-    } of asignaturas) {
-      const datosFicha = ficha && {
-        componente: ficha.componente,
-        tipo_curso: ficha.tipo_curso,
-        horas_tde: ficha.horas_tde,
-        horas_tdp: ficha.horas_tdp,
-        horas_ti: ficha.horas_ti,
-        horas_totales: ficha.horas_tde + ficha.horas_tdp + ficha.horas_ti,
-      };
+    /** Id de cada asignatura de la lista, en su mismo orden. */
+    const ids: number[] = [];
+    for (const semilla of asignaturas) {
+      const { ficha } = semilla;
       const asignatura =
-        (await tx.asignatura.findFirst({
-          where: { id_plan_estudio: plan.id, nombre: nombreAsignatura },
-        })) ??
+        (await buscarAsignatura(tx, plan.id, semilla)) ??
         (await tx.asignatura.create({
           data: {
             id_plan_estudio: plan.id,
-            nombre: nombreAsignatura,
-            semestre,
-            codigo_interno,
-            creditos,
-            ...datosFicha,
+            nombre: semilla.nombre,
+            semestre: semilla.semestre,
+            codigo_interno: semilla.codigo_interno,
+            creditos: semilla.creditos,
+            // Con ficha, el componente y el tipo de curso son los del formato diligenciado.
+            componente: ficha?.componente ?? semilla.componente,
+            tipo_curso: ficha?.tipo_curso ?? semilla.tipo_curso,
+            ...(ficha && {
+              horas_tde: ficha.horas_tde,
+              horas_tdp: ficha.horas_tdp,
+              horas_ti: ficha.horas_ti,
+              horas_totales: ficha.horas_tde + ficha.horas_tdp + ficha.horas_ti,
+            }),
           },
         }));
-      idsAsignatura.set(nombreAsignatura, asignatura.id);
-      for (const numero of raps) {
+      ids.push(asignatura.id);
+      for (const numero of semilla.raps) {
         const idRap = obtener(idsRap, numero, `RAP ${numero}`);
         await tx.asignatura_rap.upsert({
           where: {
@@ -444,19 +440,35 @@ async function sembrarPlanesDeEstudio(
       }
     }
 
-    for (const { nombre: nombreAsignatura, ficha } of asignaturas) {
+    // Un nombre puede repetirse en el plan (las cuatro «Formación humana» del 2502): un
+    // prerrequisito escrito con ese nombre no diría cuál de ellas es.
+    const idsPorNombre = new Map<string, number[]>();
+    for (const [i, { nombre: nombreAsignatura }] of asignaturas.entries()) {
+      idsPorNombre.set(nombreAsignatura, [
+        ...(idsPorNombre.get(nombreAsignatura) ?? []),
+        ids[i],
+      ]);
+    }
+    for (const [
+      i,
+      { nombre: nombreAsignatura, ficha },
+    ] of asignaturas.entries()) {
       for (const requerida of ficha?.prerrequisitos ?? []) {
+        const candidatas = idsPorNombre.get(requerida) ?? [];
+        if (candidatas.length === 0) {
+          throw new Error(
+            `No se encontró «${requerida}», prerrequisito de «${nombreAsignatura}», en el plan ${codigo}.`,
+          );
+        }
+        if (candidatas.length > 1) {
+          throw new Error(
+            `El prerrequisito «${requerida}» de «${nombreAsignatura}» es ambiguo: el plan ` +
+              `${codigo} tiene ${candidatas.length} asignaturas con ese nombre.`,
+          );
+        }
         const clave = {
-          id_asignatura: obtener(
-            idsAsignatura,
-            nombreAsignatura,
-            nombreAsignatura,
-          ),
-          id_asignatura_requerida: obtener(
-            idsAsignatura,
-            requerida,
-            `${requerida} en el plan ${codigo}`,
-          ),
+          id_asignatura: ids[i],
+          id_asignatura_requerida: candidatas[0],
           tipo: 'prerrequisito',
         };
         await tx.asignatura_requisito.upsert({
@@ -467,6 +479,40 @@ async function sembrarPlanesDeEstudio(
       }
     }
   }
+}
+
+/**
+ * La fila ya sembrada de una asignatura de la lista, o nada si hay que crearla.
+ *
+ * - Con código del SMA se busca por el código, que es único dentro del plan (el índice único de
+ *   la tabla): el nombre puede repetirse, como en las cuatro «Formación humana» del 2502.
+ * - Si esa asignatura se sembró antes de conocer su código, se reconoce por el nombre entre las
+ *   que no tienen código: así, el día que el programa entregue un código que faltaba, volver a
+ *   sembrar no la duplica.
+ * - Sin código (muchas del 1702) se busca por el nombre. `datos.spec.ts` comprueba que un
+ *   nombre solo se repita entre asignaturas con código.
+ */
+async function buscarAsignatura(
+  tx: Transaccion,
+  idPlan: number,
+  { nombre, codigo_interno }: AsignaturaPlan,
+): Promise<{ id: number } | null> {
+  if (!codigo_interno) {
+    return tx.asignatura.findFirst({
+      where: { id_plan_estudio: idPlan, nombre },
+      select: { id: true },
+    });
+  }
+  return (
+    (await tx.asignatura.findFirst({
+      where: { id_plan_estudio: idPlan, codigo_interno },
+      select: { id: true },
+    })) ??
+    tx.asignatura.findFirst({
+      where: { id_plan_estudio: idPlan, nombre, codigo_interno: null },
+      select: { id: true },
+    })
+  );
 }
 
 interface ContextoUsuarios {

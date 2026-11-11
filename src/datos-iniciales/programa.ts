@@ -68,14 +68,19 @@ export const RAPS = [
 /** Horas de trabajo por crédito académico (glosario: 2 créditos = 96 horas). */
 export const HORAS_POR_CREDITO = 48;
 
+/** Los tres valores de `asignatura.componente` (DBML). El básico es uno solo. */
+export type ComponenteAsignatura = 'BASICO' | 'PROFESIONAL' | 'COMPLEMENTARIO';
+
+export type TipoCurso = 'Obligatorio' | 'Electivo';
+
 /**
  * Datos del punto 1 del proyecto docente que el programa entregó en sus formatos FO-DO/PC-001
  * (docs/datos-institucionales.md, apartado 4). Son los que el asistente de RF-08 completa en el
  * paso 5, junto con los créditos. Componente y tipo de curso usan los valores del DBML.
  */
 export interface FichaAsignatura {
-  componente: 'BASICO' | 'PROFESIONAL' | 'COMPLEMENTARIO';
-  tipo_curso: 'Obligatorio' | 'Electivo';
+  componente: ComponenteAsignatura;
+  tipo_curso: TipoCurso;
   horas_tde: number;
   horas_tdp: number;
   horas_ti: number;
@@ -93,6 +98,12 @@ export interface AsignaturaPlan {
   codigo_interno?: string;
   /** Créditos, cuando el programa los entregó. */
   creditos?: number;
+  /**
+   * Componente y tipo de curso de una asignatura sin ficha: se conocen por el plan de estudios
+   * público, que no trae las horas. Con `ficha`, los dos datos van en ella y estos se omiten.
+   */
+  componente?: ComponenteAsignatura;
+  tipo_curso?: TipoCurso;
   ficha?: FichaAsignatura;
 }
 
@@ -440,13 +451,53 @@ function delPlan2502(
   codigo_interno: string,
   nombre: string,
   creditos: number,
+  componente?: ComponenteAsignatura,
+  tipo_curso?: TipoCurso,
 ): AsignaturaPlan {
-  return { semestre, codigo_interno, nombre, creditos, raps: [] };
+  return {
+    semestre,
+    codigo_interno,
+    nombre,
+    creditos,
+    raps: [],
+    ...(componente && { componente }),
+    ...(tipo_curso && { tipo_curso }),
+  };
+}
+
+/** Una electiva del plan 2502: componente profesional y tipo de curso «Electivo». */
+function electiva2502(
+  semestre: number,
+  codigo_interno: string,
+  nombre: string,
+): AsignaturaPlan {
+  return delPlan2502(
+    semestre,
+    codigo_interno,
+    nombre,
+    3,
+    'PROFESIONAL',
+    'Electivo',
+  );
 }
 
 /**
- * RF-04: plan 2502, tal como lo muestra la programación académica 2026-1. Solo semestres 1 a 5,
- * porque su primera cohorte todavía no llega al 6: 36 asignaturas con código y créditos.
+ * RF-04: plan 2502 completo, 74 asignaturas en diez semestres con código y créditos
+ * (docs/datos-institucionales.md, apartado 4). Los semestres 1 a 5 son los de la programación
+ * académica 2026-1; FC72731 y los semestres 6 a 10 salen de la malla del SMA, con el nombre y el
+ * componente del plan de estudios público. Por semestre son 19, 20, 19, 19, 19, 20, 19, 22, 30
+ * y 16 créditos: 203, contando las dos líneas de cada electiva.
+ *
+ * Lo que hay que saber de las filas de la malla:
+ * - Las electivas llevan el nombre de la malla («Electiva II - GA»): falta que el programa
+ *   confirme cuál línea es cuál antes de ponerles el nombre del plan público.
+ * - «Formación humana» son cuatro asignaturas con el mismo nombre y códigos distintos. La malla
+ *   no dice cuál es cuál, así que no llevan número: se distinguen por el código.
+ * - Electiva VIII no está en el plan público: va sin componente ni tipo de curso.
+ * - Ninguna fuente trae las horas ni los prerrequisitos de estas asignaturas: quedan vacíos, y
+ *   sus proyectos docentes salen con información incompleta (RF-08 p7).
+ * - Las asignaturas de los semestres 1 a 5 que no tienen formato diligenciado siguen sin
+ *   componente: cargarlo cambiaría filas que ya están sembradas.
  *
  * Sin mapeo a RAP: el programa todavía no lo entrega, así que sus asignaturas no tienen filas en
  * `asignatura_rap` y el asistente de RF-08 deja elegir entre todos los RAP del programa. Que el
@@ -521,13 +572,95 @@ export const PLAN_2502: AsignaturaPlan[] = [
     ...delPlan2502(5, 'IX24193', 'Comportamiento organizacional', 2),
     ficha: FICHA_COMPORTAMIENTO_ORGANIZACIONAL,
   },
+  delPlan2502(5, 'FC72731', 'Formación humana', 2, 'COMPLEMENTARIO'),
+  // Semestre 6
+  delPlan2502(6, 'IX24194', 'Procesos de manufactura', 4, 'PROFESIONAL'),
+  delPlan2502(6, 'IX24195', 'Estudio del trabajo', 3, 'PROFESIONAL'),
+  delPlan2502(
+    6,
+    'IX24197',
+    'Finanzas y negocios internacionales',
+    3,
+    'PROFESIONAL',
+  ),
+  delPlan2502(6, 'IX24198', 'Mercados', 3, 'PROFESIONAL'),
+  delPlan2502(6, 'IX24199', 'Procesos industriales', 3, 'PROFESIONAL'),
+  delPlan2502(6, 'IX24200', 'Legislación laboral', 2, 'PROFESIONAL'),
+  delPlan2502(6, 'FN24038', 'Inglés VI', 2, 'BASICO'),
+  // Semestre 7
+  delPlan2502(7, 'IX24201', 'Emprendimiento e innovación', 3, 'PROFESIONAL'),
+  delPlan2502(
+    7,
+    'IX24202',
+    'Planeación y organización de la producción',
+    3,
+    'PROFESIONAL',
+  ),
+  delPlan2502(7, 'IX24203', 'Investigación de operaciones I', 3, 'PROFESIONAL'),
+  delPlan2502(7, 'IX24204', 'Gestión del talento humano', 2, 'PROFESIONAL'),
+  delPlan2502(
+    7,
+    'IX24205',
+    'Gestión de la cadena de suministro',
+    2,
+    'PROFESIONAL',
+  ),
+  delPlan2502(
+    7,
+    'IX24206',
+    'Seguridad y salud en el trabajo',
+    2,
+    'PROFESIONAL',
+  ),
+  delPlan2502(7, 'FC72737', 'Formación humana', 2, 'COMPLEMENTARIO'),
+  delPlan2502(7, 'FC72738', 'Formación humana', 2, 'COMPLEMENTARIO'),
+  // Semestre 8
+  delPlan2502(8, 'IX24222', 'Gestión de la calidad', 3, 'PROFESIONAL'),
+  delPlan2502(8, 'IX24224', 'Control de la producción', 3, 'PROFESIONAL'),
+  // La malla empieza «Formulación, ge…»: se dejó el nombre del plan de estudios público.
+  delPlan2502(
+    8,
+    'IX24225',
+    'Formulación y evaluación de proyectos',
+    3,
+    'PROFESIONAL',
+  ),
+  delPlan2502(
+    8,
+    'IX24226',
+    'Investigación de operaciones II',
+    3,
+    'PROFESIONAL',
+  ),
+  delPlan2502(8, 'IX24227', 'Gestión ambiental', 2, 'PROFESIONAL'),
+  delPlan2502(8, 'FC72739', 'Formación humana', 2, 'COMPLEMENTARIO'),
+  electiva2502(8, 'IX24207', 'Electiva I - GA'),
+  electiva2502(8, 'IX24208', 'Electiva I - GP'),
+  // Semestre 9
+  electiva2502(9, 'IX24209', 'Electiva II - GA'),
+  electiva2502(9, 'IX24210', 'Electiva II - GP'),
+  electiva2502(9, 'IX24211', 'Electiva III - GA'),
+  electiva2502(9, 'IX24212', 'Electiva III - GP'),
+  electiva2502(9, 'IX24213', 'Electiva IV - GA'),
+  electiva2502(9, 'IX24214', 'Electiva IV - GP'),
+  electiva2502(9, 'IX24215', 'Electiva V - GA'),
+  // La malla la llama «GPO», no «GP» como a las demás: se carga como viene.
+  electiva2502(9, 'IX24216', 'Electiva V - GPO'),
+  electiva2502(9, 'IX24217', 'Electiva VI - GA'),
+  electiva2502(9, 'IX24218', 'Electiva VI - GP'),
+  // Semestre 10
+  electiva2502(10, 'IX24219', 'Electiva VII - GA'),
+  electiva2502(10, 'IX24220', 'Electiva VII - GP'),
+  // Electiva VIII vale 5 créditos y no está en el plan público: sin componente.
+  delPlan2502(10, 'IX24221', 'Electiva VIII - GA', 5),
+  delPlan2502(10, 'IX24228', 'Electiva VIII - GP', 5),
 ];
 
 /** Código del plan 1702: el del mapeo a RAP y el de los proyectos de demostración. */
 export const CODIGO_PLAN_1702 = '1702';
 
 /**
- * Los dos planes vigentes del programa en 2026-1 (docs/datos-institucionales.md, apartado 4).
+ * Los dos planes vigentes del programa (docs/datos-institucionales.md, apartado 4).
  * Los dos quedan «vigente»: la regla de transición entre ellos todavía no la entrega el programa.
  */
 export const PLANES_DE_ESTUDIO: PlanEstudioSemilla[] = [
