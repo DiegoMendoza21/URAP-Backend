@@ -47,7 +47,9 @@ export class AuditoriaController {
     summary:
       'Registros de auditoría, del más reciente al más antiguo, con filtros (HU-14-02)',
     description:
-      'Filtra por rango de fechas, usuario, acción y entidad. Con la entidad y el ' +
+      'Filtra por rango de fechas, usuario, acción y entidad. La acción se pide con ' +
+      '`evento`, en palabras del dominio (inicio_sesion, devolucion…), que es como llega ' +
+      'en cada registro, o con `accion`, en las del modelo de datos. Con la entidad y el ' +
       'identificador del registro devuelve el historial completo de ese registro (HU-14-03). ' +
       'La consulta deja su propia constancia en auditoría, como mucho una por persona y por hora.',
   })

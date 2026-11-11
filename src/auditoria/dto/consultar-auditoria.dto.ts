@@ -15,6 +15,7 @@ import {
   ACCIONES_AUDITORIA,
   type AccionAuditoria,
 } from '../auditoria.service.js';
+import { type EventoDeAuditoria, EVENTOS_DE_AUDITORIA } from '../eventos.js';
 
 export const TAMANO_PAGINA_POR_DEFECTO = 20;
 export const TAMANO_PAGINA_MAXIMO = 100;
@@ -30,7 +31,11 @@ function recortar({ value }: { value: unknown }): unknown {
 
 const PATRON_FECHA = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Filtros de la consulta de auditoría (HU-14-02; RF-29, p4): usuario, fecha, acción y entidad. */
+/**
+ * Filtros de la consulta de auditoría (HU-14-02; RF-29, p4): usuario, fecha, acción y entidad.
+ * La acción se puede pedir con el vocabulario del modelo (`accion`) o con el del dominio
+ * (`evento`), que es el que muestra la pantalla.
+ */
 export class ConsultarAuditoriaDto {
   @ApiPropertyOptional({ example: 1, default: 1 })
   @IsOptional()
@@ -101,6 +106,18 @@ export class ConsultarAuditoriaDto {
       'La acción debe ser crear, actualizar, eliminar, aprobar o consulta_sensible.',
   })
   accion?: AccionAuditoria;
+
+  @ApiPropertyOptional({
+    enum: EVENTOS_DE_AUDITORIA,
+    example: 'devolucion',
+    description:
+      'Lo que pasó, con palabras del dominio, como llega en cada registro. Los eventos ' +
+      'generales (creacion, modificacion…) no incluyen los que tienen nombre propio',
+  })
+  @IsOptional()
+  @Transform(recortar)
+  @IsIn(EVENTOS_DE_AUDITORIA, { message: 'El evento indicado no es válido.' })
+  evento?: EventoDeAuditoria;
 
   @ApiPropertyOptional({
     example: 'proyecto_docente',

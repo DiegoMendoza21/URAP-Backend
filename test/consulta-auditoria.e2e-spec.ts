@@ -10,6 +10,7 @@ import {
   MENSAJE_RANGO_INVERTIDO,
   MENSAJE_REGISTRO_NO_EXISTE,
 } from '../src/auditoria/consulta-auditoria.service.js';
+import { EVENTOS_DE_AUDITORIA } from '../src/auditoria/eventos.js';
 import { ContrasenasService } from '../src/auth/contrasenas.service.js';
 import { MENSAJE_SIN_PERMISO } from '../src/auth/roles.guard.js';
 import { type NombreRol, ROL } from '../src/auth/roles.js';
@@ -44,6 +45,10 @@ describe('Consulta de la auditoría (e2e) · HU-14-02 y HU-14-03', () => {
   let idDocente: number;
   /** Ids de los registros de prueba, del más antiguo al más reciente. */
   const ids: number[] = [];
+  /** Registros sobre tablas reales, para los eventos: id → evento que le corresponde. */
+  const eventoEsperado = new Map<number, string>();
+  /** Su día, lejos de cualquier otro registro del docente de esta prueba. */
+  const DIA_EVENTOS = '2021-03-03';
 
   const api = () => request(app.getHttpServer());
   const consultar = (token: string, ruta = '') =>
@@ -175,13 +180,108 @@ describe('Consulta de la auditoría (e2e) · HU-14-02 y HU-14-03', () => {
         ).id,
       );
     }
+
+    // Un registro por cada forma en que se guarda un evento, y varios que no tienen nombre
+    // propio, con la forma en que los escriben los servicios.
+    const casos: [string, string, object | undefined, string][] = [
+      ['crear', 'sesion', { id_usuario: 1 }, 'inicio_sesion'],
+      [
+        'actualizar',
+        'sesion',
+        { motivo_revocacion: 'logout' },
+        'cierre_sesion',
+      ],
+      ['crear', 'proyecto_docente', { grupo: 'A' }, 'creacion'],
+      ['actualizar', 'proyecto_docente', { horario: [] }, 'modificacion'],
+      [
+        'actualizar',
+        'proyecto_docente',
+        { estado: 'en_diligenciamiento' },
+        'modificacion',
+      ],
+      ['actualizar', 'proyecto_docente', undefined, 'modificacion'],
+      [
+        'actualizar',
+        'proyecto_docente',
+        { estado: 'enviado', fechaEnvio: '2021-03-03' },
+        'envio_revision',
+      ],
+      [
+        'actualizar',
+        'proyecto_docente',
+        { estado: 'devuelto', observaciones: 2, secciones: ['rac'] },
+        'devolucion',
+      ],
+      ['aprobar', 'proyecto_docente', { estado: 'aprobado' }, 'aprobacion'],
+      ['eliminar', 'rac', undefined, 'eliminacion'],
+      ['consulta_sensible', 'matricula', undefined, 'consulta_sensible'],
+      ['actualizar', 'sesion_clase', { temas: [1] }, 'registro_clase'],
+      [
+        'actualizar',
+        'inasistencia',
+        { ausentes: 2, marcados: 2, desmarcados: 0 },
+        'registro_inasistencias',
+      ],
+      ['actualizar', 'matricula', { total: 30 }, 'carga_matriculados'],
+      ['crear', 'evidencia_rap', { tipo: 'foto' }, 'carga_evidencia'],
+      ['crear', 'reporte_academico', { tipo: 'logro' }, 'generacion_reporte'],
+      ['crear', 'medicion_rap', { idRap: 2 }, 'creacion'],
+      ['actualizar', 'medicion_rap', { valoraciones: 3 }, 'modificacion'],
+      ['actualizar', 'medicion_rap', { estado: 'cerrada' }, 'cierre_medicion'],
+      [
+        'actualizar',
+        'medicion_rap',
+        { estado: 'borrador' },
+        'reapertura_medicion',
+      ],
+      ['crear', 'usuario', { activo: true }, 'creacion'],
+      ['actualizar', 'usuario', { nombres: 'Persona' }, 'modificacion'],
+      [
+        'actualizar',
+        'usuario',
+        { motivo: 'intentos_fallidos_consecutivos', intentos_fallidos: 0 },
+        'bloqueo_usuario',
+      ],
+      ['actualizar', 'usuario', { activo: false }, 'inactivacion_usuario'],
+      ['actualizar', 'usuario', { activo: true }, 'reactivacion_usuario'],
+      [
+        'actualizar',
+        'usuario',
+        { contrasena: VALOR_OMITIDO },
+        'restablecimiento_contrasena',
+      ],
+      ['crear', 'usuario_rol', { activo: true }, 'asignacion_rol'],
+      ['actualizar', 'usuario_rol', { activo: true }, 'asignacion_rol'],
+      ['actualizar', 'usuario_rol', { activo: false }, 'revocacion_rol'],
+      ['actualizar', 'rol', { activo: false }, 'modificacion'],
+    ];
+    for (const [accion, tabla, valorNuevo, evento] of casos) {
+      const { id } = await prisma.auditoria.create({
+        data: {
+          id_usuario: idDocente,
+          accion,
+          tabla_afectada: tabla,
+          id_registro: 1,
+          valor_nuevo: valorNuevo,
+          fecha: new Date(`${DIA_EVENTOS}T15:00:00.000Z`),
+        },
+      });
+      eventoEsperado.set(id, evento);
+    }
     // Tres usuarios con su contraseña y su inicio de sesión: en un equipo ocupado no cabe
     // en los 10 segundos por defecto.
   }, 60_000);
 
   afterAll(async () => {
     if (prisma) {
-      await prisma.auditoria.deleteMany({ where: { tabla_afectada: entidad } });
+      await prisma.auditoria.deleteMany({
+        where: {
+          OR: [
+            { tabla_afectada: entidad },
+            { id: { in: [...eventoEsperado.keys()] } },
+          ],
+        },
+      });
       await borrarUsuariosDePrueba(prisma, idsUsuarios);
       await borrarMatrizDePrueba(prisma, matriz);
       await prisma.rol.deleteMany({ where: { id: { in: rolesCreados } } });
@@ -230,6 +330,7 @@ describe('Consulta de la auditoría (e2e) · HU-14-02 y HU-14-03', () => {
         id: ids[2],
         fecha: '2026-11-11T04:30:00.000Z',
         accion: 'aprobar',
+        evento: 'aprobacion',
         entidad,
         idRegistro: 1,
         usuario: {
@@ -267,6 +368,60 @@ describe('Consulta de la auditoría (e2e) · HU-14-02 y HU-14-03', () => {
         ids[3],
         ids[1],
       ]);
+    });
+
+    describe('lo que pasó, con palabras del dominio (evento)', () => {
+      /** Los registros de eventos de esta prueba: los del docente, en su día. */
+      const listarEventos = (filtros: Record<string, string> = {}) =>
+        consultar(tokenAdministrador).query({
+          usuario: `Docente_e2e ${sufijo}`,
+          desde: DIA_EVENTOS,
+          hasta: DIA_EVENTOS,
+          tamano: 100,
+          ...filtros,
+        });
+
+      it('cada registro dice lo que pasó: un inicio de sesión no es una «creación»', async () => {
+        const { body } = await listarEventos().expect(200);
+
+        expect(body.total).toBe(eventoEsperado.size);
+        expect(
+          new Map(
+            body.elementos.map((e: { id: number; evento: string }) => [
+              e.id,
+              e.evento,
+            ]),
+          ),
+        ).toEqual(eventoEsperado);
+      });
+
+      it('el filtro por evento devuelve justo los registros que llevan ese nombre', async () => {
+        for (const evento of EVENTOS_DE_AUDITORIA) {
+          const { body } = await listarEventos({ evento }).expect(200);
+
+          const esperados = [...eventoEsperado]
+            .filter(([, suyo]) => suyo === evento)
+            .map(([id]) => id);
+          expect(esperados.length, evento).toBeGreaterThan(0);
+          expect(
+            body.elementos.map((e: { id: number }) => e.id).sort(),
+            evento,
+          ).toEqual(esperados.sort());
+        }
+      });
+
+      it('el evento se combina con la entidad', async () => {
+        const { body } = await listarEventos({
+          evento: 'modificacion',
+          entidad: 'proyecto_docente',
+        }).expect(200);
+
+        expect(body.total).toBe(3);
+      });
+
+      it('rechaza un evento que no existe', async () => {
+        await listarEventos({ evento: 'inventado' }).expect(400);
+      });
     });
 
     it('filtra por rango de fechas, con el día de la hora de la institución', async () => {

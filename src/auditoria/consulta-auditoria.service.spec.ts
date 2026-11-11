@@ -89,6 +89,7 @@ describe('ConsultaAuditoriaService · HU-14-02 y HU-14-03', () => {
           id: 40,
           fecha: '2026-11-10T15:04:05.000Z',
           accion: 'aprobar',
+          evento: 'aprobacion',
           entidad: 'proyecto_docente',
           idRegistro: 12,
           usuario: { id: 7, nombre: 'Usuario Ficticio' },

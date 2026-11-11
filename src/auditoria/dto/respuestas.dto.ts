@@ -3,6 +3,7 @@ import {
   ACCIONES_AUDITORIA,
   type AccionAuditoria,
 } from '../auditoria.service.js';
+import { type EventoDeAuditoria, EVENTOS_DE_AUDITORIA } from '../eventos.js';
 
 export class UsuarioAuditoriaDto {
   @ApiProperty({ example: 7 })
@@ -26,6 +27,15 @@ export class RegistroAuditoriaDto {
 
   @ApiProperty({ enum: ACCIONES_AUDITORIA, example: 'aprobar' })
   accion: AccionAuditoria;
+
+  @ApiProperty({
+    enum: EVENTOS_DE_AUDITORIA,
+    example: 'aprobacion',
+    description:
+      'Lo que pasó, con palabras del dominio: un inicio de sesión se guarda como la ' +
+      'creación de una sesión, y aquí llega como inicio_sesion',
+  })
+  evento: EventoDeAuditoria;
 
   @ApiProperty({
     example: 'proyecto_docente',

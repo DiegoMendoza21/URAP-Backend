@@ -18,6 +18,7 @@ import type {
   PaginaAuditoriaDto,
   RegistroAuditoriaDto,
 } from './dto/respuestas.dto.js';
+import { eventoDe, filtroDeEvento } from './eventos.js';
 
 export const MENSAJE_REGISTRO_NO_EXISTE =
   'No existe ese registro de auditoría.';
@@ -168,7 +169,8 @@ export class ConsultaAuditoriaService {
 }
 
 function filtro(consulta: ConsultarAuditoriaDto): Prisma.auditoriaWhereInput {
-  const { desde, hasta, usuario, accion, entidad, idRegistro } = consulta;
+  const { desde, hasta, usuario, accion, evento, entidad, idRegistro } =
+    consulta;
   if (desde && hasta && desde > hasta) {
     throw new BadRequestException(MENSAJE_RANGO_INVERTIDO);
   }
@@ -185,6 +187,9 @@ function filtro(consulta: ConsultarAuditoriaDto): Prisma.auditoriaWhereInput {
   }
   if (accion) {
     where.accion = accion;
+  }
+  if (evento) {
+    where.AND = [filtroDeEvento(evento)];
   }
   if (entidad) {
     where.tabla_afectada = entidad;
@@ -229,6 +234,7 @@ function aRegistro(registro: RegistroLeido): RegistroAuditoriaDto {
     id: registro.id,
     fecha: registro.fecha?.toISOString() ?? null,
     accion: (registro.accion ?? '') as AccionAuditoria,
+    evento: eventoDe(registro),
     entidad: registro.tabla_afectada ?? '',
     idRegistro: registro.id_registro,
     usuario: usuario
