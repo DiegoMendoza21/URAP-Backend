@@ -153,6 +153,64 @@ describe('UsuariosService · RF-02', () => {
     );
   });
 
+  describe('revocar un rol (HU-02-07)', () => {
+    const asignacion = {
+      id: 41,
+      id_rol: 1,
+      id_programa: null,
+      fecha_asignacion: new Date('2026-08-03T13:00:00.000Z'),
+      rol: { rol_permiso: [{ id_rol: 1 }] },
+    };
+    const prismaRoles = prisma as typeof prisma & {
+      usuario_rol: { findFirst: ReturnType<typeof vi.fn> };
+    };
+    const txRoles = tx as typeof tx & {
+      usuario_rol: { update: ReturnType<typeof vi.fn> };
+    };
+
+    beforeEach(() => {
+      prismaRoles.usuario_rol = { findFirst: vi.fn() };
+      prismaRoles.usuario_rol.findFirst.mockResolvedValue(asignacion);
+      txRoles.usuario_rol = { update: vi.fn() };
+    });
+
+    it('no revoca si nadie quedaría administrando usuarios y roles, y no lo audita', async () => {
+      tx.usuario.count.mockResolvedValue(0);
+
+      await expect(servicio.revocarRol(20, 41, administrador)).rejects.toThrow(
+        new ConflictException(MENSAJE_ULTIMO_ADMINISTRADOR_USUARIO),
+      );
+      expect(txRoles.usuario_rol.update).toHaveBeenCalledBefore(
+        tx.usuario.count,
+      );
+      expect(auditoria.registrar).not.toHaveBeenCalled();
+    });
+
+    it('la revocación es lógica y guarda en auditoría desde cuándo tenía el rol', async () => {
+      await servicio.revocarRol(20, 41, administrador);
+
+      expect(txRoles.usuario_rol.update).toHaveBeenCalledWith({
+        where: { id: 41 },
+        data: { activo: false, fecha_revocacion: expect.any(Date) },
+      });
+      expect(auditoria.registrar).toHaveBeenCalledWith({
+        accion: 'actualizar',
+        tablaAfectada: 'usuario_rol',
+        idRegistro: 41,
+        valorAnterior: {
+          activo: true,
+          fechaAsignacion: '2026-08-03T13:00:00.000Z',
+        },
+        valorNuevo: {
+          idUsuario: 20,
+          idRol: 1,
+          idPrograma: null,
+          activo: false,
+        },
+      });
+    });
+  });
+
   describe('quien administra un solo programa', () => {
     beforeEach(() => {
       alcance.alcanceConPermiso.mockResolvedValue({

@@ -22,6 +22,8 @@ import {
   type CrearUsuarioDto,
   type DetalleUsuarioDto,
   type EditarUsuarioDto,
+  type EventoRolDto,
+  type HistorialRolesDto,
   type OpcionesUsuariosDto,
   type PaginaUsuariosDto,
   type RolParaAsignarDto,
@@ -49,6 +51,12 @@ export const MENSAJE_NO_INACTIVARSE =
   'No puede inactivar su propio usuario. Pídaselo a otra persona que administre usuarios.';
 export const MENSAJE_ULTIMO_ADMINISTRADOR_USUARIO =
   'No se puede hacer este cambio: ningún usuario activo quedaría administrando usuarios y roles.';
+export const MENSAJE_ROL_YA_ASIGNADO =
+  'El usuario ya tiene ese rol vigente sobre ese programa.';
+export const MENSAJE_ASIGNACION_NO_EXISTE =
+  'El usuario no tiene ese rol vigente.';
+export const MENSAJE_NO_QUITARSE_ADMINISTRACION =
+  'No puede quitarse a sí mismo el rol con el que administra usuarios y roles. Pídaselo a otra persona que los administre.';
 export const MENSAJE_FUERA_DE_ALCANCE =
   'Solo puede administrar usuarios y roles de los programas que tiene a su cargo.';
 
@@ -56,6 +64,9 @@ const MODULO = 'usuarios';
 /** Entidades con las que quedan en auditoría los cambios de este servicio. */
 export const ENTIDAD_USUARIO = 'usuario';
 export const ENTIDAD_USUARIO_ROL = 'usuario_rol';
+
+/** Eventos que trae el historial de roles de un usuario, como mucho. */
+export const LIMITE_HISTORIAL = 200;
 
 export const MOTIVO_USUARIO_INACTIVADO = 'usuario_inactivado';
 export const MOTIVO_CONTRASENA_RESTABLECIDA = 'contrasena_restablecida';
@@ -462,6 +473,256 @@ export class UsuariosService {
     return { contrasenaTemporal };
   }
 
+  /**
+   * HU-02-07: asigna un rol sobre un programa. Si el usuario ya lo tuvo y se le revocó, se
+   * reutiliza la misma fila de `usuario_rol` (el índice único no admite otra): vuelve a quedar
+   * vigente, con la fecha y quien lo asigna ahora. Lo anterior queda en la auditoría.
+   */
+  async asignarRol(
+    id: number,
+    datos: RolParaAsignarDto,
+    usuario: UsuarioSesion,
+  ): Promise<DetalleUsuarioDto> {
+    await this.cargarParaAdministrar(id, usuario);
+    const idPrograma = datos.idPrograma ?? null;
+    await this.exigirAlcance(usuario, [idPrograma]);
+    await this.exigirRoles([datos]);
+
+    const ahora = new Date();
+    const { fila, anterior } = await this.guardar(async (tx) => {
+      const existente = await tx.usuario_rol.findFirst({
+        where: { id_usuario: id, id_rol: datos.idRol, id_programa: idPrograma },
+        select: { id: true, activo: true, fecha_revocacion: true },
+      });
+      if (existente?.activo === true && existente.fecha_revocacion === null) {
+        throw new ConflictException(MENSAJE_ROL_YA_ASIGNADO);
+      }
+      const vigente = {
+        activo: true,
+        fecha_revocacion: null,
+        fecha_asignacion: ahora,
+        id_asignado_por: usuario.id,
+      };
+      const guardada = existente
+        ? await tx.usuario_rol.update({
+            where: { id: existente.id },
+            data: vigente,
+            select: { id: true },
+          })
+        : await tx.usuario_rol.create({
+            data: {
+              ...vigente,
+              id_usuario: id,
+              id_rol: datos.idRol,
+              id_programa: idPrograma,
+            },
+            select: { id: true },
+          });
+      return { fila: guardada, anterior: existente };
+    }, MENSAJE_ROL_YA_ASIGNADO);
+
+    await this.auditoria.registrar({
+      accion: anterior ? 'actualizar' : 'crear',
+      tablaAfectada: ENTIDAD_USUARIO_ROL,
+      idRegistro: fila.id,
+      ...(anterior && {
+        valorAnterior: {
+          activo: false,
+          fechaRevocacion: anterior.fecha_revocacion?.toISOString() ?? null,
+        },
+      }),
+      valorNuevo: {
+        idUsuario: id,
+        idRol: datos.idRol,
+        idPrograma,
+        activo: true,
+      },
+    });
+    return this.detalle(id, true);
+  }
+
+  /**
+   * HU-02-07: revoca un rol. Es una revocación lógica: la fila queda inactiva, con su fecha.
+   * Los permisos se leen de la base en cada petición, así que rige desde la siguiente.
+   */
+  async revocarRol(
+    id: number,
+    idAsignacion: number,
+    usuario: UsuarioSesion,
+  ): Promise<DetalleUsuarioDto> {
+    await this.cargarParaAdministrar(id, usuario);
+    const asignacion = await this.prisma.usuario_rol.findFirst({
+      where: {
+        id: idAsignacion,
+        id_usuario: id,
+        activo: true,
+        fecha_revocacion: null,
+      },
+      select: {
+        id: true,
+        id_rol: true,
+        id_programa: true,
+        fecha_asignacion: true,
+        rol: {
+          select: {
+            rol_permiso: {
+              where: {
+                modulo: { is: { codigo: MODULO } },
+                permiso: { is: { codigo: 'administrar' } },
+              },
+              select: { id_rol: true },
+            },
+          },
+        },
+      },
+    });
+    if (!asignacion) {
+      throw new NotFoundException(MENSAJE_ASIGNACION_NO_EXISTE);
+    }
+    await this.exigirAlcance(usuario, [asignacion.id_programa]);
+    if (id === usuario.id && (asignacion.rol?.rol_permiso.length ?? 0) > 0) {
+      throw new ConflictException(MENSAJE_NO_QUITARSE_ADMINISTRACION);
+    }
+
+    const ahora = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await bloquearMatriz(tx);
+      await tx.usuario_rol.update({
+        where: { id: asignacion.id },
+        data: { activo: false, fecha_revocacion: ahora },
+      });
+      await exigirAdministrador(tx);
+    });
+    await this.auditoria.registrar({
+      accion: 'actualizar',
+      tablaAfectada: ENTIDAD_USUARIO_ROL,
+      idRegistro: asignacion.id,
+      valorAnterior: {
+        activo: true,
+        fechaAsignacion: asignacion.fecha_asignacion?.toISOString() ?? null,
+      },
+      valorNuevo: {
+        idUsuario: id,
+        idRol: asignacion.id_rol,
+        idPrograma: asignacion.id_programa,
+        activo: false,
+      },
+    });
+    return this.detalle(id, true);
+  }
+
+  /**
+   * HU-02-07: quién tuvo qué rol y cuándo. Sale de la auditoría, que guarda cada asignación
+   * y cada revocación con su fecha y quién la hizo, aunque la fila de `usuario_rol` se
+   * reutilice. Lo que no pasó por este servicio (los roles del sembrado) no tiene auditoría:
+   * de eso se muestra lo que dice la propia fila. Los más recientes primero, hasta
+   * LIMITE_HISTORIAL eventos.
+   */
+  async historialRoles(
+    id: number,
+    usuario: UsuarioSesion,
+  ): Promise<HistorialRolesDto> {
+    await this.cargarParaAdministrar(id, usuario);
+    const filas = await this.prisma.usuario_rol.findMany({
+      where: { id_usuario: id },
+      select: {
+        id: true,
+        id_rol: true,
+        id_programa: true,
+        fecha_asignacion: true,
+        fecha_revocacion: true,
+        rol: { select: { nombre: true } },
+        programa: { select: { nombre: true } },
+        usuario_usuario_rol_id_asignado_porTousuario: {
+          select: { nombres: true, apellidos: true },
+        },
+      },
+    });
+    const porId = new Map(filas.map((fila) => [fila.id, fila]));
+    const registros = await this.prisma.auditoria.findMany({
+      where: {
+        tabla_afectada: ENTIDAD_USUARIO_ROL,
+        id_registro: { in: [...porId.keys()] },
+      },
+      orderBy: [{ fecha: 'desc' }, { id: 'desc' }],
+      take: LIMITE_HISTORIAL,
+      select: {
+        id_registro: true,
+        fecha: true,
+        valor_anterior: true,
+        valor_nuevo: true,
+        usuario: { select: { nombres: true, apellidos: true } },
+      },
+    });
+
+    const eventos: (EventoRolDto & { orden: number })[] = [];
+    const agregar = (
+      fila: (typeof filas)[number],
+      tipo: EventoRolDto['tipo'],
+      fecha: Date,
+      realizadoPor: string | null,
+    ) =>
+      eventos.push({
+        idAsignacion: fila.id,
+        tipo,
+        idRol: fila.id_rol as number,
+        rol: fila.rol?.nombre ?? '',
+        idPrograma: fila.id_programa,
+        programa: fila.programa?.nombre ?? null,
+        fecha: fecha.toISOString(),
+        realizadoPor,
+        orden: fecha.getTime(),
+      });
+
+    /** El registro de auditoría más antiguo de cada fila (llegan del más reciente al más antiguo). */
+    const masAntiguo = new Map<number, (typeof registros)[number]>();
+    for (const registro of registros) {
+      const fila = porId.get(registro.id_registro as number);
+      if (!fila || !registro.fecha) {
+        continue;
+      }
+      masAntiguo.set(fila.id, registro);
+      agregar(
+        fila,
+        esRevocacion(registro.valor_nuevo) ? 'revocacion' : 'asignacion',
+        registro.fecha,
+        nombreDe(registro.usuario),
+      );
+    }
+    // Lo que la auditoría no tiene (los roles del sembrado), de la propia fila.
+    if (registros.length < LIMITE_HISTORIAL) {
+      for (const fila of filas) {
+        const primero = masAntiguo.get(fila.id);
+        if (!primero) {
+          if (fila.fecha_asignacion) {
+            agregar(
+              fila,
+              'asignacion',
+              fila.fecha_asignacion,
+              nombreDe(fila.usuario_usuario_rol_id_asignado_porTousuario),
+            );
+          }
+          if (fila.fecha_revocacion) {
+            agregar(fila, 'revocacion', fila.fecha_revocacion, null);
+          }
+        } else if (esRevocacion(primero.valor_nuevo)) {
+          // Se revocó un rol que nunca pasó por la auditoría: la revocación guardó desde
+          // cuándo lo tenía.
+          const desde = fechaDe(primero.valor_anterior, 'fechaAsignacion');
+          if (desde) {
+            agregar(fila, 'asignacion', desde, null);
+          }
+        }
+      }
+    }
+    return {
+      eventos: eventos
+        .sort((a, b) => b.orden - a.orden)
+        .slice(0, LIMITE_HISTORIAL)
+        .map(({ orden: _orden, ...evento }) => evento),
+    };
+  }
+
   /** Quien solo consulta (`usuarios.leer` con programa) ve a los usuarios de sus programas. */
   private async filtroDeConsulta(
     usuario: UsuarioSesion,
@@ -590,6 +851,7 @@ export class UsuariosService {
    */
   private async guardar<T>(
     escritura: (tx: Transaccion) => Promise<T>,
+    mensajeRepetido?: string,
   ): Promise<T> {
     try {
       return await this.prisma.$transaction(escritura);
@@ -599,9 +861,10 @@ export class UsuariosService {
         error.code === 'P2002'
       ) {
         throw new ConflictException(
-          JSON.stringify(error.meta ?? {}).includes('identificacion')
-            ? MENSAJE_DOCUMENTO_REPETIDO
-            : MENSAJE_CORREO_REPETIDO,
+          mensajeRepetido ??
+            (JSON.stringify(error.meta ?? {}).includes('identificacion')
+              ? MENSAJE_DOCUMENTO_REPETIDO
+              : MENSAJE_CORREO_REPETIDO),
         );
       }
       throw error;
@@ -647,6 +910,33 @@ export async function exigirAdministrador(tx: Transaccion): Promise<void> {
   if ((await contarAdministradoresActivos(tx)) === 0) {
     throw new ConflictException(MENSAJE_ULTIMO_ADMINISTRADOR_USUARIO);
   }
+}
+
+/** En la auditoría de los roles, una revocación deja «activo: false» en el valor nuevo. */
+function esRevocacion(valorNuevo: Prisma.JsonValue | null): boolean {
+  return (
+    valorNuevo !== null &&
+    typeof valorNuevo === 'object' &&
+    !Array.isArray(valorNuevo) &&
+    valorNuevo.activo === false
+  );
+}
+
+function fechaDe(valor: Prisma.JsonValue | null, campo: string): Date | null {
+  if (valor === null || typeof valor !== 'object' || Array.isArray(valor)) {
+    return null;
+  }
+  const texto = valor[campo];
+  const fecha = typeof texto === 'string' ? new Date(texto) : null;
+  return fecha && !Number.isNaN(fecha.getTime()) ? fecha : null;
+}
+
+function nombreDe(
+  persona: { nombres: string | null; apellidos: string | null } | null,
+): string | null {
+  return persona
+    ? [persona.nombres, persona.apellidos].filter(Boolean).join(' ').trim()
+    : null;
 }
 
 function aUsuario(fila: UsuarioLeido): UsuarioDto {

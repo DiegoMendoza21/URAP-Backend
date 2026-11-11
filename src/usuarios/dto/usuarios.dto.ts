@@ -358,6 +358,54 @@ export class ContrasenaTemporalDto {
   contrasenaTemporal: string;
 }
 
+export const TIPOS_EVENTO_ROL = ['asignacion', 'revocacion'] as const;
+
+/** Un momento del historial de roles de un usuario (HU-02-07). */
+export class EventoRolDto {
+  @ApiProperty({ example: 41, description: 'Identificador de la asignación' })
+  idAsignacion: number;
+
+  @ApiProperty({ enum: TIPOS_EVENTO_ROL, example: 'asignacion' })
+  tipo: (typeof TIPOS_EVENTO_ROL)[number];
+
+  @ApiProperty({ example: 3 })
+  idRol: number;
+
+  @ApiProperty({ example: 'Docente responsable' })
+  rol: string;
+
+  @ApiProperty({ type: Number, nullable: true, example: 1 })
+  idPrograma: number | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    example: 'Administración Industrial',
+    description: 'Vacío: el rol alcanza a todos los programas',
+  })
+  programa: string | null;
+
+  @ApiProperty({ type: String, format: 'date-time', nullable: true })
+  fecha: string | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    example: 'Administrador Demo',
+    description:
+      'Quién asignó o revocó el rol. Vacío si no quedó registrado (roles de la carga inicial)',
+  })
+  realizadoPor: string | null;
+}
+
+export class HistorialRolesDto {
+  @ApiProperty({
+    type: [EventoRolDto],
+    description: 'Del más reciente al más antiguo, hasta 200 eventos',
+  })
+  eventos: EventoRolDto[];
+}
+
 export class OpcionDto {
   @ApiProperty({ example: 1 })
   id: number;
