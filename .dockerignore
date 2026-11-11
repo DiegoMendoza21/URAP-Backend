@@ -9,6 +9,7 @@ src/generated
 !.env.example
 despliegue/.env
 almacenamiento
+evidencias
 .git
 .github
 .claude

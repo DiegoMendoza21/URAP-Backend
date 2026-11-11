@@ -14,6 +14,9 @@ coverage/
 
 # Almacenamiento documental local (ALMACENAMIENTO_DIRECTORIO): evidencias con datos personales
 /almacenamiento/
+# Red de seguridad: si la carpeta raíz del almacenamiento llegara a ser la del proyecto, las
+# evidencias quedarían aquí (sus claves empiezan por evidencias/). Tampoco van al repositorio.
+/evidencias/
 
 # Registros
 logs/

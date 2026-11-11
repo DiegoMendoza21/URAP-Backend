@@ -119,7 +119,9 @@ describe('Opciones autorizadas por la matriz de permisos (e2e) · HU-01-03', () 
       })),
     });
     tokenRolPropio = (await crearUsuario('rol-propio', [idRolPropio])).token;
-  });
+    // Arrancar la API, cargar la matriz y crear dos usuarios con su hash tarda unos 9 s: con
+    // el equipo cargado pasaba del límite por defecto de 10 s.
+  }, 60_000);
 
   afterAll(async () => {
     if (prisma) {

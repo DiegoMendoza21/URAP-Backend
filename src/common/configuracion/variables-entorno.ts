@@ -152,6 +152,22 @@ export const MENSAJE_URL_BASE_ILEGIBLE =
 /** Carpeta del almacenamiento documental cuando ALMACENAMIENTO_DIRECTORIO no está definida. */
 export const ALMACENAMIENTO_DIRECTORIO_DESARROLLO = 'almacenamiento';
 
+/**
+ * Carpeta raíz del almacenamiento documental a partir de `ALMACENAMIENTO_DIRECTORIO`. Es el
+ * único sitio que decide el valor por defecto: quien necesite la carpeta la pide aquí.
+ *
+ * La variable vacía o solo con espacios cuenta como no definida. `ConfigService.get` no
+ * basta para eso: la validación la deja en `undefined`, pero entonces `get` vuelve a leerla
+ * de `process.env` y entrega la cadena vacía, que `??` no reemplaza. Con la cadena vacía, la
+ * carpeta raíz sería la carpeta de trabajo y las evidencias quedarían en `evidencias/`, en
+ * la raíz del repositorio (datos personales, Ley 1581).
+ */
+export function directorioAlmacenamiento(valor: string | undefined): string {
+  return valor === undefined || valor.trim() === ''
+    ? ALMACENAMIENTO_DIRECTORIO_DESARROLLO
+    : valor;
+}
+
 export function validarVariablesEntorno(
   entrada: Record<string, unknown>,
 ): VariablesEntorno {
