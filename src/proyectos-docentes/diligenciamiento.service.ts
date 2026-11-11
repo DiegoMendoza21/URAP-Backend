@@ -14,7 +14,11 @@ import {
   EdicionProyectoService,
   soloCambios,
 } from './edicion-proyecto.service.js';
-import { type DatosCompletitud, SECCIONES } from './entities/secciones.js';
+import {
+  contarCompletas,
+  type DatosCompletitud,
+  evaluarSecciones,
+} from './entities/secciones.js';
 
 /** Parámetro de negocio con la longitud máxima de la descripción (RF-11, p3). */
 export const PARAMETRO_LONGITUD_DESCRIPCION =
@@ -61,13 +65,16 @@ export class DiligenciamientoService {
     private readonly parametros: ParametrosService,
   ) {}
 
-  /** Estado de cada sección y si el usuario puede editar (HU-06-08). */
+  /**
+   * Estado de cada sección, cuántas están completas (HU-06-09) y si el usuario puede editar
+   * (HU-06-08).
+   */
   async resumen(
     usuario: UsuarioSesion,
     id: number,
   ): Promise<DiligenciamientoDto> {
     const proyecto = await this.edicion.consultable(usuario, id);
-    const datos = await this.datosCompletitud(id);
+    const evaluadas = evaluarSecciones(await this.datosCompletitud(id));
     const motivo = this.edicion.motivoNoEditable(usuario, proyecto);
     return {
       idProyecto: proyecto.id,
@@ -80,16 +87,15 @@ export class DiligenciamientoService {
       puedeEditar: motivo === null,
       motivoNoEditable: motivo,
       fechaActualizacion: proyecto.fecha_actualizacion?.toISOString() ?? null,
-      secciones: SECCIONES.map((seccion) => {
-        const pendientes = seccion.pendientes(datos);
-        return {
-          numero: seccion.numero,
-          clave: seccion.clave,
-          titulo: seccion.titulo,
-          completa: pendientes.length === 0,
-          pendientes,
-        };
-      }),
+      secciones: evaluadas.map(({ seccion, pendientes, estado }) => ({
+        numero: seccion.numero,
+        clave: seccion.clave,
+        titulo: seccion.titulo,
+        completa: pendientes.length === 0,
+        estado,
+        pendientes,
+      })),
+      completitud: contarCompletas(evaluadas),
     };
   }
 

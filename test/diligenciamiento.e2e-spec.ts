@@ -315,6 +315,15 @@ describe('Diligenciamiento del proyecto docente (e2e) · RF-11, RF-12, HU-06-01 
         .get(`/proyectos-docentes/${proyecto}/diligenciamiento`)
         .expect(200);
       expect(resumen.body).toMatchObject({ puedeEditar: false });
+      // HU-06-09: el proyecto recién creado tiene las seis secciones vacías.
+      expect(
+        (resumen.body.secciones as { estado: string }[]).map((s) => s.estado),
+      ).toEqual(Array(6).fill('vacia'));
+      expect(resumen.body.completitud).toEqual({
+        completas: 0,
+        total: 6,
+        porcentaje: 0,
+      });
       await como('departamento')
         .put(`/proyectos-docentes/${proyecto}/descripcion`, { texto: 'x' })
         .expect(403);
@@ -467,12 +476,23 @@ describe('Diligenciamiento del proyecto docente (e2e) · RF-11, RF-12, HU-06-01 
         .expect(200);
       expect(body).toMatchObject({ puedeEditar: true });
       // Los puntos 4 a 7 se prueban en planeacion.e2e-spec.ts.
+      // HU-06-09: el punto 3 tiene un RAC, pero le faltan RAP: queda incompleto, no vacío.
+      // La cuenta de secciones completas es la de los estados que trae el mismo resumen.
+      const completas = (body.secciones as { estado: string }[]).filter(
+        ({ estado }) => estado === 'completa',
+      ).length;
+      expect(body.completitud).toEqual({
+        completas,
+        total: 6,
+        porcentaje: Math.round((completas * 10_000) / 6) / 100,
+      });
       expect({ secciones: body.secciones.slice(0, 2) }).toMatchObject({
         secciones: [
-          { numero: 2, completa: true, pendientes: [] },
+          { numero: 2, completa: true, estado: 'completa', pendientes: [] },
           {
             numero: 3,
             completa: false,
+            estado: 'incompleta',
             pendientes: [
               'RAP 1 no tiene RAC asociados.',
               'RAP 2 no tiene RAC asociados.',

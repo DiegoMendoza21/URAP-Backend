@@ -12,15 +12,16 @@ import {
 } from '../common/parametros/parametros.service.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
-import { porcentaje } from '../mediciones/consolidado.js';
 import { AlcanceService } from '../proyectos-docentes/alcance.service.js';
 import {
   aDatosCompletitud,
   SELECCION_COMPLETITUD,
 } from '../proyectos-docentes/diligenciamiento.service.js';
 import {
+  contarCompletas,
+  ESTADO_SECCION,
+  evaluarSecciones,
   nombreRap,
-  SECCIONES,
 } from '../proyectos-docentes/entities/secciones.js';
 import {
   alertaDeSesion,
@@ -133,7 +134,8 @@ export interface ConsultaSeguimiento {
 /**
  * Tablero de seguimiento del diligenciamiento (RF-25, HU-12-01 y HU-12-02). Para cada proyecto
  * docente del período calcula:
- * - el porcentaje de secciones completas, con la misma regla del diligenciamiento (`SECCIONES`);
+ * - el porcentaje de secciones completas, con la misma regla y la misma cuenta del diligenciamiento
+ *   (`evaluarSecciones` y `contarCompletas`);
  * - las sesiones registradas frente a las programadas y las vencidas, con la regla de RF-23
  *   (`alertaDeSesion`);
  * - las evidencias cargadas por RAP;
@@ -512,10 +514,10 @@ function aFila(
 ): ProyectoSeguimientoDto {
   // Secciones: la misma regla del diligenciamiento (RF-11 a RF-16).
   const datos = aDatosCompletitud(proyecto);
-  const incompletas = SECCIONES.filter(
-    (seccion) => seccion.pendientes(datos).length > 0,
-  ).map((seccion) => `${seccion.numero}. ${seccion.titulo}`);
-  const completas = SECCIONES.length - incompletas.length;
+  const evaluadas = evaluarSecciones(datos);
+  const incompletas = evaluadas
+    .filter(({ estado }) => estado !== ESTADO_SECCION.completa)
+    .map(({ seccion }) => `${seccion.numero}. ${seccion.titulo}`);
 
   // Sesiones: programadas son las del calendario sin festivos; la alerta es la de RF-23.
   const periodo = proyecto.periodo_academico;
@@ -565,12 +567,7 @@ function aFila(
           nombre: proyecto.estado_proyecto.nombre ?? '',
         }
       : null,
-    secciones: {
-      completas,
-      total: SECCIONES.length,
-      porcentaje: porcentaje(completas, SECCIONES.length),
-      incompletas,
-    },
+    secciones: { ...contarCompletas(evaluadas), incompletas },
     sesiones: {
       programadas: programadas.length,
       registradas: programadas.filter((sesion) => esDiligenciada(sesion))
