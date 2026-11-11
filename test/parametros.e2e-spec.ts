@@ -10,6 +10,7 @@ import { RANGO_PARAMETRO } from '../src/common/parametros/rangos-parametros.js';
 import { PrismaService } from '../src/common/prisma/prisma.service.js';
 import { MENSAJE_DATOS_INVALIDOS } from '../src/common/validacion/pipe-validacion.js';
 import { configurarAplicacion } from '../src/configurar-aplicacion.js';
+import { PARAMETROS } from '../src/datos-iniciales/catalogos.js';
 import {
   CLAVES_PARAMETRO,
   MENSAJE_ELEMENTO_VACIO,
@@ -49,7 +50,12 @@ describe('Parámetros del sistema (e2e) · HU-03-07', () => {
   /** Cómo estaba cada fila antes de la prueba; `null`, si no existía. */
   const originales = new Map<
     string,
-    { valor: string | null; id_actualizado_por: number | null } | null
+    {
+      valor: string | null;
+      tipo_dato: string | null;
+      descripcion: string | null;
+      id_actualizado_por: number | null;
+    } | null
   >();
 
   const http = () => request(app.getHttpServer());
@@ -123,7 +129,12 @@ describe('Parámetros del sistema (e2e) · HU-03-07', () => {
     for (const clave of [...CLAVES_PARAMETRO, CLAVE_JWT]) {
       const actual = await prisma.parametro_sistema.findUnique({
         where: { clave },
-        select: { valor: true, id_actualizado_por: true },
+        select: {
+          valor: true,
+          tipo_dato: true,
+          descripcion: true,
+          id_actualizado_por: true,
+        },
       });
       originales.set(clave, actual);
     }
@@ -138,16 +149,20 @@ describe('Parámetros del sistema (e2e) · HU-03-07', () => {
     // Las víctimas del bloqueo no inician sesión: sus intentos fallidos se cuentan desde cero.
     await crearUsuario('victimaUno', docente, false);
     await crearUsuario('victimaDos', docente, false);
-  });
+    // Con la base vacía de la CI crea además el catálogo de permisos y los roles: no cabe en los
+    // 10 s por defecto en un equipo cargado, y cortada a medias deja datos sin borrar.
+  }, 60_000);
 
   afterAll(async () => {
     if (prisma) {
       // Primero los parámetros: su `id_actualizado_por` apunta al administrador de la prueba.
       for (const [clave, original] of originales) {
         if (original) {
-          await prisma.parametro_sistema.updateMany({
+          // Una prueba borra una fila: si falló antes de volver a crearla, se repone aquí.
+          await prisma.parametro_sistema.upsert({
             where: { clave },
-            data: original,
+            create: { clave, ...original },
+            update: original,
           });
         } else {
           await prisma.parametro_sistema.deleteMany({ where: { clave } });
@@ -341,9 +356,21 @@ describe('Parámetros del sistema (e2e) · HU-03-07', () => {
   describe('cambio', () => {
     it('guarda el valor, dice quién lo cambió y lo audita con el anterior y el nuevo', async () => {
       const clave = PARAMETRO.alertaDiasAnticipacion;
-      // Punto de partida conocido, exista o no la fila.
+      // Punto de partida conocido, exista o no la fila. En una base sin los datos base (la de
+      // la CI) este paso crea la fila y deja su propio registro de auditoría: por eso el del
+      // cambio se busca entre los que no existían antes, no por la hora.
       await como('administrador').cambiar(clave, { valor: '2' }).expect(200);
-      const desde = new Date(Date.now() - 1000);
+      const idFila = (await fila(clave))!.id;
+      const deLaFila = {
+        tabla_afectada: 'parametro_sistema',
+        id_registro: idFila,
+      };
+      const previos = (
+        await prisma.auditoria.findMany({
+          where: deLaFila,
+          select: { id: true },
+        })
+      ).map(({ id }) => id);
 
       const { body } = await como('administrador')
         .cambiar(clave, { valor: ' 7 ' })
@@ -357,23 +384,19 @@ describe('Parámetros del sistema (e2e) · HU-03-07', () => {
       });
       expect(new Date(body.actualizadoEn as string).getTime()).not.toBeNaN();
 
-      const guardada = await fila(clave);
-      expect(guardada).toMatchObject({
+      expect(await fila(clave)).toMatchObject({
+        id: idFila,
         valor: '7',
         id_actualizado_por: idsUsuarios.administrador,
       });
 
       const eventos = await prisma.auditoria.findMany({
-        where: {
-          tabla_afectada: 'parametro_sistema',
-          id_registro: guardada!.id,
-          id_usuario: idsUsuarios.administrador,
-          fecha: { gte: desde },
-        },
+        where: { ...deLaFila, id: { notIn: previos } },
       });
       expect(eventos).toHaveLength(1);
       expect(eventos[0]).toMatchObject({
         accion: 'actualizar',
+        id_usuario: idsUsuarios.administrador,
         valor_anterior: { clave, valor: '2' },
         valor_nuevo: { clave, valor: '7' },
       });
@@ -389,6 +412,43 @@ describe('Parámetros del sistema (e2e) · HU-03-07', () => {
           }),
         ]),
       );
+    });
+
+    // Lo que pasa en una base sin los datos base, como la de la CI: se prueba a propósito para
+    // que no dependa de si la base donde corre la suite está sembrada.
+    it('si la fila del parámetro falta, la crea con su descripción inicial y lo audita una vez, como creación', async () => {
+      const clave = PARAMETRO.reporteExportacionFilasMaxima;
+      await prisma.parametro_sistema.deleteMany({ where: { clave } });
+
+      const { body } = await como('administrador')
+        .cambiar(clave, { valor: '300' })
+        .expect(200);
+
+      expect(body).toMatchObject({
+        clave,
+        tipoDato: 'entero',
+        valor: '300',
+        actualizadoPor: 'Usuario administrador E2E',
+      });
+      const creada = await fila(clave);
+      expect(creada).toMatchObject({
+        valor: '300',
+        tipo_dato: 'entero',
+        descripcion: PARAMETROS.find((parametro) => parametro.clave === clave)
+          ?.descripcion,
+        id_actualizado_por: idsUsuarios.administrador,
+      });
+
+      const eventos = await prisma.auditoria.findMany({
+        where: { tabla_afectada: 'parametro_sistema', id_registro: creada!.id },
+      });
+      expect(eventos).toHaveLength(1);
+      expect(eventos[0]).toMatchObject({
+        accion: 'crear',
+        id_usuario: idsUsuarios.administrador,
+        valor_anterior: null,
+        valor_nuevo: { clave, valor: '300' },
+      });
     });
 
     it('guardar el mismo valor no deja otro registro de auditoría', async () => {
@@ -442,6 +502,8 @@ describe('Parámetros del sistema (e2e) · HU-03-07', () => {
         .cambiar(PARAMETRO.inicioSesionIntentosMaximos, { valor: '1' })
         .expect(200);
       await iniciarSesion('victimaDos', 'clave-equivocada').expect(429);
-    });
+      // Tres cambios y tres inicios de sesión con su cifrado: no caben en los 5 s por defecto
+      // en un equipo cargado.
+    }, 30_000);
   });
 });
