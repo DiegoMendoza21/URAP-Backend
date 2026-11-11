@@ -352,7 +352,7 @@ async function exigirRol(tx: Transaccion, id: number) {
  * la administración a dos roles distintos y ninguno de los dos vería que la dejaron sin nadie.
  * Los cambios de la matriz son escasos (RF-03: frecuencia baja), así que esperar no cuesta.
  */
-async function bloquearMatriz(tx: Transaccion): Promise<void> {
+export async function bloquearMatriz(tx: Transaccion): Promise<void> {
   await tx.$queryRaw`SELECT id FROM permiso WHERE codigo = ${PERMISO_ADMINISTRACION} FOR UPDATE`;
 }
 
@@ -362,7 +362,18 @@ async function bloquearMatriz(tx: Transaccion): Promise<void> {
  * se deshace.
  */
 async function exigirAdministradorActivo(tx: Transaccion): Promise<void> {
-  const administradores = await tx.usuario.count({
+  if ((await contarAdministradoresActivos(tx)) === 0) {
+    throw new ConflictException(MENSAJE_ULTIMO_ADMINISTRADOR);
+  }
+}
+
+/**
+ * Usuarios activos que conservan la administración de usuarios y roles mediante un rol
+ * activo. También la usa la gestión de usuarios (RF-02): inactivar a alguien o revocarle un
+ * rol no puede dejar el sistema sin nadie que lo administre.
+ */
+export function contarAdministradoresActivos(tx: Transaccion): Promise<number> {
+  return tx.usuario.count({
     where: {
       activo: true,
       usuario_rol_usuario_rol_id_usuarioTousuario: {
@@ -384,9 +395,6 @@ async function exigirAdministradorActivo(tx: Transaccion): Promise<void> {
       },
     },
   });
-  if (administradores === 0) {
-    throw new ConflictException(MENSAJE_ULTIMO_ADMINISTRADOR);
-  }
 }
 
 function exigirLectura(permisos: PermisoAsignadoDto[]): void {
