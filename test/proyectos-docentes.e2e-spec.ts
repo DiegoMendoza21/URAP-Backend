@@ -6,6 +6,7 @@ import { ContrasenasService } from '../src/auth/contrasenas.service.js';
 import { type NombreRol, ROL } from '../src/auth/roles.js';
 import { PrismaService } from '../src/common/prisma/prisma.service.js';
 import { configurarAplicacion } from '../src/configurar-aplicacion.js';
+import { NOTIFICACION } from '../src/notificaciones/notificaciones.service.js';
 import {
   asegurarCatalogoDePermisos,
   asegurarPermisosDeRol,
@@ -40,6 +41,7 @@ describe('Proyectos docentes (e2e) · RF-08, HU-05-01 a HU-05-03', () => {
     raps: [] as number[],
     usuarios: [] as number[],
     proyectos: [] as number[],
+    tiposNotificacion: [] as number[],
   };
   const tokens: Record<string, string> = {};
   let programaA: number;
@@ -148,6 +150,20 @@ describe('Proyectos docentes (e2e) · RF-08, HU-05-01 a HU-05-03', () => {
     configurarAplicacion(app);
     await app.init();
     prisma = app.get(PrismaService);
+    // HU-13-01: sin el tipo sembrado, la creación no deja el aviso (base vacía de la CI).
+    const tipoAsignacion = await prisma.tipo_notificacion.findUnique({
+      where: { codigo: NOTIFICACION.asignacionProyecto },
+    });
+    if (!tipoAsignacion) {
+      const creado = await prisma.tipo_notificacion.create({
+        data: {
+          codigo: NOTIFICACION.asignacionProyecto,
+          nombre: NOTIFICACION.asignacionProyecto,
+          activo: true,
+        },
+      });
+      creados.tiposNotificacion.push(creado.id);
+    }
     await asegurarCatalogoDePermisos(prisma, matriz);
     hash = await app.get(ContrasenasService).hashear(contrasena);
 
@@ -253,6 +269,17 @@ describe('Proyectos docentes (e2e) · RF-08, HU-05-01 a HU-05-03', () => {
             },
           ],
         },
+      });
+      await prisma.notificacion.deleteMany({
+        where: {
+          OR: [
+            { id_usuario: { in: creados.usuarios } },
+            { entidad: 'proyecto_docente', id_entidad: { in: idsProyectos } },
+          ],
+        },
+      });
+      await prisma.tipo_notificacion.deleteMany({
+        where: { id: { in: creados.tiposNotificacion } },
       });
       const deProyectos = { id_proyecto_docente: { in: idsProyectos } };
       await prisma.proyecto_docente_docente.deleteMany({ where: deProyectos });
@@ -499,6 +526,26 @@ describe('Proyectos docentes (e2e) · RF-08, HU-05-01 a HU-05-03', () => {
           },
         }),
       ).resolves.toBe(1);
+
+      // HU-13-01: cada docente asignado recibe el aviso, con el enlace al proyecto.
+      const avisos = await prisma.notificacion.findMany({
+        where: {
+          entidad: 'proyecto_docente',
+          id_entidad: proyecto.id,
+          tipo_notificacion: { codigo: NOTIFICACION.asignacionProyecto },
+        },
+        select: { id_usuario: true, url_destino: true, leida: true },
+        orderBy: { id_usuario: 'asc' },
+      });
+      expect(avisos).toEqual(
+        [usuarios.docente1, usuarios.docente2]
+          .sort((a, b) => a - b)
+          .map((idUsuario) => ({
+            id_usuario: idUsuario,
+            url_destino: `/proyectos-docentes/${proyecto.id}`,
+            leida: false,
+          })),
+      );
     });
 
     it('advierte si ya existe el curso y permite consultarlo antes de crear (p6)', async () => {
