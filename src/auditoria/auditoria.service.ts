@@ -4,8 +4,15 @@ import { PrismaService } from '../common/prisma/prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
 
 /** Acciones de auditoría, con el vocabulario del modelo de datos (DBML, tabla `auditoria`). */
-export type AccionAuditoria =
-  'crear' | 'actualizar' | 'eliminar' | 'aprobar' | 'consulta_sensible';
+export const ACCIONES_AUDITORIA = [
+  'crear',
+  'actualizar',
+  'eliminar',
+  'aprobar',
+  'consulta_sensible',
+] as const;
+
+export type AccionAuditoria = (typeof ACCIONES_AUDITORIA)[number];
 
 export interface EventoAuditoria {
   accion: AccionAuditoria;
@@ -67,8 +74,8 @@ export class AuditoriaService {
             accion: evento.accion,
             tabla_afectada: evento.tablaAfectada,
             id_registro: evento.idRegistro,
-            valor_anterior: limpiar(evento.valorAnterior),
-            valor_nuevo: limpiar(evento.valorNuevo),
+            valor_anterior: omitirCamposSensibles(evento.valorAnterior),
+            valor_nuevo: omitirCamposSensibles(evento.valorNuevo),
             fecha: new Date(),
             ip: (evento.ip ?? contexto?.ip)?.slice(0, 255) ?? null,
           },
@@ -119,8 +126,12 @@ function tieneToJSON(valor: unknown): valor is { toJSON(): unknown } {
   );
 }
 
-/** Copia del valor sin campos sensibles (contraseñas, tokens), a cualquier profundidad. */
-function limpiar(
+/**
+ * Copia del valor sin campos sensibles (contraseñas, tokens), a cualquier profundidad. Se
+ * aplica al guardar y otra vez al consultar (HU-14-03), por si un registro llegó a la tabla
+ * por otro camino.
+ */
+export function omitirCamposSensibles(
   entrada: Prisma.InputJsonValue | undefined,
 ): Prisma.InputJsonValue | undefined {
   // Un Date o un Prisma.Decimal es un objeto sin propiedades propias: recorrido tal cual
@@ -130,7 +141,7 @@ function limpiar(
     : entrada;
   if (Array.isArray(valor)) {
     return valor.map((elemento) =>
-      limpiar(elemento as Prisma.InputJsonValue),
+      omitirCamposSensibles(elemento as Prisma.InputJsonValue),
     ) as Prisma.InputJsonValue;
   }
   if (valor !== null && typeof valor === 'object') {
@@ -139,7 +150,7 @@ function limpiar(
         clave,
         CAMPO_SENSIBLE.test(clave)
           ? VALOR_OMITIDO
-          : limpiar(interno as Prisma.InputJsonValue),
+          : omitirCamposSensibles(interno as Prisma.InputJsonValue),
       ]),
     );
   }
