@@ -1,8 +1,13 @@
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { Test } from '@nestjs/testing';
 import {
+  ALMACENAMIENTO_DIRECTORIO_DESARROLLO,
+  directorioAlmacenamiento,
   Entorno,
   MENSAJE_BASE_SIN_TLS,
   MENSAJE_URL_BASE_ILEGIBLE,
   validarVariablesEntorno,
+  type VariablesEntorno,
 } from './variables-entorno.js';
 
 const VARIABLES_VALIDAS: Record<string, unknown> = {
@@ -212,5 +217,60 @@ describe('validarVariablesEntorno', () => {
         CORS_ORIGENES: 'localhost',
       }),
     ).toThrow(/CORS_ORIGENES/);
+  });
+});
+
+describe('directorioAlmacenamiento', () => {
+  it.each([
+    ['no está definida', undefined],
+    ['está vacía', ''],
+    ['solo tiene espacios', '   '],
+  ])('usa la carpeta por defecto si la variable %s', (_caso, valor) => {
+    expect(directorioAlmacenamiento(valor)).toBe(
+      ALMACENAMIENTO_DIRECTORIO_DESARROLLO,
+    );
+  });
+
+  it('respeta la carpeta configurada', () => {
+    expect(directorioAlmacenamiento('/srv/urap/almacenamiento')).toBe(
+      '/srv/urap/almacenamiento',
+    );
+  });
+
+  describe('con la variable vacía en el entorno, como viene en .env.example', () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    // La validación deja la variable en undefined, pero ConfigService.get vuelve a leerla de
+    // process.env y entrega la cadena vacía: la carpeta raíz sería la carpeta de trabajo.
+    it.each(['', '   '])(
+      'la carpeta que se obtiene de ConfigService es la por defecto («%s»)',
+      async (valor) => {
+        for (const [clave, texto] of Object.entries(VARIABLES_VALIDAS)) {
+          vi.stubEnv(clave, String(texto));
+        }
+        vi.stubEnv('NODE_ENV', Entorno.Pruebas);
+        vi.stubEnv('ALMACENAMIENTO_DIRECTORIO', valor);
+
+        const modulo = await Test.createTestingModule({
+          imports: [
+            ConfigModule.forRoot({
+              ignoreEnvFile: true,
+              validate: validarVariablesEntorno,
+            }),
+          ],
+        }).compile();
+        const config =
+          modulo.get<ConfigService<VariablesEntorno, true>>(ConfigService);
+
+        expect(
+          directorioAlmacenamiento(
+            config.get('ALMACENAMIENTO_DIRECTORIO', { infer: true }),
+          ),
+        ).toBe(ALMACENAMIENTO_DIRECTORIO_DESARROLLO);
+        await modulo.close();
+      },
+    );
   });
 });

@@ -1,7 +1,7 @@
 import { Logger, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
-  ALMACENAMIENTO_DIRECTORIO_DESARROLLO,
+  directorioAlmacenamiento,
   type VariablesEntorno,
 } from '../common/configuracion/variables-entorno.js';
 import { ProyectosDocentesModule } from '../proyectos-docentes/proyectos-docentes.module.js';
@@ -27,10 +27,11 @@ import { EvidenciasService } from './evidencias.service.js';
       provide: ALMACENAMIENTO_DOCUMENTAL,
       inject: [ConfigService],
       useFactory: async (config: ConfigService<VariablesEntorno, true>) => {
-        const directorio =
-          config.get('ALMACENAMIENTO_DIRECTORIO', { infer: true }) ??
-          ALMACENAMIENTO_DIRECTORIO_DESARROLLO;
-        const almacenamiento = new AlmacenamientoLocal(directorio);
+        const almacenamiento = new AlmacenamientoLocal(
+          directorioAlmacenamiento(
+            config.get('ALMACENAMIENTO_DIRECTORIO', { infer: true }),
+          ),
+        );
         try {
           await almacenamiento.preparar();
         } catch (error) {
