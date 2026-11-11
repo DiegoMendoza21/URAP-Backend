@@ -5,8 +5,25 @@
 # Caddy no confía en un X-Forwarded-For que mande el navegador: lo reemplaza por la IP real del
 # cliente. Next.js lo reenvía tal cual al backend, que confía en un proxy (PROXIES_CONFIABLES=1).
 
+{
+	servers {
+		# Solo HTTP/1.1 y HTTP/2, por TCP: el grupo de seguridad no abre el 443 por UDP, que es
+		# lo que usa HTTP/3. Así Caddy tampoco lo anuncia (Alt-Svc).
+		protocols h1 h2
+	}
+}
+
 {$DOMINIO} {
 	encode zstd gzip
-	header Strict-Transport-Security "max-age=31536000"
+	# Next.js no agrega cabeceras de seguridad (next.config.ts no tiene headers()).
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		# SAMEORIGIN y no DENY: una pantalla puede mostrar un PDF de evidencia en un marco
+		# de la propia aplicación.
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-X-Powered-By
+	}
 	reverse_proxy frontend:3000
 }

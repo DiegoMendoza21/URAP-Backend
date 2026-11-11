@@ -52,13 +52,14 @@ services:
     ports:
       - '80:80'
       - '443:443'
-      - '443:443/udp'
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_datos:/data
       - caddy_configuracion:/config
     depends_on:
-      - frontend
+      # El HEALTHCHECK del Dockerfile del frontend: Caddy arranca cuando Next ya responde.
+      frontend:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

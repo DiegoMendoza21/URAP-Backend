@@ -1,6 +1,7 @@
 import {
   Entorno,
   MENSAJE_BASE_SIN_TLS,
+  MENSAJE_URL_BASE_ILEGIBLE,
   validarVariablesEntorno,
 } from './variables-entorno.js';
 
@@ -110,6 +111,49 @@ describe('validarVariablesEntorno', () => {
       }).DATABASE_URL,
     ).toBe(URL_CON_TLS);
   });
+
+  it.each([
+    ['sin sslaccept', '?sslcert=/certificados/rds.pem'],
+    [
+      'con sslaccept distinto de strict',
+      '?sslcert=/certificados/rds.pem&sslaccept=accept_invalid_certs',
+    ],
+    ['con sslcert vacío', '?sslcert=&sslaccept=strict'],
+  ])(
+    'en producción rechaza la URL de la base %s: el CLI de Prisma no verificaría el certificado',
+    (_caso, parametros) => {
+      expect(() =>
+        validarVariablesEntorno({
+          ...VARIABLES_VALIDAS,
+          NODE_ENV: Entorno.Produccion,
+          DATABASE_URL: `mysql://urap:clave@urap.abc123.us-east-1.rds.amazonaws.com:3306/urap${parametros}`,
+          ALMACENAMIENTO_DIRECTORIO: '/srv/urap/almacenamiento',
+        }),
+      ).toThrow(MENSAJE_BASE_SIN_TLS);
+    },
+  );
+
+  it.each([Entorno.Desarrollo, Entorno.Produccion])(
+    'en %s rechaza una URL de la base que no se puede leer, sin mostrar la contraseña',
+    (entorno) => {
+      const contrasena = 'secreta/con?barra';
+      let error: unknown;
+      try {
+        validarVariablesEntorno({
+          ...VARIABLES_VALIDAS,
+          NODE_ENV: entorno,
+          DATABASE_URL: `mysql://urap:${contrasena}@localhost:3307/urap`,
+          ALMACENAMIENTO_DIRECTORIO: '/srv/urap/almacenamiento',
+        });
+      } catch (e) {
+        error = e;
+      }
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toContain(MENSAJE_URL_BASE_ILEGIBLE);
+      expect((error as Error).message).not.toContain(contrasena);
+      expect((error as Error).message).not.toContain(MENSAJE_BASE_SIN_TLS);
+    },
+  );
 
   it('fuera de producción no exige TLS: la base local no lo tiene', () => {
     expect(validarVariablesEntorno(VARIABLES_VALIDAS).DATABASE_URL).toBe(

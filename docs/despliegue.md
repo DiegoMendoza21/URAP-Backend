@@ -19,6 +19,18 @@ Internet ──HTTPS──▶ EC2 ─┬─ caddy ──▶ frontend (Next.js) �
   `/srv/urap/almacenamiento`, fuera de los contenedores (NFR-007). Pasarlos a S3 es un cambio
   aparte.
 
+**En qué se aparta del Producto 2.** Este despliegue del prototipo es una versión reducida de la
+arquitectura que documenta la tesis:
+
+- el frontend corre en un contenedor de Next.js en el mismo EC2, detrás de Caddy;
+- la API corre con Docker Compose en esa misma instancia, sin balanceador ni réplicas;
+- los documentos quedan en el disco de la instancia, no en un servicio de almacenamiento de
+  objetos (S3);
+- el certificado HTTPS lo emite Let's Encrypt a través de Caddy.
+
+Quien mantiene la tesis decide si actualiza el diagrama de despliegue o lo explica como el
+despliegue reducido del prototipo.
+
 Los archivos del despliegue están en `despliegue/`: `docker-compose.yml`, `Caddyfile` y la
 plantilla de variables `.env.example`. Los Dockerfiles están en la raíz de cada repositorio.
 
@@ -72,13 +84,21 @@ Al terminar (tarda unos minutos), copie el **Endpoint** de la base: algo como
 | Storage | 30 GB gp3 |
 
 **IP fija.** En *EC2 → Elastic IPs → Allocate Elastic IP address* y luego *Associate* con la
-instancia `urap`. Copie la IP (por ejemplo `3.91.20.14`): el dominio apuntará a ella.
+instancia `urap`. Copie la IP (por ejemplo `203.0.113.10`): el dominio apuntará a ella.
+
+**SSH y «My IP».** La regla del 22 deja entrar solo a la IP pública desde la que la creó, y esa IP
+cambia sin avisar (otra red, o el proveedor de internet la renueva). Si `ssh` responde
+`Connection timed out`, vuelva a elegir **My IP** en esa regla. La otra persona del equipo debe
+agregar su propia IP en `urap-web` antes de entrar.
 
 ## 3. Que el servidor llegue a la base
 
 En *EC2 → Security Groups → `urap-rds` → Inbound rules → Edit*: agregue una regla **MySQL/Aurora
 (3306)** cuyo origen sea el grupo **`urap-web`** (no una IP). Así solo el servidor de URAP llega
 a la base.
+
+Revise también que `urap-rds` no tenga otra regla de entrada: si el asistente de RDS agregó una
+con la IP de su casa, bórrela, para que el único origen sea `urap-web`.
 
 ## 4. Dominio
 
@@ -87,7 +107,12 @@ Let's Encrypt necesita un nombre de dominio que apunte a la IP elástica.
 - **Con un subdominio propio** (por ejemplo, uno de la universidad): pida un registro **A** hacia
   la IP elástica.
 - **Sin dominio propio**: use `sslip.io`, que resuelve cualquier nombre que contenga la IP. Con
-  la IP `3.91.20.14`, el dominio es **`3-91-20-14.sslip.io`**. No hay que registrar nada.
+  la IP `203.0.113.10`, el dominio es **`203-0-113-10.sslip.io`**. No hay que registrar nada.
+
+  Let's Encrypt limita los certificados por dominio registrado, y `sslip.io` no está en la lista
+  pública de sufijos: todos los que lo usan en el mundo comparten el mismo cupo. Si se agota,
+  Caddy reintenta solo, pero puede tardar horas (ver «Problemas frecuentes»). Para la
+  sustentación conviene un subdominio propio.
 
 ---
 
@@ -97,7 +122,7 @@ Entre por SSH (desde la carpeta donde guardó la llave):
 
 ```bash
 chmod 400 urap.pem
-ssh -i urap.pem ubuntu@3.91.20.14
+ssh -i urap.pem ubuntu@203.0.113.10
 ```
 
 Instale Docker y prepare las carpetas:
@@ -185,8 +210,8 @@ grep -n 'DATABASE_URL' .env | sed -E 's#(urap:)[^@]*@#\1****@#' | cat -A
 
 Debe salir una sola línea, que empiece por `DATABASE_URL=mysql://` y termine en `strict$`.
 
-La API no arranca si falta una variable o si `DATABASE_URL` no lleva `sslcert`: lo dice en el
-registro (`docker compose logs backend`).
+La API no arranca si falta una variable o si `DATABASE_URL` no lleva `sslcert` y
+`sslaccept=strict`: lo dice en el registro (`docker compose logs backend`).
 
 ## 8. Primer despliegue
 
@@ -219,6 +244,9 @@ docker compose run --rm --no-deps -e NODE_ENV=development backend node dist/dato
 
 - Use una `CONTRASENA_USUARIOS_DEMO` larga y que no use en ningún otro lado: el servidor es
   público.
+- `CONTRASENA_USUARIOS_DEMO` solo la usa este comando, y el compose carga todo el `.env` en el
+  backend: después de sembrar, bórrela de `despliegue/.env` y aplique con `docker compose up -d`.
+  La API no la necesita.
 - Las clases de los 7 días anteriores a la siembra quedan como vencidas. Para la demostración,
   siembre cerca de la fecha. Si ya había datos de demostración, el seed no los vuelve a tocar:
   para empezar de cero hay que borrar la base (`DROP DATABASE urap; CREATE DATABASE urap;` con
@@ -237,11 +265,15 @@ docker compose build
 docker compose run --rm --no-deps backend npx prisma migrate deploy
 docker compose run --rm --no-deps backend node dist/datos-iniciales/sembrar.js
 docker compose up -d
+docker image prune -f
 ```
 
 `migrate deploy` solo aplica las migraciones nuevas, y `sembrar.js` solo agrega lo que falta
 (por ejemplo, un parámetro nuevo): no pisa lo que se haya cambiado desde la aplicación. La
 aplicación se corta unos segundos mientras los contenedores se reemplazan.
+
+Cada imagen pesa cerca de 1 GB, y cada `docker compose build` deja la anterior sin nombre:
+`docker image prune -f` la borra para que no se llene el disco.
 
 Para ver qué pasa: `docker compose ps` y `docker compose logs -f backend` (o `frontend`, `caddy`).
 
@@ -262,6 +294,22 @@ Para restaurar:
 **Archivos.** Las evidencias están en el disco del servidor. Para copiarlas a diario, en
 *EC2 → Lifecycle Manager* cree una política de *snapshots* diarios del volumen de la instancia.
 
+Para restaurarlas:
+
+1. *EC2 → Snapshots*: elija el del día y *Actions → Create volume from snapshot*, en la misma
+   zona de disponibilidad de la instancia.
+2. *Volumes → Actions → Attach volume* a la instancia `urap`.
+3. En el servidor, monte el volumen (`lsblk` muestra su nombre, por ejemplo `/dev/nvme1n1p1`) y
+   copie la carpeta:
+
+   ```bash
+   sudo mkdir -p /mnt/respaldo && sudo mount /dev/nvme1n1p1 /mnt/respaldo
+   sudo rsync -a /mnt/respaldo/srv/urap/almacenamiento/ /srv/urap/almacenamiento/
+   sudo umount /mnt/respaldo
+   ```
+
+4. Separe el volumen (*Detach volume*) y elimínelo.
+
 ## Problemas frecuentes
 
 | Síntoma | Causa probable |
@@ -271,6 +319,9 @@ Para restaurar:
 | `migrate deploy` se queda esperando y falla por tiempo | El grupo `urap-rds` no deja entrar al grupo `urap-web` (paso 3). |
 | `Access denied` o error de TLS al conectar | La contraseña de `DATABASE_URL` tiene caracteres sin codificar, o falta el certificado en `/srv/urap/certificados`. |
 | `docker compose build` se detiene sin mensaje claro | Falta memoria: active el intercambio del paso 5. |
+| `docker compose logs caddy` dice `rateLimited` | Let's Encrypt agotó el cupo de `sslip.io` (paso 4). Caddy reintenta solo; si no puede esperar, use un subdominio propio. |
+| `DATABASE_URL no se puede leer` | La contraseña tiene `@ : / ? #` sin codificar (paso 7). |
+| `ssh: connect to host … Connection timed out` | Su IP cambió: vuelva a elegir **My IP** en la regla SSH de `urap-web`. |
 
 ## Apagar o borrar
 
@@ -278,5 +329,9 @@ Para restaurar:
   → Stop*). RDS se vuelve a encender sola a los 7 días.
 - AWS cobra por hora cada IP pública (de los créditos del plan gratuito), y más si la IP
   elástica queda sin asociar a una instancia encendida: libérela cuando ya no la use.
+- Después de la sustentación, el servidor queda con un Administrador de demostración cuya
+  contraseña conoce todo el equipo: apague las instancias, o borre la base antes de cualquier uso
+  real (paso 8, «Datos de demostración»). Al borrar la base, vacíe también
+  `/srv/urap/almacenamiento`: los archivos que se subieron quedan huérfanos.
 - Al terminar la tesis: elimine la instancia de EC2, la de RDS (puede guardar un *snapshot*
   final), la IP elástica y los *snapshots* que ya no necesite.
