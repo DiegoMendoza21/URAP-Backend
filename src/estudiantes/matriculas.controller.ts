@@ -46,7 +46,7 @@ import { MatriculasService, TABLA_AUDITORIA } from './matriculas.service.js';
  * Lista de estudiantes matriculados en cada curso (RF-22, HU-09-01). Va con `@Roles` y no con
  * `@Permiso` porque la matriz no expresa la regla: la lista tiene datos personales (Ley 1581),
  * así que se reservó (backend #10) al Administrador, que la carga, y a los docentes del curso,
- * que la consultan. Ningún permiso de la Tabla 17 tiene exactamente esos roles.
+ * que la consultan. Ningún permiso de la Tabla 11 tiene exactamente esos roles.
  */
 @ApiTags('Estudiantes matriculados')
 @ApiBearerAuth()

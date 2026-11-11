@@ -1,6 +1,6 @@
 # Datos institucionales reales — Administración Industrial
 
-**Versión 3.0 — 8 de noviembre de 2026.** Los cambios de cada versión están al final, apartado por
+**Versión 3.2 — 10 de noviembre de 2026.** Los cambios de cada versión están al final, apartado por
 apartado. **Este archivo es público:** no lleva nombres de personas, cédulas ni correos; a las
 personas se las nombra por su función.
 
@@ -10,13 +10,13 @@ inventados.
 
 Fuentes:
 
-- `Matriz Consistencia RAP` — Vicerrectoría de Docencia, Desarrollo Profesoral. Responsable: la
-  dirección del programa.
+- `Matriz Consistencia RAP` — Vicerrectoría de Docencia, Desarrollo Profesoral. Responsables: el
+  director del programa y una docente del programa.
 - `INFORME EVALUACIÓN RAP 2023-II — Administración Industrial`.
-- `Producto 1 — Arquitectura del Negocio URAP` (revisado, v2), Tablas 16 y 17.
+- `Producto 1 — Arquitectura del Negocio URAP`, Tablas 10 y 11.
 - `FO-DO/PC-023 v00` — Medición de resultado de aprendizaje del programa por asignatura.
 - `FO-DO/PC-023 diligenciado` — medición del RAP 2 en Finanzas de corto plazo, primer período
-  de 2024, entregado por la dirección del programa. **Contiene los nombres reales de 34
+  de 2024, entregado por una docente del programa. **Contiene los nombres reales de 34
   estudiantes: ese archivo no entra al repositorio, ni siquiera a `docs/fuentes/`.** Aquí solo
   están sus datos agregados.
 - `Acuerdo No. 46 del 26 de mayo de 2026` — Consejo Académico, calendario académico 2026-2.
@@ -32,8 +32,9 @@ Al final está **lo que todavía no existe** y hay que pedirle al programa. No l
 
 ## 1. Matriz de permisos por rol
 
-Fuente: Producto 1, Tabla 17 «Matriz general de permisos por rol», y Tabla 16 «Catálogo de
-roles». Esta es la matriz que faltaba para HU-01-03.
+Fuente: Producto 1, Tabla 11 «Matriz general de permisos por rol», y Tabla 10 «Catálogo de
+roles». Esta es la matriz que faltaba para HU-01-03. En la versión revisada que circuló antes eran
+las Tablas 17 y 16; el contenido es el mismo.
 
 **Convenciones:** `ADM` = administrar · `R` = registrar · `E` = editar · `A` = aprobar ·
 `G` = generar · `C` = consultar · `—` = sin acceso.
@@ -56,7 +57,7 @@ Estudiante = ACT-04. ACT-07 son sistemas externos y no es un rol con credenciale
 
 **Corrección de la fila «Proyectos docentes» (v2 del Producto 1).** La versión original decía
 Docente `R/E propios` y Departamento `A/C`, que es el supuesto inicial del equipo antes de la
-sesión de diseño con la dirección del programa. Lo correcto es Docente `E propios` y Departamento `R/A/C`:
+sesión de diseño con una docente del programa. Lo correcto es Docente `E propios` y Departamento `R/A/C`:
 el proyecto docente lo crea el departamento académico (RF-08 asistente, RF-09 duplicación,
 RF-10 carga desde Excel; HU-05-01 a HU-05-06) y el docente lo diligencia (RF-11 a RF-16). La
 consecuencia para los guards es directa: **crear, duplicar y cargar desde Excel son del
@@ -66,10 +67,14 @@ seed de permisos de HU-01-03 le dio al Docente un permiso de creación sobre pro
 quitárselo. Las filas «Plan de curso» y «RAP y RAC» no cambian: ahí el `R` del Docente es
 registrar contenidos y RAC dentro de su proyecto, que sí le corresponde.
 
-**\* Excepción del Administrador (v3.0).** En «Proyectos docentes», `ADM` no incluye crear ni
-aprobar: la creación es del Departamento (RF-08) y la aprobación, de la revisión del
-Departamento (RF-18). Es una excepción explícita de la matriz, decidida en el desarrollo y ya
-implementada. El Administrador conserva el resto de la administración del módulo.
+**`ADM` no incluye aprobar en ningún módulo (v3.2).** Aprobar es el permiso `A`, y en la matriz
+solo lo tiene el Departamento, en «Proyectos docentes», «Plan de curso» y «RAP y RAC». El
+Administrador administra los nueve módulos, pero no aprueba en ninguno. Es una decisión del
+desarrollo, ya implementada.
+
+**\* Excepción del Administrador en «Proyectos docentes» (v3.0).** Ahí `ADM` tampoco incluye
+crear: la creación es del Departamento (RF-08). El Administrador conserva el resto de la
+administración del módulo.
 
 **Importante sobre la granularidad.** Esta matriz es por módulo, no por endpoint. Define el
 marco y resuelve los casos de alcance («propios», «RAP asignados», «publicados»), que es lo
@@ -339,7 +344,9 @@ El programa tiene dos líneas de electivas, la general y la GPO (Gestión de Pro
 Operaciones). Las electivas (4917xxx) y la práctica (4949920) salen en el reporte sin plan
 («[Pensum:XXXX]»); por sus nombres son las del 1702, valen 4 créditos y la práctica 8. Las de IX
 aparecen sin número de semestre en el informe original y se ubicaron en IX por el mapeo
-curricular; confírmalo con el plan oficial.
+curricular; confírmalo con el plan oficial. El código de Electiva III GPO, 4917204, es el que
+trae la programación 2026-1, pero rompe la serie de las demás electivas (4917023, 4917025): por
+la serie se esperaría 4917024. Se carga como viene y se pregunta (apartado 8, pregunta 11).
 
 ### Plan 2502: lo que muestra la programación 2026-1
 
@@ -553,16 +560,19 @@ para después de la entrega.
 | 2 | Si se confirma la regla del logro del RAP (apartado 3) o se exige la meta a cada indicador | Regla del apartado 3 | No: una función |
 | 3 | Si un miembro del Departamento puede aprobar un proyecto en el que es docente; RF-18 no lo prohíbe | No se permite: parámetro `revision_bloquear_autoaprobacion`, encendido | No: una regla y un parámetro |
 | 4 | Qué es un proyecto «publicado», que es lo que ve el Estudiante (RF-27) | Propuesta: aprobado o en ejecución | Solo si exige publicar a mano |
-| 5 | Los planes oficiales 1702 y 2502, con código, créditos y horas (TDE, TDP y TI) de cada asignatura. Del 1702 faltan código y créditos de 33 asignaturas: todas las de I a III, casi todas las de IV y V y una de VI | Campos vacíos | No |
+| 5 | Los planes oficiales 1702 y 2502, con código, créditos y horas (TDE, TDP y TI) de cada asignatura. Del 1702 faltan 33 códigos y 34 créditos: el código y los créditos de todas las asignaturas de I a III, de casi todas las de IV y V y de una de VI, y los créditos de Finanzas a corto plazo, que sí tiene código | Campos vacíos | No |
 | 6 | Si el plan 2502 tiene RAP propios (SUP-16) y qué asignaturas del 2502 tributan a cada RAP | RAP del programa; asignaturas del 2502 sin vínculo | Solo si tiene RAP propios |
 | 7 | Las rúbricas de los RAP 1, 3, 4, 5, 6 y 7 | Textos «PROVISIONAL —» | No |
 | 8 | El calendario académico 2027-1 | — | No |
 | 9 | De dónde sale la lista de matriculados (SUP-03) | Carga por archivo | Puede |
 | 10 | Qué significa «cohorte» en el FO-DO/PC-023 (SUP-14) | Igual a la muestra | No |
+| 11 | Si el código de Electiva III GPO (Simulación de procesos) es 4917204, como sale en la programación 2026-1, o 4917024, que es el que sigue la serie | 4917204, como viene en la programación | No |
+| 12 | Si un grupo con estudiantes de los dos planes es un solo proyecto docente o uno por plan | Uno por plan: el proyecto apunta a una asignatura y la asignatura a un plan, como en los dos formatos reales de Comportamiento organizacional (apartado 4) | Sí, si es uno solo: queda para después de la entrega |
 
 Sobre la 3, la regla tiene respaldo propio: separar quien elabora de quien aprueba es un
-principio de control interno (Ley 87 de 1993), y en el programa el caso es real, porque quienes
-dirigen el programa también dictan asignaturas. Ya está implementada: quien es docente de un
+principio de control interno (Ley 87 de 1993), y en el programa el caso es real: en el informe
+2023-II, el director del programa y varios líderes de RAP figuran también como docentes de
+asignaturas. Ya está implementada: quien es docente de un
 proyecto, sea o no el responsable, no puede aprobarlo ni devolverlo. Si el programa responde otra
 cosa, el parámetro se apaga sin tocar código. No hay reasignación de revisores: si no hay otra
 persona con el rol, el Administrador se lo asigna a alguien más o apaga el parámetro.
@@ -576,6 +586,26 @@ toma por defecto el tamaño de la muestra y ningún cálculo lo usa.
 ---
 
 ## Registro de cambios
+
+**v3.2 — 10 de noviembre de 2026.** Parte de la versión del repositorio (la v3.0 con sus ajustes
+del 10 de noviembre) y responde el parte de Claude Code de ese día.
+
+- *Fuentes y apartado 1:* la matriz y el catálogo de roles se citan como Tablas 11 y 10 del
+  Producto 1, que es la numeración del documento oficial. Solo cambian las referencias; afecta a
+  HU-01-03 y HU-02-06. Era el cambio de la v3.1 del 8 de noviembre, que no llegó al repositorio.
+- *Fuentes y apartado 1:* la sesión de diseño y la entrega de la medición del RAP 2 fueron con
+  «una docente del programa», no con «la dirección del programa». La v3.0 lo decía mal. La matriz
+  de consistencia tiene dos responsables: el director del programa y una docente.
+- *Apartado 1:* `ADM` no incluye aprobar en ningún módulo. Antes la excepción solo nombraba
+  «Proyectos docentes». Decisión del desarrollo, ya implementada; afecta a HU-01-03.
+- *Apartado 4:* nota sobre el código 4917204, que rompe la serie de las electivas.
+- *Apartado 8:* la pregunta 5 dice el conteo exacto del plan 1702 (33 códigos y 34 créditos). Se
+  agregan la pregunta 11 (código 4917204) y la 12 (grupo con estudiantes de los dos planes). La
+  nota de la pregunta 3 dice quiénes dictan asignaturas, según el informe 2023-II.
+- *Requisitos v1.4:* el libro del MEN se cita con el año 2022, que es el de su publicación, en
+  las fuentes de OBJ-04, RF-05, RF-06, RF-07 y RF-12 y en el comentario de RF-13. Antes decía
+  2021, que es la fecha del prólogo. Incluye RF-03 v1.1 (de la v1.3): cita la Tabla 11 y agrega
+  el permiso de aprobación a la lista. Ningún requisito cambia de comportamiento.
 
 **Ajustes del repositorio sobre la v3.0 — 10 de noviembre de 2026**
 

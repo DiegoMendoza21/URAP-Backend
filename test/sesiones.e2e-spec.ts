@@ -93,7 +93,7 @@ describe('Calendario de sesiones (e2e) · RF-19, HU-08-02 y HU-08-03', () => {
     ],
   };
 
-  /** El rol del sistema con sus permisos de la Tabla 17: la autorización los exige (HU-01-03). */
+  /** El rol del sistema con sus permisos de la Tabla 11: la autorización los exige (HU-01-03). */
   async function rolPorNombre(nombre: string): Promise<number> {
     const existente = await prisma.rol.findUnique({ where: { nombre } });
     const id =

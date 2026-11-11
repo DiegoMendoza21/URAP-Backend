@@ -1,6 +1,6 @@
 # URAP — Requisitos funcionales (RF-01 a RF-32)
 
-Generado desde `Requisitos_URAP_v1.2.xlsx`. El Excel es la fuente oficial.
+Generado desde `Requisitos_URAP_v1.4.xlsx`. El Excel es la fuente oficial.
 
 Cada requisito define la secuencia normal, las excepciones y los tiempos de respuesta esperados. **Antes de implementar un endpoint o una pantalla, lee el RF correspondiente completo**, incluidas sus excepciones: buena parte de las reglas de negocio están ahí y no en el modelo de datos.
 
@@ -60,7 +60,7 @@ q1. El inicio de sesión debe completarse en un tiempo menor o igual a 3 segundo
 **Versión:** 1.0 (10/09/2026)
 
 **Fuentes:** Elicitación con actores del programa de Administración Industrial  
-Sesión de diseño con la dirección del programa
+Sesión de diseño con una docente del programa
 
 **Objetivos asociados:** OBJ-06: Administrar usuarios, roles y acceso seguro a la información
 
@@ -109,17 +109,17 @@ q2. Los listados deben presentarse paginados para no superar los 4 segundos de c
 
 ## RF-03 — Gestión de roles y permisos
 
-**Versión:** 1.0 (10/09/2026)
+**Versión:** 1.1 (08/11/2026)
 
 **Fuentes:** Elicitación con actores del programa de Administración Industrial  
-Sesión de diseño con la dirección del programa
+Sesión de diseño con una docente del programa
 
 **Objetivos asociados:** OBJ-06: Administrar usuarios, roles y acceso seguro a la información
 
 **Requisitos asociados:** RF-02: Gestión de usuarios  
 NFR-004: Autorización basada en roles
 
-**Descripción:** El sistema debe permitir administrar los roles (Administrador, Departamento académico, Docente responsable, Líder RAP, Dirección del programa y Estudiante) y los permisos de lectura, creación, actualización, eliminación, generación y administración sobre cada módulo, así como asignar uno o varios roles a un usuario.
+**Descripción:** El sistema debe permitir administrar los roles (Administrador, Departamento académico, Docente responsable, Líder RAP, Dirección del programa y Estudiante) y los permisos de lectura, creación, actualización, aprobación, eliminación, generación y administración sobre cada módulo, así como asignar uno o varios roles a un usuario.
 
 **Precondición:** El usuario debe estar autenticado con el rol Administrador.
 
@@ -152,7 +152,7 @@ q1. La aplicación de los permisos debe ser verificada por el backend en cada so
 
 **Estabilidad:** Alta
 
-**Comentarios:** La matriz general de permisos por rol se encuentra en la Tabla 17 del Producto 1 y debe implementarse en la capa de servicios.
+**Comentarios:** La matriz general de permisos por rol se encuentra en la Tabla 11 del Producto 1 y debe implementarse en la capa de servicios.
 
 ---
 
@@ -216,8 +216,8 @@ q1. El guardado de un registro no debe superar los 3 segundos.
 
 **Fuentes:** Formato FO-DO/PC-023 v00 «Medición de resultado de aprendizaje del programa por asignatura» (Valoración y Rúbrica)  
 Matriz de consistencia de resultados de aprendizaje del programa de Administración Industrial (RAP 1 a RAP 7)  
-Sesión de diseño con la dirección del programa  
-Ministerio de Educación Nacional (2021). Una mirada a los resultados de aprendizaje
+Sesión de diseño con una docente del programa  
+Ministerio de Educación Nacional (2022). Una mirada a los resultados de aprendizaje
 
 **Objetivos asociados:** OBJ-04: Gestionar los resultados de aprendizaje, las rúbricas y sus evidencias
 
@@ -269,8 +269,8 @@ q1. La consulta del catálogo de RAP de un programa no debe superar los 3 segund
 
 **Fuentes:** Formato FO-DO/PC-023 v00 «Medición de resultado de aprendizaje del programa por asignatura» (Valoración y Rúbrica)  
 Matriz de consistencia de resultados de aprendizaje del programa de Administración Industrial (RAP 1 a RAP 7)  
-Sesión de diseño con la dirección del programa  
-Ministerio de Educación Nacional (2021). Una mirada a los resultados de aprendizaje
+Sesión de diseño con una docente del programa  
+Ministerio de Educación Nacional (2022). Una mirada a los resultados de aprendizaje
 
 **Objetivos asociados:** OBJ-04: Gestionar los resultados de aprendizaje, las rúbricas y sus evidencias
 
@@ -322,8 +322,8 @@ q1. El guardado de la rúbrica no debe superar los 4 segundos.
 
 **Fuentes:** Formato FO-DO/PC-023 v00 «Medición de resultado de aprendizaje del programa por asignatura» (Valoración y Rúbrica)  
 Matriz de consistencia de resultados de aprendizaje del programa de Administración Industrial (RAP 1 a RAP 7)  
-Sesión de diseño con la dirección del programa  
-Ministerio de Educación Nacional (2021). Una mirada a los resultados de aprendizaje
+Sesión de diseño con una docente del programa  
+Ministerio de Educación Nacional (2022). Una mirada a los resultados de aprendizaje
 
 **Objetivos asociados:** OBJ-04: Gestionar los resultados de aprendizaje, las rúbricas y sus evidencias
 
@@ -431,7 +431,7 @@ q2. La creación del proyecto docente debe completarse en menos de 5 segundos.
 **Versión:** 1.0 (10/09/2026)
 
 **Fuentes:** Elicitación con actores del programa de Administración Industrial  
-Sesión de diseño con la dirección del programa
+Sesión de diseño con una docente del programa
 
 **Objetivos asociados:** OBJ-01: Centralizar la creación y la planeación del proyecto docente
 
@@ -584,8 +584,8 @@ q1. El guardado no debe superar los 3 segundos.
 
 **Fuentes:** Formato FO-DO/PC-023 v00 «Medición de resultado de aprendizaje del programa por asignatura» (Valoración y Rúbrica)  
 Matriz de consistencia de resultados de aprendizaje del programa de Administración Industrial (RAP 1 a RAP 7)  
-Sesión de diseño con la dirección del programa  
-Ministerio de Educación Nacional (2021). Una mirada a los resultados de aprendizaje
+Sesión de diseño con una docente del programa  
+Ministerio de Educación Nacional (2022). Una mirada a los resultados de aprendizaje
 
 **Objetivos asociados:** OBJ-02: Diligenciar el proyecto docente conforme al formato institucional  
 OBJ-04: Gestionar los resultados de aprendizaje, las rúbricas y sus evidencias
@@ -674,7 +674,7 @@ q1. El guardado no debe superar los 3 segundos.
 
 **Estabilidad:** Alta
 
-**Comentarios:** El catálogo sugerido puede construirse a partir de las estrategias de enseñanza y aprendizaje descritas por el Ministerio de Educación Nacional (2021).
+**Comentarios:** El catálogo sugerido puede construirse a partir de las estrategias de enseñanza y aprendizaje descritas por el Ministerio de Educación Nacional (2022).
 
 ---
 
@@ -1034,7 +1034,7 @@ q2. La carga del calendario del curso no debe superar los 4 segundos.
 **Versión:** 1.0 (10/09/2026)
 
 **Fuentes:** Elicitación con actores del programa de Administración Industrial  
-Sesión de diseño con la dirección del programa
+Sesión de diseño con una docente del programa
 
 **Objetivos asociados:** OBJ-03: Registrar y controlar la ejecución real de las clases
 
@@ -1133,7 +1133,7 @@ q1. La carga de la lista de estudiantes del grupo no debe superar los 3 segundos
 **Versión:** 1.0 (10/09/2026)
 
 **Fuentes:** Elicitación con actores del programa de Administración Industrial  
-Sesión de diseño con la dirección del programa
+Sesión de diseño con una docente del programa
 
 **Objetivos asociados:** OBJ-03: Registrar y controlar la ejecución real de las clases  
 OBJ-05: Supervisar el cumplimiento del diligenciamiento y generar reportes
@@ -1236,7 +1236,7 @@ q1. El tiempo de carga depende del tamaño del archivo y de la conexión del usu
 **Versión:** 1.0 (10/09/2026)
 
 **Fuentes:** Elicitación con actores del programa de Administración Industrial  
-Sesión de diseño con la dirección del programa
+Sesión de diseño con una docente del programa
 
 **Objetivos asociados:** OBJ-05: Supervisar el cumplimiento del diligenciamiento y generar reportes
 
@@ -1287,7 +1287,7 @@ q2. La exportación consolidada no debe superar los 10 segundos.
 **Versión:** 1.0 (10/09/2026)
 
 **Fuentes:** Elicitación con actores del programa de Administración Industrial  
-Sesión de diseño con la dirección del programa
+Sesión de diseño con una docente del programa
 
 **Objetivos asociados:** OBJ-03: Registrar y controlar la ejecución real de las clases  
 OBJ-05: Supervisar el cumplimiento del diligenciamiento y generar reportes

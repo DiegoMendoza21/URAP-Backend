@@ -138,7 +138,7 @@ la petición, y las contraseñas y tokens se omiten de los valores. En `valor_an
 `valor_nuevo` van solo los campos que cambian, no el registro entero: la auditoría se
 conserva un año (NFR-008) y no debe guardar copias de datos personales (Ley 1581). La
 consulta completa de la auditoría (HU-14-02) es del administrador; el Departamento y la
-Dirección tienen una consulta restringida (Tabla 17), por definir.
+Dirección tienen una consulta restringida (Tabla 11), por definir.
 
 **Secretos fuera del código.** Credenciales, secreto JWT y vigencia del token van en
 variables de entorno. Ningún `.env` al repositorio. Ojo con la distinción: los parámetros de

@@ -10,7 +10,7 @@ import { permisosInicialesDe } from '../../src/datos-iniciales/matriz-permisos.j
 export interface MatrizDePrueba {
   modulos: number[];
   permisos: number[];
-  /** Roles a los que la prueba les cargó los permisos de la Tabla 17. */
+  /** Roles a los que la prueba les cargó los permisos de la Tabla 11. */
   roles: number[];
 }
 
@@ -40,7 +40,7 @@ export async function asegurarCatalogoDePermisos(
 }
 
 /**
- * Carga en el rol los permisos iniciales de la Tabla 17, como hace el seed, si el rol todavía
+ * Carga en el rol los permisos iniciales de la Tabla 11, como hace el seed, si el rol todavía
  * no tiene ninguno. Requiere el catálogo (`asegurarCatalogoDePermisos`).
  */
 export async function asegurarPermisosDeRol(

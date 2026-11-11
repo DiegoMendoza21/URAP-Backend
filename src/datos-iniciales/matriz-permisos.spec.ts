@@ -5,7 +5,7 @@ import {
   permisosInicialesDe,
 } from './matriz-permisos.js';
 
-describe('Matriz inicial de permisos (Producto 1, Tabla 17)', () => {
+describe('Matriz inicial de permisos (Producto 1, Tabla 11)', () => {
   it('cubre los seis roles y los nueve módulos del catálogo', () => {
     expect(Object.keys(MATRIZ_PERMISOS_INICIAL).sort()).toEqual(
       ROLES.map(({ nombre }) => nombre).sort(),
@@ -65,7 +65,7 @@ describe('Matriz inicial de permisos (Producto 1, Tabla 17)', () => {
     expect(conAdministracion).toEqual(['Administrador']);
   });
 
-  it('el Docente diligencia sus proyectos docentes pero no los crea (Tabla 17 v2; RF-08 a RF-10)', () => {
+  it('el Docente diligencia sus proyectos docentes pero no los crea (Tabla 11, fila corregida; RF-08 a RF-10)', () => {
     const proyectosDocente = permisosInicialesDe('Docente responsable')
       .filter(({ modulo }) => modulo === 'proyectos')
       .map(({ permiso }) => permiso)

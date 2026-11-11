@@ -31,7 +31,7 @@ import { SeguimientoService } from './seguimiento.service.js';
  * aplica el alcance: los programas del rol del usuario.
  *
  * Va con `@Roles` y no con `@Permiso` porque la matriz no expresa la regla: el módulo
- * «Reportes» de la Tabla 17 incluye al Docente («C propios») y al Líder RAP («C RAP
+ * «Reportes» de la Tabla 11 incluye al Docente («C propios») y al Líder RAP («C RAP
  * asignados»), y la precondición de RF-25 deja el tablero al Administrador, el Departamento
  * y la Dirección.
  */

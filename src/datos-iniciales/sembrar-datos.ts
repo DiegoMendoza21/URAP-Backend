@@ -166,7 +166,7 @@ async function sembrarCatalogos(tx: Transaccion): Promise<void> {
 }
 
 /**
- * Matriz inicial de permisos (Producto 1, Tabla 17; ver matriz-permisos.ts). Solo para los
+ * Matriz inicial de permisos (Producto 1, Tabla 11; ver matriz-permisos.ts). Solo para los
  * roles que todavía no tienen ningún permiso: si el administrador ya la ajustó (HU-02-06), no
  * se pisa.
  */

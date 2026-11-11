@@ -47,7 +47,7 @@ describe('Roles y matriz de permisos (e2e) · HU-02-05 y HU-02-06', () => {
 
   const api = () => request(app.getHttpServer());
 
-  /** El rol del sistema con sus permisos de la Tabla 17: `/roles` exige `usuarios.administrar`. */
+  /** El rol del sistema con sus permisos de la Tabla 11: `/roles` exige `usuarios.administrar`. */
   async function asegurarRol(nombre: NombreRol): Promise<number> {
     const existente = await prisma.rol.findUnique({ where: { nombre } });
     const id =
