@@ -29,10 +29,10 @@ El dominio es institucional y no se deduce leyendo el repositorio. Lee primero:
 
 No los cargues enteros por costumbre: busca el RF que necesitas y lee esa sección.
 
-Los requisitos y el backlog se exportan de dos Excel que el equipo de la tesis conserva fuera
-del repositorio, porque sus hojas de fuentes nombran a personas (`docs/fuentes/README.md`).
-No edites a mano un markdown exportado: si un requisito cambia, se cambia en el Excel y se
-vuelve a exportar.
+Los requisitos y el backlog se exportan de dos hojas de cálculo que el equipo de la tesis
+conserva fuera del repositorio, porque nombran a personas (`docs/fuentes/README.md`). No edites
+a mano un markdown exportado: si un requisito cambia, se cambia en la hoja y se vuelve a
+exportar. El estado de las historias vive en Jira.
 
 ## Stack
 
@@ -46,8 +46,10 @@ que documenta esta arquitectura en el diagrama de despliegue, el de componentes 
   para los cambios de esquema (ver Comandos y Convenciones).
 - **API REST**, JSON sobre HTTPS, con especificación OpenAPI publicada.
 - **JWT** con expiración para autenticación; autorización por rol con guards de NestJS.
-- **Almacenamiento de objetos** para documentos y evidencias (en producción Amazon S3).
-  La base de datos guarda la referencia del archivo, nunca el contenido.
+- **Almacenamiento documental** para documentos y evidencias, detrás de la interfaz
+  `AlmacenamientoDocumental`: el disco del servidor en la versión beta y Amazon S3 en la
+  arquitectura objetivo (`docs/despliegue.md`). La base de datos guarda la referencia del
+  archivo, nunca el contenido.
 
 ## Estructura
 

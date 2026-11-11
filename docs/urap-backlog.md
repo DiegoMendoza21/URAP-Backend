@@ -1,6 +1,6 @@
 # URAP — Backlog de épicas e historias de usuario
 
-Versión 2.2 — Alineada a los requisitos v1.2 (RF-01 a RF-32). Generado el 2026-11-07 desde `Backlog_Epicas_Historias_URAP_v2.2.xlsx`, que es la fuente oficial.
+Versión 2.3 — Alineada a los requisitos v1.5 (RF-01 a RF-32). Generado el 2026-11-10 desde la hoja de cálculo «Backlog URAP — Épicas e historias de usuario», que es la fuente oficial.
 
 **Este archivo dice QUÉ construir y en qué orden.** El detalle de cada requisito (secuencia normal, excepciones, tiempos de respuesta) está en `docs/requisitos-funcionales.md`: cada historia indica su RF.
 

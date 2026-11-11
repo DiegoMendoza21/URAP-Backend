@@ -1,6 +1,6 @@
 # URAP — Objetivos del sistema y actores
 
-Generado desde `Requisitos_URAP_v1.4.xlsx`. El Excel es la fuente oficial; este markdown existe para consulta rápida durante el desarrollo.
+Generado desde la hoja de cálculo «Requisitos URAP», versión 1.5, que es la fuente oficial; este markdown existe para consulta rápida durante el desarrollo.
 
 ## OBJ-01 — Centralizar la creación y la planeación del proyecto docente
 
@@ -302,13 +302,14 @@ Matriz de consistencia de resultados de aprendizaje del programa
 
 ## ACT-07 — SISTEMAS Y SERVICIOS EXTERNOS
 
-**Versión:** 1.0 (10/09/2026)
+**Versión:** 1.1 (10/11/2026)
 
 **Fuentes:** Producto 2: Arquitectura de tecnología URAP (numerales 3 y 4)  
-Producto 3: Esquema de implementación URAP (épicas EP-01 a EP-12)
+Producto 3: Esquema de implementación URAP (épicas EP-01 a EP-15)  
+Despliegue de la versión beta (10/11/2026)
 
-**Descripción:** Servicios que interactúan con URAP sin ser usuarios humanos: el servicio de almacenamiento documental (Amazon S3) para evidencias y soportes, el servicio de correo institucional para el envío de notificaciones, y la fuente del calendario oficial de días festivos de Colombia utilizada para precargar las sesiones no hábiles.
+**Descripción:** Servicios que interactúan con URAP sin ser usuarios humanos: el servicio de almacenamiento documental para evidencias y soportes (el disco del servidor en la versión beta y Amazon S3 en la arquitectura objetivo), el servicio de correo institucional para el envío de notificaciones, y la fuente del calendario oficial de días festivos de Colombia utilizada para precargar las sesiones no hábiles.
 
-**Comentarios:** La integración con el sistema de información académica de la Universidad (matrícula de estudiantes por grupo) se considera deseable pero no obligatoria para la versión beta; mientras no exista, la lista de estudiantes se cargará mediante archivo.
+**Comentarios:** La integración con el sistema de información académica de la Universidad (matrícula de estudiantes por grupo) se considera deseable pero no obligatoria para la versión beta; mientras no exista, la lista de estudiantes se cargará mediante archivo. v1.1: la versión beta guarda los archivos en el disco del servidor, detrás de una interfaz de almacenamiento que permite pasar a Amazon S3 sin cambiar el resto del sistema.
 
 ---

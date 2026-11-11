@@ -1,6 +1,6 @@
 # URAP — Requisitos funcionales (RF-01 a RF-32)
 
-Generado desde `Requisitos_URAP_v1.4.xlsx`. El Excel es la fuente oficial.
+Generado desde la hoja de cálculo «Requisitos URAP», versión 1.5, que es la fuente oficial.
 
 Cada requisito define la secuencia normal, las excepciones y los tiempos de respuesta esperados. **Antes de implementar un endpoint o una pantalla, lee el RF correspondiente completo**, incluidas sus excepciones: buena parte de las reglas de negocio están ahí y no en el modelo de datos.
 
