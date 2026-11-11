@@ -26,6 +26,7 @@ import {
   ESTUDIANTES_DEMO,
   GRUPO_DEMO,
   type EstudianteDemo,
+  fechasDelProyecto,
   type MedicionDemo,
   nivelPorConteo,
   PERIODO_CERRADO_DEMO,
@@ -67,9 +68,9 @@ const EVENTO = {
 /**
  * Siembra el recorrido de demostración (recorrido-demo.ts). Como el resto del seed, es
  * repetible: un proyecto que ya existe (misma asignatura, período y grupo `DEMO-A`) no se toca,
- * y un estudiante que ya existe (mismo documento) tampoco. Devuelve los archivos de todas las
- * evidencias de demostración, nuevas o no, para guardarlos en el almacenamiento documental
- * después de confirmar la transacción.
+ * y de un estudiante que ya existe (mismo documento) solo se pone al día el nombre. Devuelve los
+ * archivos de todas las evidencias de demostración, nuevas o no, para guardarlos en el
+ * almacenamiento documental después de confirmar la transacción.
  */
 export async function sembrarRecorridoDemo(
   tx: Transaccion,
@@ -265,8 +266,23 @@ async function sembrarEstudiantes(
     where: {
       identificacion: { in: ESTUDIANTES_DEMO.map((e) => e.documento) },
     },
-    select: { id: true, identificacion: true },
+    select: { id: true, identificacion: true, nombres: true, apellidos: true },
   });
+  // Una base sembrada con una versión anterior trae nombres que parecían de personas reales:
+  // se cambian por los de ahora. En una base nueva no hay nada que cambiar.
+  const vigentes = new Map(ESTUDIANTES_DEMO.map((e) => [e.documento, e]));
+  for (const fila of filas) {
+    const vigente = vigentes.get(fila.identificacion ?? '');
+    if (
+      vigente &&
+      (fila.nombres !== vigente.nombres || fila.apellidos !== vigente.apellidos)
+    ) {
+      await tx.estudiante.update({
+        where: { id: fila.id },
+        data: { nombres: vigente.nombres, apellidos: vigente.apellidos },
+      });
+    }
+  }
   return porClave(filas, (fila) => fila.identificacion);
 }
 
@@ -297,11 +313,16 @@ async function sembrarProyecto(
   const estadoDe = (codigo: string) =>
     obtener(estados, codigo, `el estado ${codigo}`);
 
-  // Las fechas de la revisión son fijas dentro del período: el envío en la primera semana y la
-  // respuesta del departamento tres días después.
-  const enviado = momento(sumarDias(periodo.inicio, 4), '17:00');
-  const revisado = momento(sumarDias(periodo.inicio, 7), '10:00');
-  const avanzado = definicion.estado !== 'en_diligenciamiento';
+  // Los aprobados se tramitaron en la primera semana del período; los que siguen en trámite,
+  // en los días anteriores a la siembra (`fechasDelProyecto`).
+  const fechas = fechasDelProyecto(
+    definicion.estado,
+    periodo.inicio,
+    contexto.hoy,
+  );
+  const creado = momento(fechas.creado, '09:00');
+  const enviado = fechas.enviado ? momento(fechas.enviado, '08:00') : null;
+  const revisado = fechas.revisado ? momento(fechas.revisado, '10:00') : null;
   const aprobado =
     definicion.estado === 'aprobado' || definicion.estado === 'cerrado';
 
@@ -318,11 +339,9 @@ async function sembrarProyecto(
       descripcion: definicion.descripcion,
       origen: ORIGEN_ASISTENTE,
       id_creado_por: idDocente,
-      fecha_creacion: momento(periodo.inicio, '09:00'),
-      fecha_actualizacion: avanzado
-        ? enviado
-        : momento(periodo.inicio, '09:00'),
-      fecha_envio: avanzado ? enviado : null,
+      fecha_creacion: creado,
+      fecha_actualizacion: enviado ?? momento(fechas.actualizado, '17:00'),
+      fecha_envio: enviado,
       fecha_aprobacion: aprobado ? revisado : null,
       proyecto_docente_rap: {
         create: definicion.raps.map((rap) => ({
@@ -431,15 +450,15 @@ async function sembrarRevision(
   datos: {
     idDocente: number;
     idRevisor: number;
-    enviado: Date;
-    revisado: Date;
+    enviado: Date | null;
+    revisado: Date | null;
     estadoDe: (codigo: string) => number;
   },
 ): Promise<void> {
-  if (definicion.estado === 'en_diligenciamiento') {
+  const { idDocente, idRevisor, enviado, revisado, estadoDe } = datos;
+  if (enviado === null) {
     return;
   }
-  const { idDocente, idRevisor, enviado, revisado, estadoDe } = datos;
   await tx.revision_proyecto.create({
     data: {
       id_proyecto_docente: idProyecto,
@@ -450,6 +469,9 @@ async function sembrarRevision(
       fecha: enviado,
     },
   });
+  if (revisado === null) {
+    return;
+  }
   if (definicion.estado === 'devuelto' && definicion.devolucion) {
     await tx.revision_proyecto.create({
       data: {

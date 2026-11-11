@@ -6,10 +6,13 @@ import {
 import { imagenDemo } from './imagen-demo.js';
 import { ESCALA } from './programa.js';
 import {
+  APELLIDOS_ESTUDIANTE_DEMO,
   COHORTE_2026_1,
   COHORTE_MACROECONOMIA,
   COHORTE_RF31,
+  DIAS_EN_ESPERA,
   ESTUDIANTES_DEMO,
+  fechasDelProyecto,
   GRUPO_DEMO,
   MEDICION_2026_1,
   MEDICION_CASO_RF31,
@@ -81,6 +84,23 @@ describe('Recorrido de demostración', () => {
     expect(documentos.every((d) => d.startsWith(PREFIJO_DEMO))).toBe(true);
     const nombres = ESTUDIANTES_DEMO.map((e) => `${e.nombres} ${e.apellidos}`);
     expect(new Set(nombres).size).toBe(ESTUDIANTES_DEMO.length);
+  });
+
+  it('llama a los estudiantes de forma que se vean ficticios a simple vista (Ley 1581)', () => {
+    expect(ESTUDIANTES_DEMO[0]).toEqual({
+      documento: 'DEMO-0001',
+      nombres: 'Estudiante 01',
+      apellidos: 'Ficticio Demo',
+    });
+    expect(ESTUDIANTES_DEMO[81].documento).toBe('DEMO-0082');
+    for (const estudiante of ESTUDIANTES_DEMO) {
+      expect(estudiante.nombres).toMatch(/^Estudiante \d{2}$/);
+      expect(estudiante.apellidos).toBe(APELLIDOS_ESTUDIANTE_DEMO);
+      // El número del nombre es el del documento: se reconocen entre sí en cualquier lista.
+      expect(estudiante.documento.endsWith(estudiante.nombres.slice(-2))).toBe(
+        true,
+      );
+    }
   });
 
   it('reparte los estudiantes en tres cursos sin repetir a nadie', () => {
@@ -214,5 +234,92 @@ describe('Recorrido de demostración', () => {
     expect(una.subarray(0, 8)).toEqual(firma);
     expect(una.equals(imagenDemo(6))).toBe(false);
     expect(una.equals(imagenDemo(3))).toBe(true);
+  });
+
+  describe('fechas de cada proyecto', () => {
+    const INICIO = '2026-08-03';
+
+    it('el enviado lleva dos días en la bandeja, se siembre el día que se siembre', () => {
+      for (const hoy of ['2026-09-15', '2026-11-11', '2026-11-19']) {
+        const fechas = fechasDelProyecto('enviado', INICIO, hoy);
+        expect(fechas.enviado).toBe(
+          new Date(Date.parse(hoy) - DIAS_EN_ESPERA * 86_400_000)
+            .toISOString()
+            .slice(0, 10),
+        );
+        expect(fechas.revisado).toBeNull();
+      }
+      expect(fechasDelProyecto('enviado', INICIO, '2026-11-19').enviado).toBe(
+        '2026-11-17',
+      );
+    });
+
+    it('el devuelto se envió hace seis días y se devolvió hace tres', () => {
+      expect(fechasDelProyecto('devuelto', INICIO, '2026-11-19')).toEqual({
+        creado: '2026-11-11',
+        actualizado: '2026-11-13',
+        enviado: '2026-11-13',
+        revisado: '2026-11-16',
+      });
+    });
+
+    it('el que sigue en diligenciamiento se creó hace ocho días y se trabajó ayer', () => {
+      expect(
+        fechasDelProyecto('en_diligenciamiento', INICIO, '2026-11-19'),
+      ).toEqual({
+        creado: '2026-11-11',
+        actualizado: '2026-11-18',
+        enviado: null,
+        revisado: null,
+      });
+    });
+
+    it.each(['aprobado', 'cerrado'] as const)(
+      'el %s se tramitó en la primera semana del período, sin depender del día',
+      (estado) => {
+        const esperado = {
+          creado: '2026-08-03',
+          actualizado: '2026-08-07',
+          enviado: '2026-08-07',
+          revisado: '2026-08-10',
+        };
+        expect(fechasDelProyecto(estado, INICIO, '2026-09-15')).toEqual(
+          esperado,
+        );
+        expect(fechasDelProyecto(estado, INICIO, '2026-11-19')).toEqual(
+          esperado,
+        );
+      },
+    );
+
+    it('sembrando en los primeros días, nada queda antes de la primera semana', () => {
+      expect(fechasDelProyecto('enviado', INICIO, '2026-08-05')).toEqual({
+        creado: '2026-08-03',
+        actualizado: '2026-08-07',
+        enviado: '2026-08-07',
+        revisado: null,
+      });
+      expect(fechasDelProyecto('devuelto', INICIO, '2026-08-05')).toMatchObject(
+        { enviado: '2026-08-07', revisado: '2026-08-10' },
+      );
+    });
+
+    it.each(PROYECTOS_DEMO.map((p) => [p.clave, p.estado] as const))(
+      'en %s las fechas van en orden: creado, enviado, revisado',
+      (_, estado) => {
+        const { creado, actualizado, enviado, revisado } = fechasDelProyecto(
+          estado,
+          INICIO,
+          '2026-11-19',
+        );
+        expect(creado <= actualizado).toBe(true);
+        if (enviado) {
+          expect(creado <= enviado).toBe(true);
+        }
+        if (enviado && revisado) {
+          expect(enviado < revisado).toBe(true);
+        }
+      },
+    );
   });
 });

@@ -3,10 +3,11 @@
  * estudiantes ficticios y la medición del RAP 2 que reproduce el caso real de RF-31. Se cargan
  * con `npm run db:sembrar:demo`, junto con los usuarios de demostración, nunca en producción.
  *
- * Todo es ficticio (Ley 1581 de 2012): los nombres de los estudiantes se arman combinando
- * nombres y apellidos comunes, y todo lo que se crea lleva el prefijo `DEMO-` (documentos de
- * los estudiantes y grupos de los proyectos), para reconocerlo y poder borrarlo.
+ * Todo es ficticio (Ley 1581 de 2012): los estudiantes se llaman «Estudiante 01 Ficticio Demo»,
+ * para que nadie los tome por personas reales, y todo lo que se crea lleva el prefijo `DEMO-`
+ * (documentos de los estudiantes y grupos de los proyectos), para reconocerlo y poder borrarlo.
  */
+import { sumarDias } from '../sesiones/alertas.js';
 
 /** Prefijo de todo lo que crea el recorrido de demostración. */
 export const PREFIJO_DEMO = 'DEMO-';
@@ -30,45 +31,8 @@ export const PERIODO_CERRADO_DEMO = {
 // Estudiantes y caso de RF-31
 // ---------------------------------------------------------------------------------------------
 
-const NOMBRES = [
-  'Valentina',
-  'Santiago',
-  'Mariana',
-  'Sebastián',
-  'Isabella',
-  'Samuel',
-  'Gabriela',
-  'Mateo',
-  'Daniela',
-  'Nicolás',
-  'Sofía',
-  'Alejandro',
-  'Camila',
-  'Juan Pablo',
-  'Laura',
-  'Andrés',
-  'Paula',
-];
-
-const APELLIDOS = [
-  'Rodríguez',
-  'Martínez',
-  'Gómez',
-  'Pérez',
-  'Herrera',
-  'Castro',
-  'Díaz',
-  'Morales',
-  'Romero',
-  'Jiménez',
-  'Torres',
-  'Vargas',
-  'Rojas',
-  'Mendoza',
-  'Ortiz',
-  'Ríos',
-  'Cárdenas',
-];
+/** Apellidos de todos los estudiantes de demostración: dicen a simple vista que no existen. */
+export const APELLIDOS_ESTUDIANTE_DEMO = 'Ficticio Demo';
 
 export interface EstudianteDemo {
   /** Documento ficticio, `DEMO-0001`: no es el número de ninguna persona. */
@@ -81,19 +45,20 @@ export interface EstudianteDemo {
 export const TAMANO_CASO_RF31 = 34;
 
 /**
- * 82 estudiantes ficticios, repartidos en tres cursos. Cada nombre y cada par de apellidos salen
- * de recorrer las listas con pasos distintos: el resultado es una combinación inventada, no el
- * nombre de alguien.
+ * 82 estudiantes ficticios, repartidos en tres cursos: de «Estudiante 01 Ficticio Demo» a
+ * «Estudiante 82 Ficticio Demo». No se arman con nombres y apellidos comunes: una combinación
+ * generada puede coincidir con el nombre de una persona real.
  */
 export const ESTUDIANTES_DEMO: readonly EstudianteDemo[] = Array.from(
   { length: 82 },
-  (_, i) => ({
-    documento: `${PREFIJO_DEMO}${String(i + 1).padStart(4, '0')}`,
-    nombres: NOMBRES[i % NOMBRES.length],
-    // El segundo apellido se corre dos lugares por cada vuelta completa de la lista: así no se
-    // repite ningún nombre completo aunque las listas sean más cortas que los cursos.
-    apellidos: `${APELLIDOS[(i * 5) % APELLIDOS.length]} ${APELLIDOS[(i * 3 + 7 + 2 * Math.floor(i / APELLIDOS.length)) % APELLIDOS.length]}`,
-  }),
+  (_, i) => {
+    const numero = String(i + 1).padStart(2, '0');
+    return {
+      documento: `${PREFIJO_DEMO}00${numero}`,
+      nombres: `Estudiante ${numero}`,
+      apellidos: APELLIDOS_ESTUDIANTE_DEMO,
+    };
+  },
 );
 
 /** Los 34 del caso de RF-31 (Finanzas a corto plazo 2026-2). */
@@ -778,3 +743,72 @@ export const SEMANAS_INCUMPLIDAS = [4, 9, 13];
  * tablero muestre sesiones vencidas (RF-23). Las anteriores a este margen quedan registradas.
  */
 export const DIAS_SIN_REGISTRAR = 7;
+
+// ---------------------------------------------------------------------------------------------
+// Fechas de cada proyecto
+// ---------------------------------------------------------------------------------------------
+
+/** Días que lleva en la bandeja de revisión el proyecto «enviado» el día en que se siembra. */
+export const DIAS_EN_ESPERA = 2;
+/** El proyecto «devuelto» se devolvió hace estos días, y se había enviado tres días antes. */
+export const DIAS_DESDE_DEVOLUCION = 3;
+/** Los proyectos que todavía no se aprueban se crearon hace estos días. */
+export const DIAS_DESDE_CREACION = 8;
+
+/** Fechas `YYYY-MM-DD` de un proyecto de demostración; sin envío o sin revisión, `null`. */
+export interface FechasProyectoDemo {
+  creado: string;
+  actualizado: string;
+  enviado: string | null;
+  /** Respuesta del departamento: la aprobación o la devolución. */
+  revisado: string | null;
+}
+
+/** La fecha más tardía de dos `YYYY-MM-DD`: el formato ISO se ordena como texto. */
+function posterior(a: string, b: string): string {
+  return a > b ? a : b;
+}
+
+/**
+ * Fechas de un proyecto según su estado. Los aprobados y los cerrados se tramitaron en la
+ * primera semana del período: creados el primer día, enviados cuatro días después y aprobados a
+ * los siete. Los que siguen en trámite se cuentan hacia atrás desde el día en que se siembra,
+ * para que la bandeja diga «Espera hace 2 días» y no los meses que lleva el período; nunca
+ * quedan antes de la primera semana.
+ */
+export function fechasDelProyecto(
+  estado: EstadoDemo,
+  inicioPeriodo: string,
+  hoy: string,
+): FechasProyectoDemo {
+  const envioInicial = sumarDias(inicioPeriodo, 4);
+  const revisionInicial = sumarDias(inicioPeriodo, 7);
+  if (estado === 'aprobado' || estado === 'cerrado') {
+    return {
+      creado: inicioPeriodo,
+      actualizado: envioInicial,
+      enviado: envioInicial,
+      revisado: revisionInicial,
+    };
+  }
+  const creado = posterior(inicioPeriodo, sumarDias(hoy, -DIAS_DESDE_CREACION));
+  if (estado === 'en_diligenciamiento') {
+    // Su docente lo trabajó ayer.
+    return {
+      creado,
+      actualizado: posterior(creado, sumarDias(hoy, -1)),
+      enviado: null,
+      revisado: null,
+    };
+  }
+  if (estado === 'enviado') {
+    const enviado = posterior(envioInicial, sumarDias(hoy, -DIAS_EN_ESPERA));
+    return { creado, actualizado: enviado, enviado, revisado: null };
+  }
+  const revisado = posterior(
+    revisionInicial,
+    sumarDias(hoy, -DIAS_DESDE_DEVOLUCION),
+  );
+  const enviado = sumarDias(revisado, -3);
+  return { creado, actualizado: enviado, enviado, revisado };
+}
