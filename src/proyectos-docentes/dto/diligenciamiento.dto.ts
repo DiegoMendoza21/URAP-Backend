@@ -12,6 +12,8 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { PARAMETRO } from '../../common/parametros/parametros.service.js';
+import { RANGO_PARAMETRO } from '../../common/parametros/rangos-parametros.js';
 import { ESTADO_SECCION, type EstadoSeccion } from '../entities/secciones.js';
 import { EstadoProyectoDto, RapDto } from './respuestas.dto.js';
 
@@ -23,9 +25,11 @@ import { EstadoProyectoDto, RapDto } from './respuestas.dto.js';
 
 /**
  * Tope técnico del cuerpo de la descripción, por encima del que se configura en
- * `parametro_sistema` (RF-11, p3). Protege la columna `text` (64 KB en utf8mb4).
+ * `parametro_sistema` (RF-11, p3). Protege la columna `text` (64 KB en utf8mb4). Es también el
+ * máximo que la pantalla de parámetros deja configurar (HU-03-07).
  */
-export const DESCRIPCION_TOPE_TECNICO = 16_000;
+export const DESCRIPCION_TOPE_TECNICO =
+  RANGO_PARAMETRO[PARAMETRO.descripcionCursoLongitudMaxima].maximo;
 export const RAC_CODIGO_MAXIMO = 30;
 export const RAC_ENUNCIADO_MAXIMO = 2000;
 export const CONTRIBUCION_MAXIMO = 1000;

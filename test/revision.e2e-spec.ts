@@ -1057,5 +1057,43 @@ describe('Revisión y aprobación del proyecto docente (e2e) · RF-17, RF-18, HU
         .expect(200);
       expect(await estadoDe(propio)).toBe('devuelto');
     });
+
+    // HU-03-07: la regla se cambia desde la pantalla de parámetros y rige en la siguiente
+    // petición, sin tocar código ni redesplegar.
+    it('el administrador la apaga y la enciende desde los parámetros: rige en la siguiente petición', async () => {
+      await fijar('si');
+      const apagada = await crearProyecto(
+        'R7',
+        periodoAbierto,
+        usuarios.mixtoDocente,
+        estados.enviado,
+      );
+      const encendida = await crearProyecto(
+        'R8',
+        periodoAbierto,
+        usuarios.mixtoDocente,
+        estados.enviado,
+      );
+      await como('mixtoDocente').post(ruta(apagada, 'aprobacion')).expect(403);
+
+      // Sin el permiso de administrar la estructura académica no se cambia la regla.
+      await como('mixtoDocente')
+        .patch(`/parametros/${clave}`, { valor: 'no' })
+        .expect(403);
+      await como('administrador')
+        .patch(`/parametros/${clave}`, { valor: 'no' })
+        .expect(200);
+      await como('mixtoDocente').post(ruta(apagada, 'aprobacion')).expect(200);
+      expect(await estadoDe(apagada)).toBe('aprobado');
+
+      await como('administrador')
+        .patch(`/parametros/${clave}`, { valor: 'si' })
+        .expect(200);
+      const { body } = await como('mixtoDocente')
+        .post(ruta(encendida, 'aprobacion'))
+        .expect(403);
+      expect(body).toMatchObject({ mensaje: MENSAJE_PROYECTO_PROPIO });
+      expect(await estadoDe(encendida)).toBe('enviado');
+    });
   });
 });

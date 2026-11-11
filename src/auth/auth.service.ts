@@ -14,6 +14,7 @@ import {
   PARAMETRO,
   ParametrosService,
 } from '../common/parametros/parametros.service.js';
+import { RANGO_PARAMETRO } from '../common/parametros/rangos-parametros.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { ContrasenasService } from './contrasenas.service.js';
 import {
@@ -344,14 +345,14 @@ export class AuthService {
     minutosBloqueo: number;
   } | null> {
     const [intentosMaximos, minutosBloqueo] = await Promise.all([
-      this.parametros.leerEntero(PARAMETRO_INTENTOS_MAXIMOS, {
-        minimo: 1,
-        maximo: 100,
-      }),
-      this.parametros.leerEntero(PARAMETRO_MINUTOS_BLOQUEO, {
-        minimo: 1,
-        maximo: 1440,
-      }),
+      this.parametros.leerEntero(
+        PARAMETRO_INTENTOS_MAXIMOS,
+        RANGO_PARAMETRO[PARAMETRO_INTENTOS_MAXIMOS],
+      ),
+      this.parametros.leerEntero(
+        PARAMETRO_MINUTOS_BLOQUEO,
+        RANGO_PARAMETRO[PARAMETRO_MINUTOS_BLOQUEO],
+      ),
     ]);
     return intentosMaximos !== null && minutosBloqueo !== null
       ? { intentosMaximos, minutosBloqueo }

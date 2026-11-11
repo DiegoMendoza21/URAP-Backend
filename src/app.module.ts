@@ -4,6 +4,7 @@ import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { AuditoriaModule } from './auditoria/auditoria.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { ParametrosModule } from './common/parametros/parametros.module.js';
+import { EstructuraAcademicaModule } from './estructura-academica/estructura-academica.module.js';
 import { EstudiantesModule } from './estudiantes/estudiantes.module.js';
 import { validarVariablesEntorno } from './common/configuracion/variables-entorno.js';
 import { FiltroExcepciones } from './common/filtros/filtro-excepciones.js';
@@ -30,6 +31,7 @@ import { SesionesModule } from './sesiones/sesiones.module.js';
     AuthModule,
     SaludModule,
     UsuariosModule,
+    EstructuraAcademicaModule,
     ProyectosDocentesModule,
     EstudiantesModule,
     MedicionesModule,

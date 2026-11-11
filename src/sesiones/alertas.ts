@@ -5,10 +5,8 @@
  *
  * Las fechas son textos `YYYY-MM-DD`, como las devuelve `aTextoFecha` de una columna `date`.
  */
-import {
-  PARAMETRO,
-  type RangoEntero,
-} from '../common/parametros/parametros.service.js';
+import { PARAMETRO } from '../common/parametros/parametros.service.js';
+import { RANGO_PARAMETRO } from '../common/parametros/rangos-parametros.js';
 import { aFechaColumna, aTextoFecha, MILISEGUNDOS_DIA } from './calendario.js';
 
 /**
@@ -21,12 +19,11 @@ export const ZONA_HORARIA = 'America/Bogota';
 export const PARAMETRO_UMBRAL_ALERTA = PARAMETRO.alertaDiasAnticipacion;
 /**
  * Valores aceptados del umbral. Es solo un control de cordura del parámetro: el umbral lo fija el
- * programa en `parametro_sistema` (valor inicial, 2 días).
+ * programa en `parametro_sistema` (valor inicial, 2 días). Es el mismo rango que valida la
+ * pantalla de parámetros (HU-03-07).
  */
-export const RANGO_UMBRAL_ALERTA = {
-  minimo: 0,
-  maximo: 365,
-} as const satisfies RangoEntero;
+export const RANGO_UMBRAL_ALERTA =
+  RANGO_PARAMETRO[PARAMETRO.alertaDiasAnticipacion];
 
 /**
  * - `vencida`: la fecha ya pasó y la sesión no tiene registro (p2), en rojo.
