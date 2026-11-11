@@ -50,6 +50,13 @@ export interface ResultadoSembrado {
 }
 
 /**
+ * Límite de la transacción del sembrado. Los datos de demostración son miles de consultas
+ * seguidas: con el equipo ocupado tardaron más de los dos minutos que había, y la transacción
+ * vencía a mitad de camino. Diez minutos dejan margen en un servidor pequeño.
+ */
+export const LIMITE_TRANSACCION_SEMBRADO_MS = 600_000;
+
+/**
  * Carga los datos base (catálogos, programa, RAP, rúbrica del RAP 2 y planes de estudio), que
  * sirven en cualquier ambiente, y, si se piden, los de demostración: período 2026-2 con su
  * receso, rúbricas provisionales, usuarios ficticios y el recorrido (proyectos en todos los
@@ -57,13 +64,29 @@ export interface ResultadoSembrado {
  * repetible: solo crea lo que falta y nunca modifica lo que ya existe, para no pisar lo que se
  * cambie desde la aplicación. Todo va en una transacción: si algo falla, la base queda como estaba.
  */
-export function sembrarDatosIniciales(
+export async function sembrarDatosIniciales(
   prisma: PrismaService,
   demostracion?: DatosDemostracion,
 ): Promise<ResultadoSembrado> {
-  return prisma.$transaction((tx) => sembrarEn(tx, demostracion), {
-    timeout: 120_000,
-  });
+  const inicio = Date.now();
+  try {
+    return await prisma.$transaction((tx) => sembrarEn(tx, demostracion), {
+      timeout: LIMITE_TRANSACCION_SEMBRADO_MS,
+    });
+  } catch (error) {
+    // Al vencer la transacción, Prisma la revierte y el error que llega depende de la consulta
+    // que estaba en curso: unas veces nombra el límite y otras una clave foránea o un dato
+    // nulo, que hacen pensar en un fallo de los datos.
+    if (Date.now() - inicio >= LIMITE_TRANSACCION_SEMBRADO_MS) {
+      throw new Error(
+        `El sembrado pasó el límite de ${LIMITE_TRANSACCION_SEMBRADO_MS / 60_000} minutos de ` +
+          'su transacción y no se guardó nada: la base quedó como estaba. Vuelva a correrlo ' +
+          'cuando el equipo o la base estén menos ocupados.',
+        { cause: error },
+      );
+    }
+    throw error;
+  }
 }
 
 /** El sembrado dentro de una transacción ya abierta (la prueba e2e la revierte al terminar). */
