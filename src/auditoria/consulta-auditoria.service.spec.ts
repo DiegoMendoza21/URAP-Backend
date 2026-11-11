@@ -151,6 +151,17 @@ describe('ConsultaAuditoriaService · HU-14-02 y HU-14-03', () => {
       });
     });
 
+    it('busca el guion bajo y el porcentaje del usuario como texto, no como comodines', async () => {
+      await servicio.listar(consulta({ usuario: 'ana_demo 100%' }));
+
+      const where = argumentosDelListado().where as {
+        usuario: { AND: { OR: { email?: { contains: string } }[] }[] };
+      };
+      expect(
+        where.usuario.AND.map((palabra) => palabra.OR[2].email?.contains),
+      ).toEqual(['ana\\_demo', '100\\%']);
+    });
+
     it('rechaza un rango con la fecha inicial posterior a la final', async () => {
       await expect(
         servicio.listar(consulta({ desde: '2026-11-10', hasta: '2026-11-01' })),

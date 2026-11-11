@@ -117,7 +117,7 @@ describe('Consulta de la auditoría (e2e) · HU-14-02 y HU-14-03', () => {
     ).token;
     const docente = await crearUsuario(
       'Persona',
-      `Docente ${sufijo}`,
+      `Docente_e2e ${sufijo}`,
       await rolDelSistema(ROL.docente),
     );
     idDocente = docente.id;
@@ -307,6 +307,17 @@ describe('Consulta de la auditoría (e2e) · HU-14-02 y HU-14-03', () => {
         200,
       );
       expect(nadie.body).toMatchObject({ total: 0, elementos: [] });
+    });
+
+    it('el guion bajo del texto del usuario busca un guion bajo, no cualquier carácter', async () => {
+      const conGuion = await listar({
+        usuario: `docente_e2e ${sufijo}`,
+      }).expect(200);
+      expect(conGuion.body.total).toBe(2);
+
+      // Como comodín, «e2e_consulta» encontraría los correos «e2e.consulta…».
+      const sinComodin = await listar({ usuario: 'e2e_consulta' }).expect(200);
+      expect(sinComodin.body.total).toBe(0);
     });
 
     it('con la entidad y el registro devuelve el historial completo de ese registro (HU-14-03)', async () => {

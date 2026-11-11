@@ -178,16 +178,27 @@ function filtro(consulta: ConsultarAuditoriaDto): Prisma.auditoriaWhereInput {
     // Cada palabra debe aparecer en el nombre, los apellidos o el correo: así «ana demo»
     // encuentra a quien tiene «Ana» en los nombres y «Demo» en los apellidos.
     where.usuario = {
-      AND: usuario.split(/\s+/).map((palabra) => ({
-        OR: [
-          { nombres: { contains: palabra } },
-          { apellidos: { contains: palabra } },
-          { email: { contains: palabra } },
-        ],
-      })),
+      AND: usuario
+        .split(/\s+/)
+        .map(literal)
+        .map((palabra) => ({
+          OR: [
+            { nombres: { contains: palabra } },
+            { apellidos: { contains: palabra } },
+            { email: { contains: palabra } },
+          ],
+        })),
     };
   }
   return where;
+}
+
+/**
+ * `contains` se traduce a LIKE, donde `%` y `_` son comodines: se escapan para que el guion
+ * bajo de un correo busque un guion bajo y no cualquier carácter.
+ */
+function literal(palabra: string): string {
+  return palabra.replace(/[\\%_]/g, '\\$&');
 }
 
 function inicioDelDia(fecha: string): Date {
