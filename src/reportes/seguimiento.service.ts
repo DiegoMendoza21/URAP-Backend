@@ -8,8 +8,8 @@ import type { UsuarioSesion } from '../auth/tipos.js';
 import {
   PARAMETRO,
   ParametrosService,
-  type RangoEntero,
 } from '../common/parametros/parametros.service.js';
+import { RANGO_PARAMETRO } from '../common/parametros/rangos-parametros.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { AlcanceService } from '../proyectos-docentes/alcance.service.js';
@@ -70,10 +70,8 @@ export const PARAMETRO_EXPORTACION_MAXIMA =
   PARAMETRO.reporteExportacionFilasMaxima;
 
 /** Valores admitidos del máximo de filas; fuera de ellos no se aplica tope y queda el error. */
-export const RANGO_EXPORTACION_MAXIMA: RangoEntero = {
-  minimo: 1,
-  maximo: 1_000_000,
-};
+export const RANGO_EXPORTACION_MAXIMA =
+  RANGO_PARAMETRO[PARAMETRO.reporteExportacionFilasMaxima];
 
 export const MENSAJE_PERIODO_NO_EXISTE = 'El período académico no existe.';
 

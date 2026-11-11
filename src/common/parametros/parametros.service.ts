@@ -44,7 +44,9 @@ export interface RangoEntero {
 
 /**
  * Lectura de los parámetros de negocio de la tabla `parametro_sistema` (CLAUDE.md, «nada de
- * datos de negocio hardcodeados»). La pantalla para editarlos llega con HU-03-07.
+ * datos de negocio hardcodeados»). Lee de la base en cada uso y no guarda copias: por eso un
+ * cambio hecho en la pantalla de parámetros (HU-03-07, `estructura-academica/`) rige desde la
+ * siguiente petición, sin redesplegar. No agregue una caché aquí sin invalidarla al editar.
  *
  * Los parámetros de seguridad del despliegue (secreto y vigencia del JWT, límites de
  * peticiones) no van aquí: son variables de entorno.
