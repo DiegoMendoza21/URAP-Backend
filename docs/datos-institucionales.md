@@ -531,10 +531,12 @@ descripciones están resumidas; el nombre es el del documento.
 | Producción de textos | Resumen, reseña, ensayo y otros textos que exigen sintetizar información y argumentar. |
 | Portafolio | Colección sistemática y organizada de los productos del estudiante, según las metas establecidas. |
 
-**Cómo se carga sin tocar el modelo** (el modelo se congela el 18 de noviembre): como un
-`parametro_sistema` de tipo JSON, por ejemplo `catalogo_estrategias_rf13`, que el Administrador
-puede editar. Las sugerencias de RF-13 son este catálogo más las estrategias que ya usaron otros
-proyectos del programa, que es lo que hoy está implementado.
+**Cómo se carga sin tocar el modelo** (el modelo se congela el 15 de noviembre y las
+funcionalidades el 18): en dos parámetros de tipo lista de `parametro_sistema`,
+`catalogo_estrategias_ensenanza` y `catalogo_estrategias_aprendizaje`, con los nombres separados
+por coma. Son dos porque `valor` admite 255 caracteres; las descripciones de estas tablas no se
+cargan. El docente ve las sugerencias de RF-13 en tres grupos: las de enseñanza y las de
+aprendizaje de este catálogo, y las estrategias que ya usaron otros proyectos del programa.
 
 ---
 
@@ -542,13 +544,14 @@ proyectos del programa, que es lo que hoy está implementado.
 
 Esto sí es lo único que falta. No lo inventes ni lo deduzcas: mientras no llegue, la aplicación
 dice «no definido». La última columna dice si la respuesta cambiaría el modelo; como el modelo se
-congela el 18 de noviembre, lo que lo cambie y llegue después queda para después de la entrega.
+congela el 15 de noviembre (las funcionalidades, el 18), lo que lo cambie y llegue después queda
+para después de la entrega.
 
 | # | Pregunta | Mientras tanto | ¿Cambia el modelo? |
 |---|---|---|---|
 | 1 | Meta de cumplimiento (porcentaje esperado) y si es la misma para los siete RAP | «Meta no definida» | Solo si es distinta por RAP |
 | 2 | Si se confirma la regla del logro del RAP (apartado 3) o se exige la meta a cada indicador | Regla del apartado 3 | No: una función |
-| 3 | Si un miembro del Departamento puede aprobar un proyecto en el que es docente responsable; RF-18 no lo prohíbe | Propuesta: no permitirlo | No: una regla y un parámetro |
+| 3 | Si un miembro del Departamento puede aprobar un proyecto en el que es docente; RF-18 no lo prohíbe | No se permite: parámetro `revision_bloquear_autoaprobacion`, encendido | No: una regla y un parámetro |
 | 4 | Qué es un proyecto «publicado», que es lo que ve el Estudiante (RF-27) | Propuesta: aprobado o en ejecución | Solo si exige publicar a mano |
 | 5 | Los planes oficiales 1702 y 2502, con código, créditos y horas (TDE, TDP y TI) de cada asignatura. Del 1702 faltan código y créditos de 33 asignaturas: todas las de I a III, casi todas las de IV y V y una de VI | Campos vacíos | No |
 | 6 | Si el plan 2502 tiene RAP propios (SUP-16) y qué asignaturas del 2502 tributan a cada RAP | RAP del programa; asignaturas del 2502 sin vínculo | Solo si tiene RAP propios |
@@ -557,10 +560,12 @@ congela el 18 de noviembre, lo que lo cambie y llegue después queda para despu�
 | 9 | De dónde sale la lista de matriculados (SUP-03) | Carga por archivo | Puede |
 | 10 | Qué significa «cohorte» en el FO-DO/PC-023 (SUP-14) | Igual a la muestra | No |
 
-Sobre la 3, la propuesta tiene respaldo propio: separar quien elabora de quien aprueba es un
+Sobre la 3, la regla tiene respaldo propio: separar quien elabora de quien aprueba es un
 principio de control interno (Ley 87 de 1993), y en el programa el caso es real, porque quienes
-dirigen el programa también dictan asignaturas. Si no hay otra persona con el rol, el
-Administrador reasigna la revisión.
+dirigen el programa también dictan asignaturas. Ya está implementada: quien es docente de un
+proyecto, sea o no el responsable, no puede aprobarlo ni devolverlo. Si el programa responde otra
+cosa, el parámetro se apaga sin tocar código. No hay reasignación de revisores: si no hay otra
+persona con el rol, el Administrador se lo asigna a alguien más o apaga el parámetro.
 
 Ya no hace falta preguntar dos cosas. **Nivel o nota** quedó resuelto por el instructivo del
 formato y por la medición real de 2024-1: se registra el nivel (apartado 3). **La lista del MEN de
@@ -571,6 +576,14 @@ toma por defecto el tamaño de la muestra y ningún cálculo lo usa.
 ---
 
 ## Registro de cambios
+
+**Ajustes del repositorio sobre la v3.0 — 10 de noviembre de 2026**
+
+- *Apartado 7:* el catálogo se carga en dos parámetros de tipo lista y no en uno de tipo JSON,
+  porque `parametro_sistema.valor` admite 255 caracteres.
+- *Apartado 8:* la regla de la pregunta 3 ya está implementada, con su parámetro.
+- *Apartados 7 y 8:* las dos fechas de congelamiento, la del modelo (15 de noviembre) y la de las
+  funcionalidades (18 de noviembre).
 
 **v3.0 — 8 de noviembre de 2026**
 
