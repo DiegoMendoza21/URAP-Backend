@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Param,
@@ -32,8 +33,10 @@ import {
   CrearUsuarioDto,
   DetalleUsuarioDto,
   EditarUsuarioDto,
+  HistorialRolesDto,
   OpcionesUsuariosDto,
   PaginaUsuariosDto,
+  RolParaAsignarDto,
   UsuarioCreadoDto,
 } from './dto/usuarios.dto.js';
 import { UsuariosService } from './usuarios.service.js';
@@ -190,5 +193,74 @@ export class UsuariosController {
     @UsuarioActual() usuario: UsuarioSesion,
   ): Promise<ContrasenaTemporalDto> {
     return this.usuarios.generarContrasena(id, usuario);
+  }
+
+  @Post(':id/roles')
+  @Permiso('usuarios', 'administrar')
+  @ApiOperation({
+    summary: 'Asigna un rol al usuario sobre un programa (HU-02-07)',
+    description:
+      'Queda registrado quién lo asignó y cuándo. Un usuario puede tener varios roles ' +
+      'vigentes. Si ya tuvo ese rol y se le revocó, vuelve a quedar vigente.',
+  })
+  @ApiCreatedResponse({ type: DetalleUsuarioDto })
+  @ApiBadRequestResponse({
+    type: RespuestaErrorDto,
+    description: 'Rol o programa inexistente',
+  })
+  @ApiNotFoundResponse({ type: RespuestaErrorDto })
+  @ApiConflictResponse({
+    type: RespuestaErrorDto,
+    description: 'El usuario ya tiene ese rol vigente sobre ese programa',
+  })
+  asignarRol(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() datos: RolParaAsignarDto,
+    @UsuarioActual() usuario: UsuarioSesion,
+  ): Promise<DetalleUsuarioDto> {
+    return this.usuarios.asignarRol(id, datos, usuario);
+  }
+
+  @Delete(':id/roles/:idAsignacion')
+  @Permiso('usuarios', 'administrar')
+  @ApiOperation({
+    summary: 'Revoca un rol del usuario (HU-02-07)',
+    description:
+      'La revocación es lógica: la asignación queda inactiva, con su fecha. Nadie se quita ' +
+      'a sí mismo el rol con el que administra usuarios.',
+  })
+  @ApiOkResponse({ type: DetalleUsuarioDto })
+  @ApiNotFoundResponse({
+    type: RespuestaErrorDto,
+    description: 'El usuario no existe o no tiene ese rol vigente',
+  })
+  @ApiConflictResponse({
+    type: RespuestaErrorDto,
+    description:
+      'Es su propio rol de administración, o no quedaría nadie administrando usuarios y roles',
+  })
+  revocarRol(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('idAsignacion', ParseIntPipe) idAsignacion: number,
+    @UsuarioActual() usuario: UsuarioSesion,
+  ): Promise<DetalleUsuarioDto> {
+    return this.usuarios.revocarRol(id, idAsignacion, usuario);
+  }
+
+  @Get(':id/roles/historial')
+  @Permiso('usuarios', 'administrar')
+  @ApiOperation({
+    summary:
+      'Historial de roles del usuario: quién tuvo qué rol y cuándo (HU-02-07)',
+    description:
+      'Sale de la auditoría. Solo para quien administra usuarios: dice quién hizo cada cambio.',
+  })
+  @ApiOkResponse({ type: HistorialRolesDto })
+  @ApiNotFoundResponse({ type: RespuestaErrorDto })
+  historialRoles(
+    @Param('id', ParseIntPipe) id: number,
+    @UsuarioActual() usuario: UsuarioSesion,
+  ): Promise<HistorialRolesDto> {
+    return this.usuarios.historialRoles(id, usuario);
   }
 }
