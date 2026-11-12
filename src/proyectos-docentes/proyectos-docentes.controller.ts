@@ -26,9 +26,14 @@ import { RespuestaErrorDto } from '../common/dto/respuesta-error.dto.js';
 import { ConsultarProyectosDocentesDto } from './dto/consultas.dto.js';
 import { CrearProyectoDocenteDto } from './dto/crear-proyecto-docente.dto.js';
 import {
+  DuplicarProyectoDocenteDto,
+  PreparacionDuplicadoDto,
+} from './dto/duplicacion.dto.js';
+import {
   PaginaProyectosDocentesDto,
   ProyectoDocenteDetalleDto,
 } from './dto/respuestas.dto.js';
+import { DuplicacionService } from './duplicacion.service.js';
 import { ProyectosDocentesService } from './proyectos-docentes.service.js';
 
 @ApiTags('Proyectos docentes')
@@ -39,7 +44,10 @@ import { ProyectosDocentesService } from './proyectos-docentes.service.js';
 })
 @Controller('proyectos-docentes')
 export class ProyectosDocentesController {
-  constructor(private readonly proyectos: ProyectosDocentesService) {}
+  constructor(
+    private readonly proyectos: ProyectosDocentesService,
+    private readonly duplicacion: DuplicacionService,
+  ) {}
 
   @Post()
   @Permiso('proyectos', 'crear')
@@ -103,6 +111,74 @@ export class ProyectosDocentesController {
     @Query() consulta: ConsultarProyectosDocentesDto,
   ): Promise<PaginaProyectosDocentesDto> {
     return this.proyectos.listar(usuario, consulta);
+  }
+
+  @Get(':id/duplicacion')
+  @Permiso('proyectos', 'crear')
+  @ApiOperation({
+    summary:
+      'Prepara la duplicación del proyecto docente (RF-09, p3; HU-05-04)',
+    description:
+      'Qué se va a copiar, los períodos abiertos, los docentes del programa y los RAP, con lo ' +
+      'que sugiere el origen. Advierte si la asignatura cambió de RAP (excepción de p4).',
+  })
+  @ApiOkResponse({ type: PreparacionDuplicadoDto })
+  @ApiForbiddenResponse({
+    type: RespuestaErrorDto,
+    description:
+      'Sin el permiso de crear proyectos docentes, o no es Departamento académico del programa',
+  })
+  @ApiNotFoundResponse({
+    type: RespuestaErrorDto,
+    description: 'El proyecto no existe o el usuario no tiene acceso a él',
+  })
+  prepararDuplicado(
+    @UsuarioActual() usuario: UsuarioSesion,
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<PreparacionDuplicadoDto> {
+    return this.duplicacion.preparar(usuario, id);
+  }
+
+  @Post(':id/duplicacion')
+  @Permiso('proyectos', 'crear')
+  @ApiOperation({
+    summary: 'Duplica el proyecto docente (RF-09; HU-05-04)',
+    description:
+      'Crea un proyecto en «En diligenciamiento» con la descripción, los RAC con su relación ' +
+      'con los RAP y su evaluación, las estrategias, los contenidos por semana y la ' +
+      'bibliografía del origen, y guarda la referencia a él. No copia revisiones, ' +
+      'observaciones, horario, clases, evidencias, matriculados ni mediciones. Las semanas ' +
+      'que no caben en el período elegido no se copian.',
+  })
+  @ApiCreatedResponse({ type: ProyectoDocenteDetalleDto })
+  @ApiBadRequestResponse({
+    type: RespuestaErrorDto,
+    description:
+      'Período cerrado o inactivo, RAP de otro programa o inactivos, docentes repetidos, sin ' +
+      'responsable o que no lo son en el programa',
+  })
+  @ApiForbiddenResponse({
+    type: RespuestaErrorDto,
+    description:
+      'Sin el permiso de crear proyectos docentes, o no es Departamento académico del programa',
+  })
+  @ApiNotFoundResponse({
+    type: RespuestaErrorDto,
+    description:
+      'El proyecto de origen no existe o el usuario no tiene acceso a él',
+  })
+  @ApiConflictResponse({
+    type: RespuestaErrorDto,
+    description:
+      'Ya existe un proyecto para la asignatura, el período y el grupo (excepción de p5), ' +
+      'o no hay un período académico abierto',
+  })
+  duplicar(
+    @UsuarioActual() usuario: UsuarioSesion,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() datos: DuplicarProyectoDocenteDto,
+  ): Promise<ProyectoDocenteDetalleDto> {
+    return this.duplicacion.duplicar(usuario, id, datos);
   }
 
   @Get(':id')

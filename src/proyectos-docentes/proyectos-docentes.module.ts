@@ -7,6 +7,7 @@ import { BibliografiaService } from './bibliografia.service.js';
 import { ContenidosService } from './contenidos.service.js';
 import { DiligenciamientoController } from './diligenciamiento.controller.js';
 import { DiligenciamientoService } from './diligenciamiento.service.js';
+import { DuplicacionService } from './duplicacion.service.js';
 import { EdicionProyectoService } from './edicion-proyecto.service.js';
 import { EstrategiasService } from './estrategias.service.js';
 import { EvaluacionService } from './evaluacion.service.js';
@@ -19,8 +20,8 @@ import { RevisionService } from './revision.service.js';
 
 /**
  * Proyecto docente: creación con el asistente (RF-08), consulta y diligenciamiento por
- * secciones (RF-11 a RF-16), y su revisión y aprobación (RF-17 y RF-18). RF-09 y RF-10 llegan
- * aquí.
+ * secciones (RF-11 a RF-16), su duplicación (RF-09) y su revisión y aprobación (RF-17 y
+ * RF-18). RF-10 llega aquí.
  */
 @Module({
   imports: [NotificacionesModule],
@@ -36,6 +37,7 @@ import { RevisionService } from './revision.service.js';
     AlcanceService,
     AsistenteService,
     ProyectosDocentesService,
+    DuplicacionService,
     EdicionProyectoService,
     DiligenciamientoService,
     RacService,
