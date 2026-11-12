@@ -20,6 +20,7 @@ function baseEnMemoria() {
   const asignaturas: Fila[] = [];
   const vinculos = new Set<string>();
   const requisitos = new Set<string>();
+  const actualizaciones: Record<string, unknown>[] = [];
   let siguiente = 1;
   const tx = {
     plan_estudio: {
@@ -42,17 +43,45 @@ function baseEnMemoria() {
       },
     },
     asignatura: {
-      findFirst: ({ where }: { where: Record<string, unknown> }) =>
-        Promise.resolve(
-          asignaturas.find((fila) =>
-            Object.entries(where).every(
-              ([campo, valor]) => (fila[campo] ?? null) === valor,
-            ),
-          ) ?? null,
-        ),
+      findFirst: ({
+        where,
+        select,
+      }: {
+        where: Record<string, unknown>;
+        select: Record<string, true>;
+      }) => {
+        const fila = asignaturas.find((a) =>
+          Object.entries(where).every(
+            ([campo, valor]) => (a[campo] ?? null) === valor,
+          ),
+        );
+        // Como la base: solo los campos pedidos, y `null` el que no tiene valor.
+        return Promise.resolve(
+          fila
+            ? Object.fromEntries(
+                Object.keys(select).map((campo) => [
+                  campo,
+                  fila[campo] ?? null,
+                ]),
+              )
+            : null,
+        );
+      },
       create: ({ data }: { data: Record<string, unknown> }) => {
         const fila = { id: siguiente++, ...data };
         asignaturas.push(fila);
+        return Promise.resolve(fila);
+      },
+      update: ({
+        where,
+        data,
+      }: {
+        where: { id: number };
+        data: Record<string, unknown>;
+      }) => {
+        const fila = asignaturas.find((a) => a.id === where.id);
+        Object.assign(fila ?? {}, data);
+        actualizaciones.push({ id: where.id, ...data });
         return Promise.resolve(fila);
       },
     },
@@ -88,6 +117,7 @@ function baseEnMemoria() {
     asignaturas,
     vinculos,
     requisitos,
+    actualizaciones,
     delPlan,
   };
 }
@@ -169,6 +199,76 @@ describe('sembrarPlanesDeEstudio', () => {
       expect(fila.horas_tde).toBeUndefined();
       expect(fila.horas_totales).toBeUndefined();
     }
+  });
+
+  it('sobre una base sembrada sin el componente de los semestres 1 a 5, lo completa y no toca nada más', async () => {
+    const base = baseEnMemoria();
+    // Como quedaron las bases sembradas con el PR #47: las 74, sin componente en 33 de ellas.
+    const comoEnEl47 = PLAN_2502.map((fila) => {
+      if (
+        fila.semestre <= 5 &&
+        !fila.ficha &&
+        fila.codigo_interno !== 'FC72731'
+      ) {
+        const { componente: _quitado, ...resto } = fila;
+        return resto;
+      }
+      return fila;
+    });
+    await sembrar(base.tx, [
+      PLANES_ANTERIORES[0],
+      { ...PLANES_ANTERIORES[1], asignaturas: comoEnEl47 },
+    ]);
+    // 33 de los semestres 1 a 5 y las dos Electiva VIII.
+    expect(
+      base.delPlan('2502').filter((fila) => (fila.componente ?? null) === null),
+    ).toHaveLength(35);
+    const antes = structuredClone(base.asignaturas);
+
+    await sembrar(base.tx);
+
+    // 33 actualizaciones, solo del componente. Las dos Electiva VIII siguen sin él.
+    expect(base.actualizaciones).toHaveLength(33);
+    for (const cambio of base.actualizaciones) {
+      expect(Object.keys(cambio).sort()).toEqual(['componente', 'id']);
+    }
+    expect(base.asignaturas).toHaveLength(antes.length);
+    const sinComponente = (fila: Fila) => {
+      const { componente: _quitado, ...resto } = fila;
+      return resto;
+    };
+    expect(base.asignaturas.map(sinComponente)).toEqual(
+      antes.map(sinComponente),
+    );
+    const fila = (codigo: string) =>
+      base.delPlan('2502').find((a) => a.codigo_interno === codigo);
+    expect(fila('FN23003')?.componente).toBe('BASICO');
+    expect(fila('IX24189')?.componente).toBe('PROFESIONAL');
+    expect(fila('NC2505')?.componente).toBe('PROFESIONAL');
+    expect(fila('IX24221')?.componente).toBeUndefined();
+    // Sembrar una vez más no cambia nada.
+    await sembrar(base.tx);
+    expect(base.actualizaciones).toHaveLength(33);
+  });
+
+  it('no cambia un componente que ya está, aunque la lista diga otro', async () => {
+    const base = baseEnMemoria();
+    const matematica = (componente: 'BASICO' | 'PROFESIONAL') =>
+      plan([
+        {
+          semestre: 1,
+          nombre: 'Matemática I',
+          codigo_interno: 'NC2501',
+          creditos: 4,
+          componente,
+          raps: [],
+        },
+      ]);
+    await sembrar(base.tx, matematica('PROFESIONAL'));
+    await sembrar(base.tx, matematica('BASICO'));
+
+    expect(base.actualizaciones).toEqual([]);
+    expect(base.asignaturas[0].componente).toBe('PROFESIONAL');
   });
 
   it('guarda el componente y el tipo de curso de una asignatura sin ficha, sin horas', async () => {

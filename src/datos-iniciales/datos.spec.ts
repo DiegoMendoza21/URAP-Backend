@@ -194,17 +194,33 @@ describe('Datos iniciales', () => {
       }
     });
 
-    it('las de los semestres 1 a 5 que ya estaban no cambian', () => {
+    it('las de los semestres 1 a 5 traen el componente del plan público, sin tipo de curso', () => {
       const anteriores = PLAN_2502.filter((fila) => !deLaMalla.includes(fila));
       expect(anteriores).toHaveLength(36);
-      // Sin formato diligenciado siguen sin componente ni tipo de curso.
-      for (const { ficha, componente, tipo_curso } of anteriores) {
-        if (!ficha) {
-          expect(componente).toBeUndefined();
-          expect(tipo_curso).toBeUndefined();
-        }
+      const sinFicha = anteriores.filter(({ ficha }) => !ficha);
+      expect(sinFicha).toHaveLength(33);
+      const componentes = new Map<string, number>();
+      for (const { componente, tipo_curso } of sinFicha) {
+        expect(componente).toEqual(expect.any(String));
+        expect(tipo_curso).toBeUndefined();
+        const clave = componente ?? '';
+        componentes.set(clave, (componentes.get(clave) ?? 0) + 1);
       }
-      expect(conCodigo('NC2505')[0]?.ficha?.componente).toBe('PROFESIONAL');
+      expect(Object.fromEntries(componentes)).toEqual({
+        BASICO: 18,
+        PROFESIONAL: 15,
+      });
+      expect(conCodigo('FN23003')[0]?.componente).toBe('BASICO');
+      expect(conCodigo('IX24189')[0]?.componente).toBe('PROFESIONAL');
+    });
+
+    it('las tres con formato diligenciado siguen con el componente de su ficha', () => {
+      for (const codigo of ['NC2507', 'NC2505', 'IX24193']) {
+        const [fila] = conCodigo(codigo);
+        expect(fila?.componente).toBeUndefined();
+        // NC2505 sigue «Profesional», como en su formato, aunque el plan público diga básico.
+        expect(fila?.ficha?.componente).toBe('PROFESIONAL');
+      }
     });
 
     it('las electivas I a VII llevan el nombre de la malla y son de tipo «Electivo»', () => {
