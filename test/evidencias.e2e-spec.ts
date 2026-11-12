@@ -19,6 +19,7 @@ import {
   MENSAJE_SIN_RAP_A_CARGO,
   MENSAJE_SOLO_DOCENTES_DEL_PROYECTO,
 } from '../src/documentos/evidencias.service.js';
+import { MENSAJE_RAP_NO_A_CARGO } from '../src/documentos/evidencias-lider-rap.service.js';
 import {
   asegurarCatalogoDePermisos,
   asegurarPermisosDeRol,
@@ -90,6 +91,7 @@ describe('Evidencias (e2e) · RF-24, HU-10-01', () => {
   let proyectoAjeno: number;
   let sesion: number;
   let sesionAjena: number;
+  let periodoAbierto: number;
 
   const http = () => request(app.getHttpServer());
   const autorizar = (quien: string) => `Bearer ${tokens[quien]}`;
@@ -254,6 +256,7 @@ describe('Evidencias (e2e) · RF-24, HU-10-01', () => {
       ),
     );
     creados.periodos.push(abierto.id, cerrado.id);
+    periodoAbierto = abierto.id;
 
     const facultad = await prisma.facultad.create({
       data: { nombre: `Facultad E2E Evidencias ${sufijo}` },
@@ -806,6 +809,181 @@ describe('Evidencias (e2e) · RF-24, HU-10-01', () => {
         .get(ruta(proyecto, `/${idEvidenciaRap1}/archivo`))
         .set('Authorization', autorizar('estudiante'))
         .expect(404);
+    });
+  });
+
+  describe('evidencias de los RAP a cargo del Líder RAP (HU-10-04)', () => {
+    const rutaLider = (resto = '') => `/api/raps-a-cargo${resto}`;
+    let visible: number;
+    let deOtroPeriodo: number;
+    let deOtroRap: number;
+
+    /** Evidencia insertada directamente, con su archivo en el almacenamiento de prueba. */
+    async function evidencia(
+      idProyecto: number,
+      idRap: number,
+      idDocente: number,
+      descripcion: string,
+    ): Promise<number> {
+      const clave = `evidencias/proyecto-${idProyecto}/lider-${idRap}-${Date.now()}.png`;
+      await almacenamiento.guardar(clave, PNG);
+      const fila = await prisma.evidencia_rap.create({
+        data: {
+          id_proyecto_docente: idProyecto,
+          id_rap: idRap,
+          nombre_original: 'foto-ficticia.png',
+          url: clave,
+          tipo: 'image/png',
+          tamano_bytes: PNG.length,
+          descripcion,
+          fecha: new Date('2026-10-05T00:00:00.000Z'),
+          id_subido_por: idDocente,
+          fecha_subida: new Date(),
+        },
+      });
+      return fila.id;
+    }
+
+    beforeAll(async () => {
+      // El líder lidera el RAP 2 solo en el período abierto (ver el beforeAll de arriba).
+      visible = await evidencia(
+        proyectoAjeno,
+        rap2,
+        usuarios.docenteAjeno,
+        'Exposición del grupo B.',
+      );
+      deOtroPeriodo = await evidencia(
+        proyectoCerrado,
+        rap2,
+        usuarios.docente,
+        'Evidencia de un período que no lidera.',
+      );
+      deOtroRap = await evidencia(
+        proyectoAjeno,
+        rap1,
+        usuarios.docenteAjeno,
+        'Evidencia de un RAP que no lidera.',
+      );
+    });
+
+    it('lista los RAP a cargo con sus períodos y cuántas evidencias y proyectos tienen', async () => {
+      const esperadas = await prisma.evidencia_rap.count({
+        where: {
+          id_rap: rap2,
+          proyecto_docente: { is: { id_periodo: periodoAbierto } },
+        },
+      });
+
+      const { body } = await http()
+        .get(rutaLider())
+        .set('Authorization', autorizar('lider'))
+        .expect(200);
+
+      expect(body.raps).toEqual([
+        expect.objectContaining({
+          id: rap2,
+          todosLosPeriodos: false,
+          periodos: [{ id: periodoAbierto, codigo: `E2E-EVID-A-${sufijo}` }],
+          totalEvidencias: esperadas,
+          // proyecto y proyectoAjeno: los dos del período abierto tributan al RAP 2.
+          totalProyectos: 2,
+        }),
+      ]);
+      expect(body.raps[0].proyectosConEvidencias).toBeGreaterThanOrEqual(1);
+    });
+
+    it('da las evidencias del RAP en todas las asignaturas, con asignatura, grupo y docente, y audita la consulta', async () => {
+      const { body } = await http()
+        .get(rutaLider(`/${rap2}/evidencias`))
+        .set('Authorization', autorizar('lider'))
+        .expect(200);
+
+      const ids = body.elementos.map((fila: { id: number }) => fila.id);
+      expect(ids).toContain(visible);
+      expect(ids).not.toContain(deOtroPeriodo);
+      expect(ids).not.toContain(deOtroRap);
+      expect(
+        body.elementos.find((fila: { id: number }) => fila.id === visible),
+      ).toMatchObject({
+        descripcion: 'Exposición del grupo B.',
+        fecha: '2026-10-05',
+        proyecto: {
+          id: proyectoAjeno,
+          asignatura: 'Asignatura de evidencias',
+          grupo: 'B',
+          periodo: `E2E-EVID-A-${sufijo}`,
+          docenteResponsable: { id: usuarios.docenteAjeno },
+        },
+      });
+
+      // RF-29: fotos de clase, datos personales. Queda como consulta sensible del RAP.
+      await expect
+        .poll(
+          () =>
+            prisma.auditoria.count({
+              where: {
+                accion: 'consulta_sensible',
+                tabla_afectada: 'rap',
+                id_registro: rap2,
+                id_usuario: usuarios.lider,
+                ip: { not: null },
+              },
+            }),
+          { timeout: 5000 },
+        )
+        .toBe(1);
+    });
+
+    it('el archivo se descarga solo por el endpoint protegido del proyecto', async () => {
+      await http()
+        .get(ruta(proyectoAjeno, `/${visible}/archivo`))
+        .expect(401);
+      await http()
+        .get(ruta(proyectoAjeno, `/${visible}/archivo`))
+        .set('Authorization', autorizar('lider'))
+        .expect(200);
+      // La de un período que no lidera no se lista ni se descarga.
+      await http()
+        .get(ruta(proyectoCerrado, `/${deOtroPeriodo}/archivo`))
+        .set('Authorization', autorizar('lider'))
+        .expect(403);
+    });
+
+    it('un RAP que no está a su cargo responde 403 y no deja consulta en la auditoría', async () => {
+      const { body } = await http()
+        .get(rutaLider(`/${rap1}/evidencias`))
+        .set('Authorization', autorizar('lider'))
+        .expect(403);
+      expect(body.mensaje).toBe(MENSAJE_RAP_NO_A_CARGO);
+      expect(
+        await prisma.auditoria.count({
+          where: {
+            accion: 'consulta_sensible',
+            tabla_afectada: 'rap',
+            id_registro: rap1,
+            id_usuario: usuarios.lider,
+          },
+        }),
+      ).toBe(0);
+    });
+
+    it('quien no es Líder RAP no tiene RAP a cargo ni ve sus evidencias', async () => {
+      const { body } = await http()
+        .get(rutaLider())
+        .set('Authorization', autorizar('departamento'))
+        .expect(200);
+      expect(body.raps).toEqual([]);
+      await http()
+        .get(rutaLider(`/${rap2}/evidencias`))
+        .set('Authorization', autorizar('docente'))
+        .expect(403);
+      await http()
+        .get(rutaLider(`/${rap2}/evidencias`))
+        .set('Authorization', autorizar('estudiante'))
+        .expect(403);
+      await http()
+        .get(rutaLider(`/${rap2}/evidencias`))
+        .expect(401);
     });
   });
 });

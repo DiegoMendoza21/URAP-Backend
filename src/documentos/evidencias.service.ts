@@ -97,12 +97,12 @@ const SESION_VIGENTE = {
 
 const ZONA_HORARIA = 'America/Bogota';
 
-const INCLUIR_EVIDENCIA = {
+export const INCLUIR_EVIDENCIA = {
   sesion_clase: { select: { id: true, fecha: true, semana: true } },
   usuario: { select: { id: true, nombres: true, apellidos: true } },
 } as const satisfies Prisma.evidencia_rapInclude;
 
-type EvidenciaConRelaciones = Prisma.evidencia_rapGetPayload<{
+export type EvidenciaConRelaciones = Prisma.evidencia_rapGetPayload<{
   include: typeof INCLUIR_EVIDENCIA;
 }>;
 
@@ -565,7 +565,7 @@ export class EvidenciasService {
   }
 }
 
-function aEvidencia(evidencia: EvidenciaConRelaciones): EvidenciaDto {
+export function aEvidencia(evidencia: EvidenciaConRelaciones): EvidenciaDto {
   const sesion = evidencia.sesion_clase;
   return {
     id: evidencia.id,
