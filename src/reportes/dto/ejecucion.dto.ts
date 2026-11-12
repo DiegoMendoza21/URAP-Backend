@@ -118,8 +118,8 @@ export class CursoEjecucionDto {
   @ApiProperty({
     example: 0,
     description:
-      'Temas dictados fuera del contenido programático. El registro de clase todavía no ' +
-      'permite escribirlos (HU-08-05): hoy siempre es 0.',
+      'Temas dictados fuera del contenido programático: los que el docente escribe como no ' +
+      'planeados al registrar la clase (HU-08-05), sin repetir el mismo texto.',
   })
   adicionales: number;
 

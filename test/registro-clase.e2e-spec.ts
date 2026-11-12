@@ -14,8 +14,16 @@ import {
   MENSAJE_PERIODO_CERRADO_REGISTRO,
   MENSAJE_PROYECTO_NO_APROBADO,
   MENSAJE_TEMAS_INVALIDOS,
+  mensajeTemaAdicionalPlaneado,
+  mensajeTemaAdicionalRepetido,
   mensajeTipoSinTema,
+  TABLA_AUDITORIA_CLASE,
 } from '../src/sesiones/registro-clase.service.js';
+import {
+  MENSAJE_SIN_TEMAS,
+  TEMA_ADICIONAL_MAXIMO,
+} from '../src/sesiones/dto/registro.dto.js';
+import { MENSAJE_DATOS_INVALIDOS } from '../src/common/validacion/pipe-validacion.js';
 import {
   asegurarCatalogoDePermisos,
   asegurarPermisosDeRol,
@@ -523,6 +531,104 @@ describe('Registro de clase (e2e) · RF-20 y RF-22, HU-08-04 y HU-09-02', () => 
       numeroAusentes: 1,
       estado: 'registrada',
     });
+  });
+
+  it('registra temas no planeados, los audita y los conserva al corregir sin el campo (HU-08-05)', async () => {
+    const sesion = await sesionDe(proyecto, 'anterior');
+    const ruta = `${rutaSesion(proyecto, sesion.id)}/registro`;
+
+    // Solo temas no planeados: también es una clase registrada (RF-20, excepción de p4).
+    const registro = await como('docente').put(ruta, {
+      idsContenido: [],
+      temasAdicionales: ['  Charla de un   invitado ', 'Simulacro de examen'],
+    });
+    expect(registro.status).toBe(200);
+    expect(registro.body).toMatchObject({
+      temasAdicionales: ['Charla de un invitado', 'Simulacro de examen'],
+      sesion: { diligenciada: true },
+    });
+    const filas = await prisma.sesion_tema.findMany({
+      where: { id_sesion: sesion.id },
+      orderBy: { id: 'asc' },
+    });
+    expect(
+      filas.map(({ id_contenido, tema_adicional }) => [
+        id_contenido,
+        tema_adicional,
+      ]),
+    ).toEqual([
+      [null, 'Charla de un invitado'],
+      [null, 'Simulacro de examen'],
+    ]);
+    const auditado = await prisma.auditoria.findFirst({
+      where: {
+        tabla_afectada: TABLA_AUDITORIA_CLASE,
+        id_registro: sesion.id,
+        id_usuario: usuarios.docente,
+      },
+      orderBy: { id: 'desc' },
+    });
+    expect(auditado?.valor_nuevo).toMatchObject({
+      temasAdicionales: ['Charla de un invitado', 'Simulacro de examen'],
+    });
+
+    // Corregir sin el campo agrega el tema del contenido y conserva los no planeados.
+    const corregido = await como('docente').put(ruta, {
+      idsContenido: [contenido[2]],
+    });
+    expect(corregido.status).toBe(200);
+    expect(corregido.body.temasAdicionales).toEqual([
+      'Charla de un invitado',
+      'Simulacro de examen',
+    ]);
+
+    // Una lista vacía los borra.
+    const sinAdicionales = await como('docente').put(ruta, {
+      idsContenido: [contenido[2]],
+      temasAdicionales: [],
+    });
+    expect(sinAdicionales.body.temasAdicionales).toEqual([]);
+    expect(
+      await prisma.sesion_tema.count({
+        where: { id_sesion: sesion.id, id_contenido: null },
+      }),
+    ).toBe(0);
+  });
+
+  it.each([
+    [
+      'un tema no planeado repetido',
+      { temasAdicionales: ['Charla', 'CHARLA'] },
+      mensajeTemaAdicionalRepetido('CHARLA'),
+    ],
+    [
+      'un tema no planeado que ya está en el contenido',
+      { temasAdicionales: ['tema e2e de la semana 3'] },
+      mensajeTemaAdicionalPlaneado('tema e2e de la semana 3'),
+    ],
+    [
+      'un tema no planeado vacío',
+      { temasAdicionales: ['   '] },
+      MENSAJE_DATOS_INVALIDOS,
+    ],
+    [
+      'un tema no planeado demasiado largo',
+      { temasAdicionales: ['x'.repeat(TEMA_ADICIONAL_MAXIMO + 1)] },
+      MENSAJE_DATOS_INVALIDOS,
+    ],
+    [
+      'una clase sin ningún tema',
+      { idsContenido: [], temasAdicionales: [] },
+      MENSAJE_SIN_TEMAS,
+    ],
+  ])('rechaza %s (HU-08-05)', async (_caso, cuerpo, mensaje) => {
+    const sesion = await sesionDe(proyecto, 'anterior');
+    const respuesta = await como('docente').put(
+      `${rutaSesion(proyecto, sesion.id)}/registro`,
+      { idsContenido: [contenido[1]], ...cuerpo },
+    );
+    expect(respuesta.status).toBe(400);
+    expect(respuesta.body.mensaje).toBe(mensaje);
   });
 
   it('corrige el registro sin cambiar quién ni cuándo lo registró', async () => {

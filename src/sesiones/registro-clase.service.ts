@@ -22,10 +22,12 @@ import {
   RANGO_UMBRAL_ALERTA,
 } from './alertas.js';
 import { aTextoFecha } from './calendario.js';
-import type {
-  DetalleSesionDto,
-  RegistrarSesionDto,
-  TemaContenidoDto,
+import {
+  type DetalleSesionDto,
+  MENSAJE_SIN_TEMAS,
+  MENSAJE_TEMA_ADICIONAL_VACIO,
+  type RegistrarSesionDto,
+  type TemaContenidoDto,
 } from './dto/registro.dto.js';
 import {
   aSesion,
@@ -67,6 +69,59 @@ export const MENSAJE_AUSENTES_INVALIDOS =
 export const MENSAJE_CONFIRMAR_TODO_EL_GRUPO =
   'Marcó a todo el grupo como ausente. Confirme que ningún estudiante asistió a la clase.';
 
+export function mensajeTemaAdicionalRepetido(tema: string): string {
+  return `«${tema}» está escrito dos veces entre los temas no planeados de esta clase.`;
+}
+
+export function mensajeTemaAdicionalPlaneado(tema: string): string {
+  return `«${tema}» ya está en el contenido programático: selecciónelo en la lista de temas en vez de escribirlo como no planeado.`;
+}
+
+/** Para comparar temas como los lee una persona: sin mayúsculas, tildes ni espacios de más. */
+function huellaTema(texto: string): string {
+  return (
+    texto
+      .trim()
+      .replace(/\s+/g, ' ')
+      .toLocaleLowerCase('es-CO')
+      .normalize('NFD')
+      // Las tildes y la diéresis; la eñe se conserva: «caña» y «cana» son temas distintos.
+      .replace(/[́̈]/g, '')
+      .normalize('NFC')
+  );
+}
+
+/**
+ * HU-08-05: los temas no planeados de una clase, ya recortados por el DTO. No se repiten entre
+ * ellos ni repiten un tema del contenido programático del proyecto, que se selecciona de la
+ * lista (RF-20, p4). Si no cumplen, responde 400 con el tema que falla.
+ */
+export function validarTemasAdicionales(
+  adicionales: readonly string[],
+  temasPlaneados: readonly (string | null)[],
+): string[] {
+  const planeados = new Set(
+    temasPlaneados
+      .filter((tema): tema is string => tema !== null && tema.trim() !== '')
+      .map(huellaTema),
+  );
+  const vistos = new Set<string>();
+  for (const tema of adicionales) {
+    const huella = huellaTema(tema);
+    if (huella === '') {
+      throw new BadRequestException(MENSAJE_TEMA_ADICIONAL_VACIO);
+    }
+    if (vistos.has(huella)) {
+      throw new BadRequestException(mensajeTemaAdicionalRepetido(tema));
+    }
+    if (planeados.has(huella)) {
+      throw new BadRequestException(mensajeTemaAdicionalPlaneado(tema));
+    }
+    vistos.add(huella);
+  }
+  return [...adicionales];
+}
+
 export function mensajeTipoSinTema(tipo: string | null): string {
   return (
     `Esta sesión está marcada como «${tipo ?? 'sin tipo'}» y no lleva temas. Si sí hubo clase, ` +
@@ -77,7 +132,10 @@ export function mensajeTipoSinTema(tipo: string | null): string {
 /** La sesión con lo que ya tiene registrado: temas, ausentes y quién la registró. */
 const INCLUIR_REGISTRO = {
   ...INCLUIR_SESION,
-  sesion_tema: { select: { id_contenido: true } },
+  sesion_tema: {
+    select: { id_contenido: true, tema_adicional: true },
+    orderBy: { id: 'asc' },
+  },
   inasistencia: { select: { id_matricula: true } },
   usuario: { select: { nombres: true, apellidos: true } },
 } as const satisfies Prisma.sesion_claseInclude;
@@ -90,6 +148,8 @@ type SesionRegistrada = Prisma.sesion_claseGetPayload<{
 export interface ContenidoDelRegistro {
   estado: string | null;
   temas: number[];
+  /** Temas no planeados (HU-08-05), en el orden en que se escribieron. */
+  temasAdicionales: string[];
   ausentes: number[];
   observaciones: string | null;
 }
@@ -168,7 +228,10 @@ export class RegistroClaseService {
           },
           include: {
             tipo_sesion: true,
-            sesion_tema: { select: { id_contenido: true } },
+            sesion_tema: {
+              select: { id_contenido: true, tema_adicional: true },
+              orderBy: { id: 'asc' },
+            },
             inasistencia: { select: { id_matricula: true } },
           },
         });
@@ -193,16 +256,18 @@ export class RegistroClaseService {
         const ausentesActuales = new Set(
           sesion.inasistencia.map((fila) => fila.id_matricula),
         );
+        const adicionalesActuales = temasAdicionalesDe(sesion.sesion_tema);
 
         // Temas: semanas del contenido programático de este proyecto que tienen tema. Una semana
         // que ya estaba registrada y luego se vació puede conservarse.
-        const contenidos = await tx.contenido_programatico.findMany({
-          where: {
-            id: { in: datos.idsContenido },
-            id_proyecto_docente: proyecto.id,
-          },
+        const delProyecto = await tx.contenido_programatico.findMany({
+          where: { id_proyecto_docente: proyecto.id },
           select: { id: true, tema: true },
         });
+        const pedidos = new Set(datos.idsContenido);
+        const contenidos = delProyecto.filter((contenido) =>
+          pedidos.has(contenido.id),
+        );
         if (
           contenidos.length !== datos.idsContenido.length ||
           contenidos.some(
@@ -211,6 +276,18 @@ export class RegistroClaseService {
           )
         ) {
           throw new BadRequestException(MENSAJE_TEMAS_INVALIDOS);
+        }
+        // HU-08-05: sin el campo se conservan los temas no planeados; una lista vacía los borra.
+        const temasAdicionales =
+          datos.temasAdicionales === undefined
+            ? adicionalesActuales
+            : validarTemasAdicionales(
+                datos.temasAdicionales,
+                delProyecto.map((contenido) => contenido.tema),
+              );
+        // RF-20, p4: al menos un tema, del contenido programático o no planeado.
+        if (datos.idsContenido.length === 0 && temasAdicionales.length === 0) {
+          throw new BadRequestException(MENSAJE_SIN_TEMAS);
         }
 
         // Ausentes: matriculados en este curso. Quien se retiró después de quedar marcado
@@ -255,7 +332,7 @@ export class RegistroClaseService {
         }
 
         const temas = [...new Set(datos.idsContenido)];
-        // Los temas adicionales (HU-08-05) no tienen `id_contenido` y no se tocan aquí.
+        // Los temas no planeados (HU-08-05) no tienen `id_contenido`: van aparte.
         await tx.sesion_tema.deleteMany({
           where: {
             id_sesion: sesion.id,
@@ -270,6 +347,23 @@ export class RegistroClaseService {
               id_contenido: id,
             })),
           });
+        }
+        // Se reemplazan solo si cambiaron: así no se reescriben en cada corrección.
+        if (
+          JSON.stringify(temasAdicionales) !==
+          JSON.stringify(adicionalesActuales)
+        ) {
+          await tx.sesion_tema.deleteMany({
+            where: { id_sesion: sesion.id, id_contenido: null },
+          });
+          if (temasAdicionales.length > 0) {
+            await tx.sesion_tema.createMany({
+              data: temasAdicionales.map((tema) => ({
+                id_sesion: sesion.id,
+                tema_adicional: tema,
+              })),
+            });
+          }
         }
         await tx.inasistencia.deleteMany({
           where: { id_sesion: sesion.id, id_matricula: { notIn: ausentes } },
@@ -304,12 +398,14 @@ export class RegistroClaseService {
           anterior: {
             estado: sesion.estado,
             temas: [...temasActuales],
+            temasAdicionales: adicionalesActuales,
             ausentes: [...ausentesActuales],
             observaciones: sesion.observaciones,
           } satisfies ContenidoDelRegistro,
           nuevo: {
             estado: ESTADO_REGISTRADA,
             temas,
+            temasAdicionales,
             ausentes,
             observaciones,
           } satisfies ContenidoDelRegistro,
@@ -428,6 +524,7 @@ export class RegistroClaseService {
       puedeRegistrar: puedeVerDatos && motivo === null,
       motivoNoRegistrable: motivo,
       temas,
+      temasAdicionales: temasAdicionalesDe(sesion.sesion_tema),
       numeroAusentes: sesion._count.inasistencia,
       asistencia: puedeVerDatos
         ? {
@@ -502,15 +599,18 @@ export function eventosDelRegistro(
 ): EventoAuditoria[] {
   const eventos: EventoAuditoria[] = [];
 
+  // Los temas no planeados van con su texto: son temas de la clase, no datos personales.
   const clase = soloCambios(
     {
       estado: anterior.estado,
       temas: ordenados(anterior.temas),
+      temasAdicionales: anterior.temasAdicionales,
       observaciones: anterior.observaciones,
     },
     {
       estado: nuevo.estado,
       temas: ordenados(nuevo.temas),
+      temasAdicionales: nuevo.temasAdicionales,
       observaciones: nuevo.observaciones,
     },
   );
@@ -542,6 +642,19 @@ export function eventosDelRegistro(
     });
   }
   return eventos;
+}
+
+/** Los temas no planeados de una sesión (HU-08-05): las filas sin `id_contenido`. */
+function temasAdicionalesDe(
+  filas: readonly {
+    id_contenido: number | null;
+    tema_adicional: string | null;
+  }[],
+): string[] {
+  return filas
+    .filter((fila) => fila.id_contenido === null)
+    .map((fila) => fila.tema_adicional?.trim() ?? '')
+    .filter((tema) => tema !== '');
 }
 
 /** Sin repetidos y en orden: `soloCambios` compara por JSON. */
