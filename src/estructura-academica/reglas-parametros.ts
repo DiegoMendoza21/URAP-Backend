@@ -100,6 +100,10 @@ export const DEFINICION_PARAMETRO: Record<ClaveParametro, DefinicionParametro> =
       elementos: 'texto',
       admiteVacia: true,
     },
+    [PARAMETRO.recordatorioSesionesDias]: {
+      tipo: 'entero',
+      rango: RANGO_PARAMETRO[PARAMETRO.recordatorioSesionesDias],
+    },
   };
 
 /** Las claves editables, en el orden en que se declaran en `PARAMETRO`. */

@@ -33,6 +33,8 @@ export const PARAMETRO = {
   catalogoEstrategiasEnsenanza: 'catalogo_estrategias_ensenanza',
   /** RF-13, p2: estrategias de aprendizaje del catálogo del MEN que sugiere el punto 4. */
   catalogoEstrategiasAprendizaje: 'catalogo_estrategias_aprendizaje',
+  /** RF-26, HU-13-02: cada cuántos días se le recuerdan al docente sus sesiones pendientes. */
+  recordatorioSesionesDias: 'recordatorio_sesiones_dias',
 } as const;
 
 export type ClaveParametro = (typeof PARAMETRO)[keyof typeof PARAMETRO];

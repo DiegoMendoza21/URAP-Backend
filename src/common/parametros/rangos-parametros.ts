@@ -29,6 +29,8 @@ export const RANGO_PARAMETRO = {
   [PARAMETRO.descripcionCursoLongitudMaxima]: { minimo: 1, maximo: 16_000 },
   /** RF-25, p5. */
   [PARAMETRO.reporteExportacionFilasMaxima]: { minimo: 1, maximo: 1_000_000 },
+  /** RF-26, HU-13-02: de un recordatorio diario a uno por trimestre. */
+  [PARAMETRO.recordatorioSesionesDias]: { minimo: 1, maximo: 90 },
 } as const satisfies Partial<Record<ClaveParametro, RangoEntero>>;
 
 /** Claves de los parámetros enteros. */

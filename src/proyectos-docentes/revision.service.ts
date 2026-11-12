@@ -16,9 +16,13 @@ import {
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import {
-  NOTIFICACION,
-  NotificacionesService,
-} from '../notificaciones/notificaciones.service.js';
+  type AvisoRevision,
+  avisoAprobado,
+  avisoDevuelto,
+  avisoEnviado,
+  cursoDelAviso,
+} from '../notificaciones/avisos-revision.js';
+import { NotificacionesService } from '../notificaciones/notificaciones.service.js';
 import { AlcanceService } from './alcance.service.js';
 import {
   aDatosCompletitud,
@@ -175,12 +179,11 @@ function aObservacion(fila: {
 
 /** «Finanzas a corto plazo, grupo A (2026-2)»: cómo se nombra el proyecto en los avisos. */
 function nombreProyecto(proyecto: ProyectoEnRevision): string {
-  const asignatura = proyecto.asignatura?.nombre ?? 'sin asignatura';
-  const grupo = proyecto.grupo ? `, grupo ${proyecto.grupo}` : '';
-  const periodo = proyecto.periodo_academico?.codigo
-    ? ` (${proyecto.periodo_academico.codigo})`
-    : '';
-  return `${asignatura}${grupo}${periodo}`;
+  return cursoDelAviso(
+    proyecto.asignatura?.nombre,
+    proyecto.grupo,
+    proyecto.periodo_academico?.codigo,
+  );
 }
 
 /**
@@ -304,15 +307,20 @@ export class RevisionService {
       valorAnterior: { estado: proyecto.estado_proyecto?.codigo ?? null },
       valorNuevo: { estado: ESTADO.enviado, fechaEnvio: ahora.toISOString() },
     });
+    // Quien envía no se avisa a sí mismo. Con la separación de funciones encendida, tampoco
+    // los demás docentes del proyecto: no pueden revisarlo, así que el aviso no es para ellos.
+    const excluidos = new Set([usuario.id]);
+    if (await this.bloquearProyectosPropios()) {
+      for (const docente of proyecto.proyecto_docente_docente) {
+        excluidos.add(docente.id_usuario);
+      }
+    }
     const revisores = await this.revisoresDelPrograma(proyecto);
     await this.notificaciones.notificar({
-      tipo: NOTIFICACION.proyectoEnviado,
-      destinatarios: revisores.filter((idUsuario) => idUsuario !== usuario.id),
-      titulo: 'Proyecto docente enviado a revisión',
-      mensaje: `El proyecto docente de ${nombreProyecto(proyecto)} fue enviado a revisión y espera su revisión.`,
+      ...avisoEnviado(nombreProyecto(proyecto), id),
+      destinatarios: revisores.filter((idUsuario) => !excluidos.has(idUsuario)),
       entidad: 'proyecto_docente',
       idEntidad: id,
-      urlDestino: `/proyectos-docentes/${id}/revision`,
     });
     return this.transicion(id, ahora);
   }
@@ -461,12 +469,7 @@ export class RevisionService {
     });
     await this.avisarDocentes(
       proyecto,
-      {
-        tipo: NOTIFICACION.proyectoAprobado,
-        titulo: 'Proyecto docente aprobado',
-        mensaje: `El departamento académico aprobó el proyecto docente de ${nombreProyecto(proyecto)}. Ya puede registrar sus clases.`,
-        urlDestino: `/proyectos-docentes/${id}`,
-      },
+      avisoAprobado(nombreProyecto(proyecto), id),
       'aprobado',
     );
     return this.transicion(id, ahora);
@@ -526,12 +529,7 @@ export class RevisionService {
     });
     await this.avisarDocentes(
       proyecto,
-      {
-        tipo: NOTIFICACION.proyectoDevuelto,
-        titulo: 'Proyecto docente devuelto con observaciones',
-        mensaje: `El departamento académico devolvió el proyecto docente de ${nombreProyecto(proyecto)} con ${observaciones.length === 1 ? 'una observación' : `${observaciones.length} observaciones`}. Revíselas en cada sección y vuelva a enviarlo.`,
-        urlDestino: `/proyectos-docentes/${id}/diligenciar`,
-      },
+      avisoDevuelto(nombreProyecto(proyecto), id, observaciones.length),
       'devuelto con observaciones',
     );
     return this.transicion(id, ahora);
@@ -843,12 +841,7 @@ export class RevisionService {
    */
   private async avisarDocentes(
     proyecto: ProyectoEnRevision,
-    aviso: {
-      tipo: string;
-      titulo: string;
-      mensaje: string;
-      urlDestino: string;
-    },
+    aviso: AvisoRevision,
     /** Qué le pasó al proyecto, para el aviso a los revisores: «aprobado», «devuelto…». */
     resultado: string,
   ): Promise<void> {

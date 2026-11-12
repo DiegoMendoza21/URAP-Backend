@@ -255,6 +255,11 @@ describe('Planes de estudio (e2e) · modelo v2.5, RF-04 y RF-08', () => {
       await prisma.sesion.deleteMany({
         where: { id_usuario: { in: creados.usuarios } },
       });
+      // Con la base sembrada existe el tipo `asignacion_proyecto`: crear el proyecto le deja
+      // un aviso al docente (HU-13-01), que hay que borrar antes que al usuario.
+      await prisma.notificacion.deleteMany({
+        where: { id_usuario: { in: creados.usuarios } },
+      });
       await prisma.usuario_rol.deleteMany({
         where: { id_usuario: { in: creados.usuarios } },
       });

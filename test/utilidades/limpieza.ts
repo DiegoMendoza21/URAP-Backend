@@ -1,8 +1,8 @@
 import type { PrismaService } from '../../src/common/prisma/prisma.service.js';
 
 /**
- * Borra los datos de prueba de unos usuarios ficticios: auditoría, sesiones, roles y el
- * usuario. La auditoría va primero porque referencia al usuario (RF-29): en la aplicación los
+ * Borra los datos de prueba de unos usuarios ficticios: auditoría, notificaciones, sesiones,
+ * roles y el usuario. La auditoría va primero porque referencia al usuario (RF-29): en la aplicación los
  * usuarios se inactivan y nunca se borran, pero las pruebas sí limpian lo que crean.
  */
 export async function borrarUsuariosDePrueba(
@@ -23,6 +23,10 @@ export async function borrarUsuariosDePrueba(
         { tabla_afectada: 'sesion', id_registro: { in: idsSesiones } },
       ],
     },
+  });
+  // Los avisos que recibieron, como el de asignación de un proyecto (HU-13-01).
+  await prisma.notificacion.deleteMany({
+    where: { id_usuario: { in: idsUsuarios } },
   });
   await prisma.sesion.deleteMany({
     where: { id_usuario: { in: idsUsuarios } },

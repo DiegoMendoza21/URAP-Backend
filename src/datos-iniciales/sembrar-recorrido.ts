@@ -5,6 +5,13 @@ import {
   PERIODO_TOMA,
   TIPO_VALORACION,
 } from '../mediciones/constantes.js';
+import {
+  type AvisoRevision,
+  avisoAprobado,
+  avisoDevuelto,
+  avisoEnviado,
+  cursoDelAviso,
+} from '../notificaciones/avisos-revision.js';
 import { ORIGEN_ASISTENTE } from '../proyectos-docentes/proyectos-docentes.service.js';
 import { fechaDeHoy, sumarDias } from '../sesiones/alertas.js';
 import {
@@ -366,6 +373,12 @@ async function sembrarProyecto(
     revisado,
     estadoDe,
   });
+  await sembrarAvisos(tx, idProyecto, definicion, {
+    idDocente,
+    idRevisor,
+    enviado,
+    revisado,
+  });
 
   const idsMatricula = definicion.matriculados
     ? await sembrarMatriculas(tx, idProyecto, definicion.matriculados, contexto)
@@ -500,6 +513,96 @@ async function sembrarRevision(
         id_estado_anterior: estadoDe('enviado'),
         id_estado_nuevo: estadoDe('aprobado'),
         fecha: revisado,
+      },
+    });
+  }
+}
+
+/**
+ * HU-13-03: los avisos que la revisión le habría dejado a cada quien, para que la campana no
+ * empiece vacía en la demostración. Sin leer, salvo la aprobación de un período ya cerrado.
+ * Quien envía no se avisa a sí mismo, igual que en la revisión.
+ */
+async function sembrarAvisos(
+  tx: Transaccion,
+  idProyecto: number,
+  definicion: ProyectoDemo,
+  datos: {
+    idDocente: number;
+    idRevisor: number;
+    enviado: Date | null;
+    revisado: Date | null;
+  },
+): Promise<void> {
+  const { idDocente, idRevisor, enviado, revisado } = datos;
+  const proyecto = await tx.proyecto_docente.findUniqueOrThrow({
+    where: { id: idProyecto },
+    select: {
+      grupo: true,
+      asignatura: { select: { nombre: true } },
+      periodo_academico: { select: { codigo: true } },
+    },
+  });
+  const curso = cursoDelAviso(
+    proyecto.asignatura?.nombre,
+    proyecto.grupo,
+    proyecto.periodo_academico?.codigo,
+  );
+  const avisos: {
+    aviso: AvisoRevision;
+    idUsuario: number;
+    fecha: Date;
+    leida: boolean;
+  }[] = [];
+  if (definicion.estado === 'enviado' && enviado) {
+    avisos.push({
+      aviso: avisoEnviado(curso, idProyecto),
+      idUsuario: idRevisor,
+      fecha: enviado,
+      leida: false,
+    });
+  }
+  if (definicion.estado === 'devuelto' && definicion.devolucion && revisado) {
+    avisos.push({
+      aviso: avisoDevuelto(
+        curso,
+        idProyecto,
+        definicion.devolucion.observaciones.length,
+      ),
+      idUsuario: idDocente,
+      fecha: revisado,
+      leida: false,
+    });
+  }
+  if (
+    (definicion.estado === 'aprobado' || definicion.estado === 'cerrado') &&
+    revisado
+  ) {
+    avisos.push({
+      aviso: avisoAprobado(curso, idProyecto),
+      idUsuario: idDocente,
+      fecha: revisado,
+      leida: definicion.estado === 'cerrado',
+    });
+  }
+  for (const { aviso, idUsuario, fecha, leida } of avisos) {
+    const tipo = await tx.tipo_notificacion.findUnique({
+      where: { codigo: aviso.tipo },
+      select: { id: true },
+    });
+    await tx.notificacion.create({
+      data: {
+        id_tipo_notificacion: tipo?.id ?? null,
+        id_usuario: idUsuario,
+        titulo: aviso.titulo,
+        mensaje: aviso.mensaje,
+        entidad: 'proyecto_docente',
+        id_entidad: idProyecto,
+        url_destino: aviso.urlDestino,
+        leida,
+        fecha_lectura: leida ? fecha : null,
+        estado_envio: 'pendiente',
+        created_at: fecha,
       },
     });
   }

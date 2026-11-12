@@ -350,3 +350,38 @@ export class ResultadoGeneracionDto {
   @ApiProperty({ type: [String], example: [] })
   advertencias: string[];
 }
+
+/** RF-26, HU-13-02: lo que hizo un envío del recordatorio de sesiones pendientes. */
+export class ResultadoRecordatoriosDto {
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    example: 7,
+    description:
+      'Periodicidad leída de `recordatorio_sesiones_dias`. Vacía si el parámetro falta o es inválido: entonces no se envía nada',
+  })
+  periodicidadDias: number | null;
+
+  @ApiProperty({
+    example: 4,
+    description: 'Docentes activos con sesiones vencidas o por vencer',
+  })
+  docentesConPendientes: number;
+
+  @ApiProperty({ example: 3, description: 'Recordatorios enviados' })
+  enviados: number;
+
+  @ApiProperty({
+    example: 1,
+    description:
+      'Docentes que ya recibieron un recordatorio dentro de la periodicidad',
+  })
+  omitidosPorPeriodicidad: number;
+
+  @ApiProperty({
+    example: 0,
+    description:
+      'Docentes cuyo tipo de recordatorio (`sesion_vencida` o `sesion_por_vencer`) está desactivado',
+  })
+  omitidosPorTipoInactivo: number;
+}

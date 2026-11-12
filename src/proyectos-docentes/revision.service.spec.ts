@@ -257,6 +257,38 @@ describe('RevisionService', () => {
       expect(respuesta.idProyecto).toBe(7);
     });
 
+    it('no avisa a los docentes del proyecto que revisan, con la separación de funciones encendida', async () => {
+      const { servicio, notificaciones } = crear();
+      // El codocente 21 es también del Departamento: no puede revisar este proyecto.
+      notificaciones.usuariosConPermiso.mockResolvedValue([21, 30, 31]);
+
+      await servicio.enviar(responsable, 7);
+
+      expect(notificaciones.notificar).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tipo: NOTIFICACION.proyectoEnviado,
+          destinatarios: [30, 31],
+        }),
+      );
+    });
+
+    it('sí avisa al codocente que revisa cuando la separación de funciones está apagada', async () => {
+      const { servicio, notificaciones } = crear({
+        parametro: { valor: 'no' },
+      });
+      notificaciones.usuariosConPermiso.mockResolvedValue([20, 21, 30]);
+
+      await servicio.enviar(responsable, 7);
+
+      // Quien envía nunca se avisa a sí mismo.
+      expect(notificaciones.notificar).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tipo: NOTIFICACION.proyectoEnviado,
+          destinatarios: [21, 30],
+        }),
+      );
+    });
+
     it('no lo envía con secciones incompletas y lista los pendientes (excepción de p2)', async () => {
       const { servicio, tx } = crear({ completitud: VACIO });
 
