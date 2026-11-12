@@ -69,18 +69,11 @@ export const TIPO_REPORTE = {
   ejecucion: 'ejecucion_contenidos',
 } as const;
 
-/**
- * HU-12-04: el registro de clase todavía no permite escribir temas fuera del contenido
- * programático (HU-08-05). Se dice en el reporte para que el cero no se lea como un dato.
- */
 /** HU-12-04: el máximo exportable cuenta las filas de temas del archivo. */
 export const FILAS_TEMAS: FilasExportacion = {
   unidad: 'temas',
   filtros: 'programa o asignatura',
 };
-
-export const NOTA_ADICIONALES =
-  'El registro de clase todavía no permite anotar temas fuera del contenido programático: los temas adicionales no planeados aparecen en cero hasta que se habilite.';
 
 /**
  * Reportes académicos (RF-28):
@@ -375,7 +368,6 @@ export class ReportesAcademicosService {
       [titulo('Reporte de ejecución de contenidos')],
       [`Período académico ${reporte.periodo?.codigo ?? 'sin definir'}`],
       [`Generado el ${fechaGeneracion(new Date(reporte.generado))}`],
-      [textoLargo(NOTA_ADICIONALES)],
       [],
       encabezado(['Indicador', 'Valor']),
       ['Cursos', numero(resumen.cursos, false)],

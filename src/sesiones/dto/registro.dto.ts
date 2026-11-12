@@ -2,7 +2,6 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
   ArrayMaxSize,
-  ArrayMinSize,
   ArrayUnique,
   IsArray,
   IsBoolean,
@@ -11,6 +10,7 @@ import {
   IsString,
   MaxLength,
   Min,
+  MinLength,
 } from 'class-validator';
 import { SesionCalendarioDto } from './respuestas.dto.js';
 
@@ -20,10 +20,26 @@ import { SesionCalendarioDto } from './respuestas.dto.js';
 export const OBSERVACIONES_MAXIMO = 2000;
 
 export const MENSAJE_SIN_TEMAS =
-  'Seleccione al menos un tema del contenido programático.';
+  'Seleccione al menos un tema del contenido programático o escriba un tema no planeado.';
+
+/** HU-08-05: largo de cada tema no planeado; la columna `tema_adicional` es varchar(255). */
+export const TEMA_ADICIONAL_MAXIMO = 200;
+/** Temas no planeados por clase: se escriben desde el teléfono, saliendo del salón. */
+export const TEMAS_ADICIONALES_MAXIMO = 10;
+export const MENSAJE_TEMA_ADICIONAL_VACIO =
+  'Un tema no planeado no puede quedar vacío: escríbalo o quítelo.';
 
 function recortar({ value }: { value: unknown }): unknown {
   return typeof value === 'string' ? value.trim() : value;
+}
+
+/** Recorta cada texto de la lista y deja un solo espacio entre palabras. */
+function recortarLista({ value }: { value: unknown }): unknown {
+  return Array.isArray(value)
+    ? value.map((texto: unknown) =>
+        typeof texto === 'string' ? texto.trim().replace(/\s+/g, ' ') : texto,
+      )
+    : value;
 }
 
 export class RegistrarSesionDto {
@@ -32,10 +48,9 @@ export class RegistrarSesionDto {
     example: [12, 13],
     description:
       'Temas desarrollados en la sesión: semanas del contenido programático (punto 6) con su ' +
-      'tema (RF-20, p4). Al menos uno.',
+      'tema (RF-20, p4). Puede ir vacío solo si la sesión lleva al menos un tema no planeado.',
   })
   @IsArray({ message: MENSAJE_SIN_TEMAS })
-  @ArrayMinSize(1, { message: MENSAJE_SIN_TEMAS })
   @ArrayMaxSize(100, {
     message: 'Se pueden seleccionar como máximo 100 temas.',
   })
@@ -43,6 +58,29 @@ export class RegistrarSesionDto {
   @IsInt({ each: true, message: 'Los temas seleccionados no son válidos.' })
   @Min(1, { each: true, message: 'Los temas seleccionados no son válidos.' })
   idsContenido: number[];
+
+  @ApiPropertyOptional({
+    type: [String],
+    example: ['Charla de un invitado del sector'],
+    maxItems: TEMAS_ADICIONALES_MAXIMO,
+    description:
+      'Temas desarrollados que no están en el contenido programático (RF-20, excepción de p4; ' +
+      'HU-08-05): se guardan como no planeados. Sin el campo se conservan los anteriores; una ' +
+      'lista vacía los borra. Sin repetir y distintos de los temas del contenido programático.',
+  })
+  @IsOptional()
+  @Transform(recortarLista)
+  @IsArray({ message: 'Los temas no planeados deben enviarse como una lista.' })
+  @ArrayMaxSize(TEMAS_ADICIONALES_MAXIMO, {
+    message: `Se pueden escribir como máximo ${TEMAS_ADICIONALES_MAXIMO} temas no planeados por clase.`,
+  })
+  @IsString({ each: true, message: 'Cada tema no planeado debe ser un texto.' })
+  @MinLength(1, { each: true, message: MENSAJE_TEMA_ADICIONAL_VACIO })
+  @MaxLength(TEMA_ADICIONAL_MAXIMO, {
+    each: true,
+    message: `Cada tema no planeado puede tener hasta ${TEMA_ADICIONAL_MAXIMO} caracteres.`,
+  })
+  temasAdicionales?: string[];
 
   @ApiPropertyOptional({
     type: [Number],
@@ -200,6 +238,14 @@ export class DetalleSesionDto {
       'la semana de la sesión va marcado.',
   })
   temas: TemaContenidoDto[];
+
+  @ApiProperty({
+    type: [String],
+    example: ['Charla de un invitado del sector'],
+    description:
+      'Temas desarrollados fuera del contenido programático: no planeados (HU-08-05)',
+  })
+  temasAdicionales: string[];
 
   @ApiProperty({
     example: 3,

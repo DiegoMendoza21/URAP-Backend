@@ -7,8 +7,8 @@
  * - No dictado: no se marcó y su semana ya terminó.
  * - Por dictar: no se marcó y su semana todavía no termina. No es un incumplimiento.
  * - Adicional no planeado: un tema escrito en la clase fuera del contenido (RF-20, excepción de
- *   p4; HU-08-05). Hoy el registro de clase no permite escribirlos: la columna sale en cero
- *   hasta que se construya HU-08-05, y entonces se cuenta sin cambiar este reporte.
+ *   p4; HU-08-05): el docente lo escribe como no planeado al registrar la clase, y se guarda en
+ *   `sesion_tema.tema_adicional`, sin `id_contenido`. No suma a lo planeado.
  *
  * Regla (decisión de implementación, aprobada por la coordinación el 2026-11-12): un tema cuya
  * semana no ha terminado se muestra como por dictar y no cuenta como incumplimiento.

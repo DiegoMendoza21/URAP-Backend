@@ -19,9 +19,16 @@ import {
   MENSAJE_SIN_CONTENIDO,
   MENSAJE_SOLO_QUIEN_REGISTRA,
   MENSAJE_TEMAS_INVALIDOS,
+  mensajeTemaAdicionalPlaneado,
+  mensajeTemaAdicionalRepetido,
   mensajeTipoSinTema,
   RegistroClaseService,
+  validarTemasAdicionales,
 } from './registro-clase.service.js';
+import {
+  MENSAJE_SIN_TEMAS,
+  MENSAJE_TEMA_ADICIONAL_VACIO,
+} from './dto/registro.dto.js';
 import type { SesionesService } from './sesiones.service.js';
 
 // Datos ficticios: nunca datos reales de personas en las pruebas (Ley 1581).
@@ -161,10 +168,8 @@ describe('RegistroClaseService', () => {
     sesiones.tienePermisoEdicion.mockResolvedValue(true);
     parametros.leerEntero.mockResolvedValue(2);
     tx.sesion_clase.findFirst.mockResolvedValue(sesionEnTransaccion());
-    tx.contenido_programatico.findMany.mockImplementation(
-      ({ where }: { where: { id: { in: number[] } } }) =>
-        Promise.resolve(CONTENIDOS.filter((c) => where.id.in.includes(c.id))),
-    );
+    // El servicio lee todo el contenido del proyecto (HU-08-05 compara con sus temas).
+    tx.contenido_programatico.findMany.mockResolvedValue(CONTENIDOS);
     tx.matricula.findMany.mockImplementation(
       ({ where }: { where: { id: { in: number[] } } }) =>
         Promise.resolve(MATRICULAS.filter((m) => where.id.in.includes(m.id))),
@@ -481,6 +486,127 @@ describe('RegistroClaseService', () => {
       await expect(registrar({})).rejects.toThrow(
         new ConflictException(MENSAJE_PERIODO_CERRADO_REGISTRO),
       );
+    });
+  });
+
+  describe('temas no planeados (HU-08-05)', () => {
+    it('guarda una clase solo con temas no planeados, marcados sin contenido, y los audita con su texto', async () => {
+      await registrar({
+        idsContenido: [],
+        temasAdicionales: ['Charla de un invitado', 'Simulacro de examen'],
+      });
+
+      expect(tx.sesion_tema.deleteMany).toHaveBeenCalledWith({
+        where: { id_sesion: 500, id_contenido: null },
+      });
+      expect(tx.sesion_tema.createMany).toHaveBeenCalledWith({
+        data: [
+          { id_sesion: 500, tema_adicional: 'Charla de un invitado' },
+          { id_sesion: 500, tema_adicional: 'Simulacro de examen' },
+        ],
+      });
+      expect(auditoria.registrar).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tablaAfectada: 'sesion_clase',
+          valorAnterior: expect.objectContaining({ temasAdicionales: [] }),
+          valorNuevo: expect.objectContaining({
+            temasAdicionales: ['Charla de un invitado', 'Simulacro de examen'],
+          }),
+        }),
+      );
+    });
+
+    it('sin temas del contenido ni no planeados, pide al menos uno', async () => {
+      await expect(registrar({ idsContenido: [] })).rejects.toThrow(
+        MENSAJE_SIN_TEMAS,
+      );
+      await expect(
+        registrar({ idsContenido: [], temasAdicionales: [] }),
+      ).rejects.toThrow(MENSAJE_SIN_TEMAS);
+      expect(tx.sesion_clase.update).not.toHaveBeenCalled();
+    });
+
+    it('sin el campo conserva los no planeados; una lista vacía los borra', async () => {
+      const conAdicional = () =>
+        sesionEnTransaccion({
+          estado: 'registrada',
+          sesion_tema: [
+            { id_contenido: 10, tema_adicional: null },
+            { id_contenido: null, tema_adicional: 'Charla de un invitado' },
+          ],
+        });
+      tx.sesion_clase.findFirst.mockResolvedValue(conAdicional());
+      await registrar({});
+      // No se reescriben si no cambiaron, y no hay nada que auditar.
+      expect(tx.sesion_tema.deleteMany).not.toHaveBeenCalledWith({
+        where: { id_sesion: 500, id_contenido: null },
+      });
+      expect(auditoria.registrar).not.toHaveBeenCalled();
+
+      vi.clearAllMocks();
+      tx.sesion_clase.findFirst.mockResolvedValue(conAdicional());
+      tx.contenido_programatico.findMany.mockResolvedValue(CONTENIDOS);
+      await registrar({ temasAdicionales: [] });
+      expect(tx.sesion_tema.deleteMany).toHaveBeenCalledWith({
+        where: { id_sesion: 500, id_contenido: null },
+      });
+      expect(auditoria.registrar).toHaveBeenCalledWith(
+        expect.objectContaining({
+          valorAnterior: { temasAdicionales: ['Charla de un invitado'] },
+          valorNuevo: { temasAdicionales: [] },
+        }),
+      );
+    });
+
+    it('rechaza un tema repetido o uno que ya está en el contenido programático', async () => {
+      await expect(
+        registrar({ temasAdicionales: ['Charla', 'charla'] }),
+      ).rejects.toThrow(mensajeTemaAdicionalRepetido('charla'));
+      await expect(
+        registrar({ temasAdicionales: ['tema de la SEMANA 15'] }),
+      ).rejects.toThrow(mensajeTemaAdicionalPlaneado('tema de la SEMANA 15'));
+      expect(tx.sesion_clase.update).not.toHaveBeenCalled();
+    });
+
+    it('el detalle trae los temas no planeados, en el orden en que se escribieron', async () => {
+      prisma.sesion_clase.findFirst.mockResolvedValue(
+        sesionDetalle({
+          sesion_tema: [
+            { id_contenido: 10, tema_adicional: null },
+            { id_contenido: null, tema_adicional: 'Simulacro de examen' },
+            { id_contenido: null, tema_adicional: 'Charla de un invitado' },
+          ],
+        }),
+      );
+      const detalle = await servicio.detalle(docente, 99, 500);
+      expect(detalle.temasAdicionales).toEqual([
+        'Simulacro de examen',
+        'Charla de un invitado',
+      ]);
+      expect(
+        detalle.temas.find((tema) => tema.idContenido === 10)?.seleccionado,
+      ).toBe(true);
+    });
+  });
+
+  describe('validarTemasAdicionales', () => {
+    const planeados = ['Planeación estratégica', null, 'Diseño organizacional'];
+
+    it('acepta temas distintos entre sí y del contenido', () => {
+      expect(
+        validarTemasAdicionales(['Caña de azúcar', 'Cana'], planeados),
+      ).toEqual(['Caña de azúcar', 'Cana']);
+    });
+
+    it.each([
+      [['Resúmenes', 'resumenes'], mensajeTemaAdicionalRepetido('resumenes')],
+      [
+        ['planeacion  ESTRATÉGICA'],
+        mensajeTemaAdicionalPlaneado('planeacion  ESTRATÉGICA'),
+      ],
+      [['   '], MENSAJE_TEMA_ADICIONAL_VACIO],
+    ])('rechaza %j', (temas, mensaje) => {
+      expect(() => validarTemasAdicionales(temas, planeados)).toThrow(mensaje);
     });
   });
 

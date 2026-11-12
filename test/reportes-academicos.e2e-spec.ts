@@ -312,7 +312,11 @@ describe('Reportes académicos (e2e) · RF-28, HU-12-03, HU-12-04 y HU-12-05', (
         },
       });
     // Semana 1, ya pasada: se dictaron el tema uno y, adelantado, el cuatro.
-    await sesion(1, -14, 'registrada', [uno, cuatro]);
+    const primera = await sesion(1, -14, 'registrada', [uno, cuatro]);
+    // HU-08-05: un tema no planeado, escrito en la misma clase.
+    await prisma.sesion_tema.create({
+      data: { id_sesion: primera.id, tema_adicional: 'Charla de un invitado' },
+    });
     // Semana 2, ya pasada: su única clase con tema se retiró, así que no cuenta.
     await sesion(2, -8, 'programada', []);
     await sesion(2, -7, 'retirada', [dos]);
@@ -510,6 +514,7 @@ describe('Reportes académicos (e2e) · RF-28, HU-12-03, HU-12-04 y HU-12-05', (
       adicionales: number;
       porcentajeDictados: number | null;
       temas: { semana: number; tema: string; estado: string }[];
+      temasAdicionales: { tema: string; fechas: string[] }[];
     };
     const cursosDe = (cuerpo: unknown) =>
       (cuerpo as { cursos: Curso[] }).cursos;
@@ -544,7 +549,7 @@ describe('Reportes académicos (e2e) · RF-28, HU-12-03, HU-12-04 y HU-12-05', (
         dictados: 2,
         noDictados: 1,
         porDictar: 1,
-        adicionales: 0,
+        adicionales: 1,
         porcentajeDictados: 50,
         // La clase retirada no cuenta como sesión del calendario.
         sesiones: 3,
@@ -558,6 +563,10 @@ describe('Reportes académicos (e2e) · RF-28, HU-12-03, HU-12-04 y HU-12-05', (
         [2, 'no_dictado'],
         [3, 'por_dictar'],
         [4, 'dictado'],
+      ]);
+      // HU-08-05: el tema no planeado aparece aparte, sin sumar a lo planeado.
+      expect(aprobado?.temasAdicionales).toEqual([
+        { tema: 'Charla de un invitado', fechas: [expect.any(String)] },
       ]);
       // Un curso sin contenido programático: sin temas y sin porcentaje.
       expect(
@@ -576,7 +585,7 @@ describe('Reportes académicos (e2e) · RF-28, HU-12-03, HU-12-04 y HU-12-05', (
           dictados: 2,
           noDictados: 1,
           porDictar: 1,
-          adicionales: 0,
+          adicionales: 1,
           porcentajeDictados: 50,
         },
       });
@@ -651,7 +660,8 @@ describe('Reportes académicos (e2e) · RF-28, HU-12-03, HU-12-04 y HU-12-05', (
       );
       expect((libro.body as Buffer).subarray(0, 2).toString()).toBe('PK');
 
-      // El curso aprobado lleva cuatro filas de temas: con un máximo de 3, se piden filtros.
+      // El curso aprobado lleva cinco filas de temas (cuatro planeados y uno no planeado): con un
+      // máximo de 3, se piden filtros.
       const original = await prisma.parametro_sistema.findUnique({
         where: { clave: PARAMETRO_EXPORTACION_MAXIMA },
       });
@@ -670,7 +680,7 @@ describe('Reportes académicos (e2e) · RF-28, HU-12-03, HU-12-04 y HU-12-05', (
           conPeriodo('ejecucion-contenidos/excel'),
         ).expect(422);
         expect(grande.body.mensaje).toBe(
-          mensajeExportacionGrande(4, 3, FILAS_TEMAS),
+          mensajeExportacionGrande(5, 3, FILAS_TEMAS),
         );
       } finally {
         if (original) {
