@@ -176,6 +176,7 @@ describe('Estudiantes matriculados (e2e) · RF-22, HU-09-01', () => {
     await crearUsuario('docenteAsignado', ROL.docente, programaA.id);
     await crearUsuario('docenteAjeno', ROL.docente, programaA.id);
     await crearUsuario('estudiante', ROL.estudiante, programaA.id);
+    await crearUsuario('liderRap', ROL.liderRap, programaA.id);
     await prisma.proyecto_docente_docente.create({
       data: {
         id_proyecto_docente: idProyecto,
@@ -192,6 +193,10 @@ describe('Estudiantes matriculados (e2e) · RF-22, HU-09-01', () => {
       await prisma.auditoria.deleteMany({
         where: { id_usuario: { in: creados.usuarios } },
       });
+      await prisma.inasistencia.deleteMany({
+        where: { matricula: { is: deProyectos } },
+      });
+      await prisma.sesion_clase.deleteMany({ where: deProyectos });
       await prisma.matricula.deleteMany({ where: deProyectos });
       await prisma.estudiante.deleteMany({
         where: { identificacion: { startsWith: `E2E-${sufijo.slice(-9)}-` } },
@@ -244,6 +249,8 @@ describe('Estudiantes matriculados (e2e) · RF-22, HU-09-01', () => {
       await consultar('docenteAsignado').expect(200);
       await consultar('departamento').expect(403);
       await consultar('estudiante').expect(403);
+      // Ley 1581: el Líder RAP no ve la lista ni las inasistencias individuales.
+      await consultar('liderRap').expect(403);
       await consultar('docenteAjeno').expect(404);
     });
 
@@ -509,6 +516,119 @@ describe('Estudiantes matriculados (e2e) · RF-22, HU-09-01', () => {
     it('valida la consulta', async () => {
       await consultar('administrador', '?estado=otro').expect(400);
       await consultar('administrador', '?tamano=1000').expect(400);
+      await consultar('administrador', '?orden=porcentaje').expect(400);
+    });
+  });
+
+  describe('inasistencias acumuladas (HU-09-03)', () => {
+    type Elemento = {
+      idMatricula: number;
+      inasistencias: number;
+      sesionesInasistencia: {
+        idSesion: number;
+        fecha: string;
+        semana: number;
+      }[];
+    };
+    let idsMatricula: number[];
+    let sesiones: number[];
+
+    beforeAll(async () => {
+      // Lo que deja la sección de carga: la lista vigente del curso.
+      idsMatricula = (
+        await prisma.matricula.findMany({
+          where: { id_proyecto_docente: idProyecto, estado: 'matriculado' },
+          select: { id: true },
+          orderBy: { id: 'asc' },
+        })
+      ).map((fila) => fila.id);
+      sesiones = [];
+      // Se crean fuera de orden: la respuesta las da de la más antigua a la más reciente.
+      for (const [fecha, semana] of [
+        ['2026-09-28', 8],
+        ['2026-09-14', 6],
+      ] as const) {
+        const sesion = await prisma.sesion_clase.create({
+          data: {
+            id_proyecto_docente: idProyecto,
+            fecha: new Date(`${fecha}T00:00:00.000Z`),
+            semana,
+            estado: 'registrada',
+          },
+        });
+        sesiones.push(sesion.id);
+      }
+      const [sesion28, sesion14] = sesiones;
+      const [conDos, conUna] = idsMatricula.slice(-2);
+      await prisma.inasistencia.createMany({
+        data: [
+          { id_sesion: sesion28, id_matricula: conDos },
+          { id_sesion: sesion14, id_matricula: conDos },
+          { id_sesion: sesion14, id_matricula: conUna },
+        ],
+      });
+    });
+
+    it('da por estudiante el número de inasistencias y las sesiones, y ordena por más inasistencias', async () => {
+      expect(idsMatricula.length).toBeGreaterThanOrEqual(3);
+      const [sesion28, sesion14] = sesiones;
+      const [conDos, conUna] = idsMatricula.slice(-2);
+
+      const { body } = await consultar(
+        'docenteAsignado',
+        '?orden=inasistencias',
+      ).expect(200);
+      const elementos = (body as { elementos: Elemento[] }).elementos;
+
+      expect(elementos.map((e) => e.inasistencias)).toEqual([
+        2,
+        1,
+        ...Array<number>(elementos.length - 2).fill(0),
+      ]);
+      expect(elementos[0]).toMatchObject({
+        idMatricula: conDos,
+        sesionesInasistencia: [
+          { idSesion: sesion14, fecha: '2026-09-14', semana: 6 },
+          { idSesion: sesion28, fecha: '2026-09-28', semana: 8 },
+        ],
+      });
+      expect(elementos[1]).toMatchObject({
+        idMatricula: conUna,
+        sesionesInasistencia: [{ idSesion: sesion14, fecha: '2026-09-14' }],
+      });
+      expect(elementos[2].sesionesInasistencia).toEqual([]);
+    });
+
+    it('por defecto sigue ordenada por apellidos, con las inasistencias de cada uno', async () => {
+      const { body } = await consultar('administrador').expect(200);
+      const elementos = (
+        body as { elementos: (Elemento & { apellidos: string })[] }
+      ).elementos;
+      const apellidos = elementos.map((e) => e.apellidos);
+      expect(apellidos).toEqual(
+        [...apellidos].sort((a, b) => a.localeCompare(b)),
+      );
+      expect(elementos.reduce((suma, e) => suma + e.inasistencias, 0)).toBe(3);
+    });
+
+    it('la consulta queda en la auditoría como consulta sensible de la lista', async () => {
+      const donde = {
+        id_usuario: usuarios.docenteAsignado,
+        accion: 'consulta_sensible',
+        tabla_afectada: 'matricula',
+        id_registro: idProyecto,
+        ip: { not: null },
+      };
+      const antes = await prisma.auditoria.count({ where: donde });
+      await consultar('docenteAsignado', '?orden=inasistencias').expect(200);
+      expect(await prisma.auditoria.count({ where: donde })).toBe(antes + 1);
+    });
+
+    it('el docente de otro curso, el Líder RAP y el Departamento no la ven', async () => {
+      await consultar('docenteAjeno', '?orden=inasistencias').expect(404);
+      await consultar('liderRap', '?orden=inasistencias').expect(403);
+      await consultar('departamento', '?orden=inasistencias').expect(403);
+      await consultar('estudiante', '?orden=inasistencias').expect(403);
     });
   });
 });

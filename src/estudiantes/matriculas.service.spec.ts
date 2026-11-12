@@ -88,7 +88,12 @@ function crearServicio({
   return { servicio, prisma, alcance, auditoria };
 }
 
-const consulta = { pagina: 1, tamano: 20, estado: 'matriculado' as const };
+const consulta = {
+  pagina: 1,
+  tamano: 20,
+  estado: 'matriculado' as const,
+  orden: 'apellidos' as const,
+};
 
 describe('MatriculasService (RF-22, HU-09-01)', () => {
   describe('cargar', () => {
@@ -174,6 +179,94 @@ describe('MatriculasService (RF-22, HU-09-01)', () => {
       });
       // La consulta la audita @AuditarConsulta en el controlador, con la IP (RF-29).
       expect(auditoria.registrar).not.toHaveBeenCalled();
+    });
+
+    it('da por estudiante sus inasistencias acumuladas y las sesiones en que faltó (HU-09-03)', async () => {
+      const { servicio, prisma } = crearServicio();
+      prisma.matricula.findMany.mockResolvedValue([
+        {
+          id: 41,
+          estado: 'matriculado',
+          estudiante: {
+            identificacion: '1000000001',
+            nombres: 'Estudiante Uno',
+            apellidos: 'Ficticio Demo',
+            email: null,
+          },
+          inasistencia: [
+            {
+              sesion_clase: {
+                id: 31,
+                fecha: new Date('2026-09-14T00:00:00.000Z'),
+                semana: 6,
+              },
+            },
+            {
+              sesion_clase: {
+                id: 35,
+                fecha: new Date('2026-09-28T00:00:00.000Z'),
+                semana: 8,
+              },
+            },
+          ],
+        },
+        {
+          id: 42,
+          estado: 'matriculado',
+          estudiante: {
+            identificacion: '1000000002',
+            nombres: 'Estudiante Dos',
+            apellidos: 'Ficticio Demo',
+            email: null,
+          },
+          inasistencia: [],
+        },
+      ]);
+
+      const { elementos } = await servicio.listar(
+        docenteAsignado,
+        ID_PROYECTO,
+        consulta,
+      );
+
+      expect(elementos[0]).toMatchObject({
+        idMatricula: 41,
+        inasistencias: 2,
+        sesionesInasistencia: [
+          { idSesion: 31, fecha: '2026-09-14', semana: 6 },
+          { idSesion: 35, fecha: '2026-09-28', semana: 8 },
+        ],
+      });
+      expect(elementos[1]).toMatchObject({
+        inasistencias: 0,
+        sesionesInasistencia: [],
+      });
+    });
+
+    it('ordena por apellidos o, si se pide, por más inasistencias y luego por apellidos', async () => {
+      const { servicio, prisma } = crearServicio();
+      const porApellidos = [
+        { estudiante: { apellidos: 'asc' } },
+        { estudiante: { nombres: 'asc' } },
+        { id: 'asc' },
+      ];
+
+      await servicio.listar(docenteAsignado, ID_PROYECTO, consulta);
+      await servicio.listar(docenteAsignado, ID_PROYECTO, {
+        ...consulta,
+        orden: 'inasistencias',
+      });
+
+      expect(prisma.matricula.findMany).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ orderBy: porApellidos }),
+      );
+      expect(prisma.matricula.findMany).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          orderBy: [{ inasistencia: { _count: 'desc' } }, ...porApellidos],
+        }),
+      );
     });
 
     it('oculta la lista a un docente que no está asignado al proyecto', async () => {
