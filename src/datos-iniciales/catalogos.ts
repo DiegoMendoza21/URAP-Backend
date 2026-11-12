@@ -286,6 +286,13 @@ export const PARAMETROS = [
     descripcion:
       'Estrategias de aprendizaje del MEN que sugiere el punto 4 del proyecto docente, separadas por coma (RF-13).',
   },
+  {
+    clave: 'recordatorio_sesiones_dias',
+    valor: '7',
+    tipo_dato: 'entero',
+    descripcion:
+      'Cada cuántos días se le recuerdan al docente, en un solo aviso, sus sesiones vencidas y por vencer (RF-26, HU-13-02).',
+  },
 ];
 
 /**

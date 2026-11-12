@@ -701,6 +701,7 @@ describe('SesionesService', () => {
             codigo_interno: 'DEMO-04',
           },
           periodo_academico: periodoAbierto,
+          proyecto_docente_docente: [{ id_usuario: 5 }],
         },
         {
           id: 99,
@@ -710,6 +711,8 @@ describe('SesionesService', () => {
             codigo_interno: 'DEMO-03',
           },
           periodo_academico: periodoAbierto,
+          // Un codocente: el recordatorio (HU-13-02) también le llega a él.
+          proyecto_docente_docente: [{ id_usuario: 5 }, { id_usuario: 6 }],
         },
         {
           id: 97,
@@ -719,6 +722,7 @@ describe('SesionesService', () => {
             codigo_interno: 'DEMO-01',
           },
           periodo_academico: periodoAbierto,
+          proyecto_docente_docente: [{ id_usuario: 5 }],
         },
       ]);
       prisma.sesion_clase.findMany.mockResolvedValue([
@@ -795,6 +799,10 @@ describe('SesionesService', () => {
             periodo_academico: {
               is: { OR: [{ cerrado: false }, { cerrado: null }] },
             },
+            // RF-20: solo los proyectos en los que ya se pueden registrar clases.
+            estado_proyecto: {
+              is: { codigo: { in: ['aprobado', 'en_ejecucion'] } },
+            },
           },
         }),
       );
@@ -805,6 +813,25 @@ describe('SesionesService', () => {
       expect(where.AND).toContainEqual({
         id_proyecto_docente: { in: [98, 99, 97] },
       });
+    });
+
+    it('agrupa por docente activo los proyectos con pendientes (HU-13-02)', async () => {
+      const porDocente = await servicio.pendientesPorDocente();
+
+      expect([...porDocente.keys()].sort()).toEqual([5, 6]);
+      expect(porDocente.get(5)?.map((p) => p.idProyectoDocente)).toEqual([
+        99, 98,
+      ]);
+      expect(porDocente.get(6)?.map((p) => p.idProyectoDocente)).toEqual([99]);
+      // Lo que sale es el proyecto del panel, sin la lista interna de docentes.
+      expect(porDocente.get(6)?.[0]).not.toHaveProperty('idsDocentes');
+      expect(prisma.proyecto_docente.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            proyecto_docente_docente: { some: { usuario: { activo: true } } },
+          }),
+        }),
+      );
     });
 
     it('pagina la lista de proyectos sin cambiar los totales', async () => {

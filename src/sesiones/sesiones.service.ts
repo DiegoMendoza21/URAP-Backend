@@ -54,6 +54,17 @@ import type {
   SesionCalendarioDto,
 } from './dto/respuestas.dto.js';
 
+/**
+ * RF-20, precondición: las clases se registran cuando el proyecto docente está aprobado o en
+ * ejecución (códigos de `estado_proyecto`, RF-17). Es la única línea que cambia si el programa
+ * decide otra cosa. Las alertas del panel (RF-23) y el recordatorio (RF-26) solo cuentan esos
+ * proyectos: no tiene sentido pedir que se registre lo que todavía no se puede registrar.
+ */
+export const ESTADOS_QUE_PERMITEN_REGISTRO: readonly string[] = [
+  'aprobado',
+  'en_ejecucion',
+];
+
 /** Estados de `sesion_clase` (DBML). «Vencida» lo calcula RF-23; no se guarda aquí. */
 export const ESTADO_PROGRAMADA = 'programada';
 export const ESTADO_REGISTRADA = 'registrada';
@@ -329,14 +340,73 @@ export class SesionesService {
     usuario: UsuarioSesion,
     { pagina, tamano }: ConsultarProyectosDocentesDto,
   ): Promise<PendientesDocenteDto> {
+    const { hoy, umbralDias, proyectos } = await this.proyectosConPendientes({
+      id_usuario: usuario.id,
+    });
+    // La respuesta es la del panel: sin la lista interna de docentes.
+    const conPendientes = proyectos.map(sinDocentes);
+    return {
+      hoy,
+      umbralDias,
+      vencidas: conPendientes.reduce((suma, p) => suma + p.vencidas, 0),
+      porVencer: conPendientes.reduce((suma, p) => suma + p.porVencer, 0),
+      elementos: conPendientes.slice((pagina - 1) * tamano, pagina * tamano),
+      pagina,
+      tamano,
+      total: conPendientes.length,
+    };
+  }
+
+  /**
+   * RF-26, HU-13-02: los proyectos con sesiones vencidas o por vencer de cada docente activo,
+   * con la misma regla del panel (`pendientesDelDocente`), para el recordatorio agrupado. Solo
+   * aparecen los docentes que tienen alguno.
+   */
+  async pendientesPorDocente(): Promise<
+    Map<number, ProyectoConPendientesDto[]>
+  > {
+    const { proyectos } = await this.proyectosConPendientes({
+      usuario: { activo: true },
+    });
+    const porDocente = new Map<number, ProyectoConPendientesDto[]>();
+    for (const proyecto of proyectos) {
+      for (const idUsuario of proyecto.idsDocentes) {
+        porDocente.set(idUsuario, [
+          ...(porDocente.get(idUsuario) ?? []),
+          sinDocentes(proyecto),
+        ]);
+      }
+    }
+    return porDocente;
+  }
+
+  /**
+   * RF-23: los proyectos de los docentes que cumplen `docentes`, con el período abierto y en un
+   * estado que permite registrar clases (RF-20), que tienen sesiones vencidas o por vencer, los
+   * más atrasados primero. Cada uno lleva sus
+   * docentes activos. Las sesiones de un período cerrado ya son incumplimientos (excepción
+   * p4): no hay nada que diligenciar.
+   */
+  private async proyectosConPendientes(
+    docentes: Prisma.proyecto_docente_docenteWhereInput,
+  ): Promise<{
+    hoy: string;
+    umbralDias: number | null;
+    proyectos: (ProyectoConPendientesDto & { idsDocentes: number[] })[];
+  }> {
     const hoy = fechaDeHoy();
     const [umbralDias, proyectos] = await Promise.all([
       this.parametros.leerEntero(PARAMETRO_UMBRAL_ALERTA, RANGO_UMBRAL_ALERTA),
       this.prisma.proyecto_docente.findMany({
         where: {
-          proyecto_docente_docente: { some: { id_usuario: usuario.id } },
+          proyecto_docente_docente: { some: docentes },
           periodo_academico: {
             is: { OR: [{ cerrado: false }, { cerrado: null }] },
+          },
+          // RF-20: solo los proyectos en los que ya se pueden registrar clases. Un proyecto en
+          // diligenciamiento puede tener calendario, pero sus clases todavía no se registran.
+          estado_proyecto: {
+            is: { codigo: { in: [...ESTADOS_QUE_PERMITEN_REGISTRO] } },
           },
         },
         select: {
@@ -344,6 +414,10 @@ export class SesionesService {
           grupo: true,
           asignatura: { select: { nombre: true, codigo_interno: true } },
           periodo_academico: { select: { codigo: true } },
+          proyecto_docente_docente: {
+            where: { usuario: { activo: true } },
+            select: { id_usuario: true },
+          },
         },
       }),
     ]);
@@ -383,7 +457,7 @@ export class SesionesService {
       alertasPorProyecto.set(sesion.id_proyecto_docente, lista);
     }
 
-    const conPendientes: ProyectoConPendientesDto[] = proyectos
+    const conPendientes = proyectos
       .map((proyecto) => {
         const resumen = resumirAlertas(
           alertasPorProyecto.get(proyecto.id) ?? [],
@@ -397,6 +471,9 @@ export class SesionesService {
           vencidas: resumen.vencidas,
           porVencer: resumen.porVencer,
           mayorAtraso: resumen.mayorAtraso,
+          idsDocentes: proyecto.proyecto_docente_docente.map(
+            ({ id_usuario }) => id_usuario,
+          ),
         };
       })
       .filter((proyecto) => proyecto.vencidas + proyecto.porVencer > 0)
@@ -408,16 +485,7 @@ export class SesionesService {
           a.asignatura.localeCompare(b.asignatura, 'es'),
       );
 
-    return {
-      hoy,
-      umbralDias,
-      vencidas: conPendientes.reduce((suma, p) => suma + p.vencidas, 0),
-      porVencer: conPendientes.reduce((suma, p) => suma + p.porVencer, 0),
-      elementos: conPendientes.slice((pagina - 1) * tamano, pagina * tamano),
-      pagina,
-      tamano,
-      total: conPendientes.length,
-    };
+    return { hoy, umbralDias, proyectos: conPendientes };
   }
 
   /**
@@ -907,6 +975,28 @@ export function horasDelHorario(
   horario: Parameters<typeof aBloque>[0][],
 ): Map<number | null, BloqueHorarioDto> {
   return new Map(horario.map((bloque) => [bloque.dia_semana, aBloque(bloque)]));
+}
+
+function sinDocentes({
+  idProyectoDocente,
+  asignatura,
+  codigoAsignatura,
+  grupo,
+  periodo,
+  vencidas,
+  porVencer,
+  mayorAtraso,
+}: ProyectoConPendientesDto): ProyectoConPendientesDto {
+  return {
+    idProyectoDocente,
+    asignatura,
+    codigoAsignatura,
+    grupo,
+    periodo,
+    vencidas,
+    porVencer,
+    mayorAtraso,
+  };
 }
 
 /** Contexto de la regla de alertas de RF-23 para un período: hoy, el umbral y el cierre. */

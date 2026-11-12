@@ -4,8 +4,10 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
 import { ContrasenasService } from '../src/auth/contrasenas.service.js';
 import { type NombreRol, ROL } from '../src/auth/roles.js';
+import { PARAMETRO } from '../src/common/parametros/parametros.service.js';
 import { PrismaService } from '../src/common/prisma/prisma.service.js';
 import { configurarAplicacion } from '../src/configurar-aplicacion.js';
+import { NOTIFICACION } from '../src/notificaciones/notificaciones.service.js';
 import {
   diasEntre,
   fechaDeHoy,
@@ -58,6 +60,7 @@ describe('Calendario de sesiones (e2e) · RF-19, HU-08-02 y HU-08-03', () => {
     asignaturas: [] as number[],
     usuarios: [] as number[],
     proyectos: [] as number[],
+    estados: [] as number[],
   };
   const tokens: Record<string, string> = {};
   const usuarios: Record<string, number> = {};
@@ -84,6 +87,11 @@ describe('Calendario de sesiones (e2e) · RF-19, HU-08-02 y HU-08-03', () => {
       http()
         .post(`/api${ruta}`)
         .set('Authorization', `Bearer ${tokens[quien]}`),
+    patch: (ruta: string, cuerpo: object) =>
+      http()
+        .patch(`/api${ruta}`)
+        .set('Authorization', `Bearer ${tokens[quien]}`)
+        .send(cuerpo),
   });
 
   const lunesYMiercoles = {
@@ -184,6 +192,21 @@ describe('Calendario de sesiones (e2e) · RF-19, HU-08-02 y HU-08-03', () => {
       },
     });
     creados.proyectos.push(creado.id);
+    return creado.id;
+  }
+
+  /** Un estado del proyecto por su código; la CI no corre el seed, así que puede faltar. */
+  async function estadoProyecto(codigo: string): Promise<number> {
+    const existente = await prisma.estado_proyecto.findUnique({
+      where: { codigo },
+    });
+    if (existente) {
+      return existente.id;
+    }
+    const creado = await prisma.estado_proyecto.create({
+      data: { codigo, nombre: codigo },
+    });
+    creados.estados.push(creado.id);
     return creado.id;
   }
 
@@ -290,11 +313,34 @@ describe('Calendario de sesiones (e2e) · RF-19, HU-08-02 y HU-08-03', () => {
           ],
         },
       });
+      // Recordatorios de sesiones (HU-13-02): los de sus usuarios y los que el envío de la
+      // prueba dejó a otros docentes de la base, que también tenían pendientes.
+      await prisma.notificacion.deleteMany({
+        where: {
+          OR: [
+            { id_usuario: { in: creados.usuarios } },
+            {
+              created_at: { gte: inicioPrueba },
+              tipo_notificacion: {
+                codigo: {
+                  in: [
+                    NOTIFICACION.sesionVencida,
+                    NOTIFICACION.sesionPorVencer,
+                  ],
+                },
+              },
+            },
+          ],
+        },
+      });
       await prisma.sesion_clase.deleteMany({ where: deProyectos });
       await prisma.horario_curso.deleteMany({ where: deProyectos });
       await prisma.proyecto_docente_docente.deleteMany({ where: deProyectos });
       await prisma.proyecto_docente.deleteMany({
         where: { id: { in: creados.proyectos } },
+      });
+      await prisma.estado_proyecto.deleteMany({
+        where: { id: { in: creados.estados } },
       });
       await prisma.asignatura.deleteMany({
         where: { id: { in: creados.asignaturas } },
@@ -736,6 +782,8 @@ describe('Calendario de sesiones (e2e) · RF-19, HU-08-02 y HU-08-03', () => {
     const hoy = fechaDeHoy();
     let parametroAnterior: string | null | undefined;
     let proyectoAlertas: number;
+    /** En diligenciamiento y con calendario: sus clases todavía no se registran (RF-20). */
+    let proyectoBorrador: number;
     let proyectoAlertasCerrado: number;
     let periodoAlertasCerrado: number;
     let idFestivo: number;
@@ -820,6 +868,29 @@ describe('Calendario de sesiones (e2e) · RF-19, HU-08-02 y HU-08-03', () => {
           fecha_registro: new Date(),
           id_registrado_por: usuarios.docente,
         },
+      });
+
+      // RF-20: el proyecto de las alertas está aprobado, así que sus clases se registran. Otro
+      // del mismo docente sigue en diligenciamiento: tiene calendario, pero ni el panel ni el
+      // recordatorio deben pedirle que lo registre.
+      await prisma.proyecto_docente.update({
+        where: { id: proyectoAlertas },
+        data: { id_estado: await estadoProyecto('aprobado') },
+      });
+      proyectoBorrador = await crearProyecto(periodoAbierto, 'BOR');
+      await como('docente')
+        .put(`/proyectos-docentes/${proyectoBorrador}/horario`, todosLosDias)
+        .expect(200);
+      await como('docente')
+        .post(`/proyectos-docentes/${proyectoBorrador}/calendario`)
+        .expect(200);
+      await prisma.sesion_clase.updateMany({
+        where: { id_proyecto_docente: proyectoBorrador },
+        data: { id_tipo_sesion: tipoClase.id, id_dia_festivo: null },
+      });
+      await prisma.proyecto_docente.update({
+        where: { id: proyectoBorrador },
+        data: { id_estado: await estadoProyecto('en_diligenciamiento') },
       });
 
       // Período ya terminado: se genera abierto y luego se cierra (excepción p4).
@@ -974,9 +1045,225 @@ describe('Calendario de sesiones (e2e) · RF-19, HU-08-02 y HU-08-03', () => {
       ]);
     });
 
+    it('el panel no cuenta un proyecto que todavía no permite registrar clases (RF-20)', async () => {
+      const borrador = await como('docente').get(
+        `/proyectos-docentes/${proyectoBorrador}/calendario`,
+      );
+      // Tiene clases pasadas sin registrar, pero no está aprobado.
+      expect(borrador.body.resumen.vencidas).toBeGreaterThan(0);
+
+      const respuesta = await como('docente')
+        .get('/sesiones/pendientes')
+        .expect(200);
+
+      expect(
+        (respuesta.body.elementos as { idProyectoDocente: number }[]).map(
+          (p) => p.idProyectoDocente,
+        ),
+      ).toEqual([proyectoAlertas]);
+    });
+
     it('el panel de pendientes es solo del docente (403 para Departamento y Estudiante)', async () => {
       await como('departamento').get('/sesiones/pendientes').expect(403);
       await como('estudiante').get('/sesiones/pendientes').expect(403);
+    });
+
+    describe('recordatorio de sesiones pendientes y su configuración (RF-26, HU-13-02 y HU-13-04)', () => {
+      const PERIODICIDAD = 7;
+      let periodicidadAnterior: string | null | undefined;
+      /** Estado de cada tipo antes de la prueba, para dejarlo igual. */
+      const tiposAnteriores = new Map<string, boolean | null>();
+
+      const avisosDe = (quien: string) =>
+        prisma.notificacion.findMany({
+          where: {
+            id_usuario: usuarios[quien],
+            tipo_notificacion: {
+              codigo: {
+                in: [NOTIFICACION.sesionVencida, NOTIFICACION.sesionPorVencer],
+              },
+            },
+          },
+          include: { tipo_notificacion: { select: { codigo: true } } },
+        });
+
+      beforeAll(async () => {
+        const parametro = await prisma.parametro_sistema.findUnique({
+          where: { clave: PARAMETRO.recordatorioSesionesDias },
+        });
+        periodicidadAnterior = parametro ? parametro.valor : undefined;
+        await prisma.parametro_sistema.upsert({
+          where: { clave: PARAMETRO.recordatorioSesionesDias },
+          create: {
+            clave: PARAMETRO.recordatorioSesionesDias,
+            valor: String(PERIODICIDAD),
+            tipo_dato: 'entero',
+          },
+          update: { valor: String(PERIODICIDAD) },
+        });
+        // La CI no corre el seed: los dos tipos del recordatorio pueden faltar.
+        for (const codigo of [
+          NOTIFICACION.sesionVencida,
+          NOTIFICACION.sesionPorVencer,
+        ]) {
+          const tipo = await prisma.tipo_notificacion.findUnique({
+            where: { codigo },
+          });
+          if (tipo) {
+            tiposAnteriores.set(codigo, tipo.activo);
+            await prisma.tipo_notificacion.update({
+              where: { id: tipo.id },
+              data: { activo: true },
+            });
+          } else {
+            creados.tiposNotificacion.push(
+              (
+                await prisma.tipo_notificacion.create({
+                  data: { codigo, nombre: codigo, activo: true },
+                })
+              ).id,
+            );
+          }
+        }
+      });
+
+      afterAll(async () => {
+        if (!prisma) {
+          return;
+        }
+        for (const [codigo, activo] of tiposAnteriores) {
+          await prisma.tipo_notificacion.update({
+            where: { codigo },
+            data: { activo },
+          });
+        }
+        if (periodicidadAnterior === undefined) {
+          await prisma.parametro_sistema.deleteMany({
+            where: { clave: PARAMETRO.recordatorioSesionesDias },
+          });
+        } else {
+          await prisma.parametro_sistema.update({
+            where: { clave: PARAMETRO.recordatorioSesionesDias },
+            data: { valor: periodicidadAnterior },
+          });
+        }
+      });
+
+      it('solo el administrador envía los recordatorios a mano y configura los tipos', async () => {
+        await como('docente').post('/recordatorios/sesiones').expect(403);
+        await como('departamento').post('/recordatorios/sesiones').expect(403);
+        await como('docente').get('/notificaciones/tipos').expect(403);
+        await como('docente')
+          .patch(`/notificaciones/tipos/${NOTIFICACION.sesionVencida}`, {
+            activo: false,
+          })
+          .expect(403);
+        await http().post('/api/recordatorios/sesiones').expect(401);
+      });
+
+      it('le deja al docente un solo aviso con sus pendientes, que lleva al calendario del curso', async () => {
+        const calendario = await como('docente').get(
+          `/proyectos-docentes/${proyectoAlertas}/calendario`,
+        );
+        const { vencidas, porVencer } = calendario.body.resumen as {
+          vencidas: number;
+          porVencer: number;
+        };
+
+        const respuesta = await como('administrador')
+          .post('/recordatorios/sesiones')
+          .expect(200);
+
+        expect(respuesta.body.periodicidadDias).toBe(PERIODICIDAD);
+        expect(respuesta.body.enviados).toBeGreaterThanOrEqual(1);
+        const avisos = await avisosDe('docente');
+        expect(avisos).toHaveLength(1);
+        expect(avisos[0]).toMatchObject({
+          tipo_notificacion: { codigo: NOTIFICACION.sesionVencida },
+          titulo: 'Tiene sesiones vencidas sin diligenciar',
+          url_destino: `/proyectos-docentes/${proyectoAlertas}/calendario`,
+          leida: false,
+        });
+        expect(avisos[0].mensaje).toContain(
+          `Tiene ${vencidas} sesiones vencidas sin diligenciar y ${porVencer} ` +
+            `${porVencer === 1 ? 'sesión' : 'sesiones'} por vencer en el curso:`,
+        );
+        // Sin proyectos, no hay nada que recordar.
+        expect(await avisosDe('otroDocente')).toEqual([]);
+      });
+
+      it('no lo repite dentro de la periodicidad', async () => {
+        const respuesta = await como('administrador')
+          .post('/recordatorios/sesiones')
+          .expect(200);
+
+        expect(respuesta.body.omitidosPorPeriodicidad).toBeGreaterThanOrEqual(
+          1,
+        );
+        expect(await avisosDe('docente')).toHaveLength(1);
+      });
+
+      it('lista los tipos con la periodicidad, y un tipo apagado deja de generar el aviso', async () => {
+        const lista = await como('administrador')
+          .get('/notificaciones/tipos')
+          .expect(200);
+        expect(lista.body.recordatorioSesionesDias).toBe(PERIODICIDAD);
+        expect(lista.body.tipos).toContainEqual(
+          expect.objectContaining({
+            codigo: NOTIFICACION.sesionVencida,
+            activo: true,
+          }),
+        );
+
+        const apagado = await como('administrador')
+          .patch(`/notificaciones/tipos/${NOTIFICACION.sesionVencida}`, {
+            activo: false,
+          })
+          .expect(200);
+        expect(apagado.body).toMatchObject({
+          codigo: NOTIFICACION.sesionVencida,
+          activo: false,
+        });
+        const auditado = await prisma.auditoria.findFirst({
+          where: {
+            tabla_afectada: 'tipo_notificacion',
+            id_usuario: usuarios.administrador,
+          },
+        });
+        expect(auditado?.valor_nuevo).toEqual({ activo: false });
+
+        // Sin el aviso anterior, el docente volvería a recibirlo; con el tipo apagado, no.
+        await prisma.notificacion.deleteMany({
+          where: { id_usuario: usuarios.docente },
+        });
+        const respuesta = await como('administrador')
+          .post('/recordatorios/sesiones')
+          .expect(200);
+        expect(respuesta.body.omitidosPorTipoInactivo).toBeGreaterThanOrEqual(
+          1,
+        );
+        expect(await avisosDe('docente')).toEqual([]);
+
+        await como('administrador')
+          .patch(`/notificaciones/tipos/${NOTIFICACION.sesionVencida}`, {
+            activo: true,
+          })
+          .expect(200);
+      });
+
+      it('rechaza un tipo que no existe o un cambio vacío', async () => {
+        await como('administrador')
+          .patch('/notificaciones/tipos/no_existe', { activo: false })
+          .expect(404);
+        await como('administrador')
+          .patch(`/notificaciones/tipos/${NOTIFICACION.sesionVencida}`, {})
+          .expect(400);
+        await como('administrador')
+          .patch(`/notificaciones/tipos/${NOTIFICACION.sesionVencida}`, {
+            activo: 'tal vez',
+          })
+          .expect(400);
+      });
     });
 
     it('un docente sin proyectos asignados no tiene pendientes', async () => {

@@ -19,6 +19,10 @@ export const NOTIFICACION = {
   proyectoEnviado: 'proyecto_enviado',
   proyectoAprobado: 'proyecto_aprobado',
   proyectoDevuelto: 'proyecto_devuelto',
+  /** HU-13-02: el recordatorio de un docente con alguna sesión vencida. */
+  sesionVencida: 'sesion_vencida',
+  /** HU-13-02: el recordatorio de un docente que solo tiene sesiones por vencer. */
+  sesionPorVencer: 'sesion_por_vencer',
 } as const;
 
 /**

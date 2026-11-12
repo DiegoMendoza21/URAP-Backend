@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { AuditoriaModule } from './auditoria/auditoria.module.js';
 import { AuthModule } from './auth/auth.module.js';
@@ -25,6 +26,8 @@ import { SesionesModule } from './sesiones/sesiones.module.js';
       cache: true,
       validate: validarVariablesEntorno,
     }),
+    // Tareas programadas, como el recordatorio de sesiones pendientes (RF-26, HU-13-02).
+    ScheduleModule.forRoot(),
     PrismaModule,
     ParametrosModule,
     AuditoriaModule,
