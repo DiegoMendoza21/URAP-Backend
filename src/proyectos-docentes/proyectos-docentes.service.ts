@@ -38,6 +38,8 @@ import {
 export const ESTADO_INICIAL = 'en_diligenciamiento';
 /** `proyecto_docente.origen` de un proyecto creado con el asistente (DBML v2.5). */
 export const ORIGEN_ASISTENTE = 'manual';
+/** `proyecto_docente.origen` de un proyecto copiado de otro (RF-09; DBML v2.5). */
+export const ORIGEN_DUPLICADO = 'duplicado';
 
 export const MENSAJE_SIN_PERIODO =
   'No hay un período académico activo. El administrador debe configurarlo antes de crear proyectos docentes.';
@@ -93,7 +95,7 @@ export class ProyectosDocentesService {
     }
     await this.asistente.exigirPrograma(usuario.id, idPrograma);
 
-    this.validarDocentes(datos);
+    validarDocentes(datos.docentes);
     const [periodo, estado, rapsValidos, docentesValidos] = await Promise.all([
       this.asistente.periodoVigente(),
       this.prisma.estado_proyecto.findUnique({
@@ -141,19 +143,7 @@ export class ProyectosDocentesService {
     const ahora = new Date();
 
     const creado = await this.prisma.$transaction(async (tx) => {
-      // p6 y HU-05-06: un curso es asignatura + período + grupo, sin importar el docente. Se
-      // comprueba aquí porque el índice único de MySQL no impide duplicados con grupo nulo.
-      // Antes se bloquea la fila de la asignatura: en REPEATABLE READ dos creaciones
-      // simultáneas (un doble clic) leerían las dos «no existe» y crearían dos proyectos. Con
-      // el bloqueo, las creaciones de una misma asignatura se atienden de a una.
-      await tx.$queryRaw`SELECT id FROM asignatura WHERE id = ${asignatura.id} FOR UPDATE`;
-      const existente = await tx.proyecto_docente.findFirst({
-        where: { id_asignatura: asignatura.id, id_periodo: periodo.id, grupo },
-        select: { id: true },
-      });
-      if (existente) {
-        throw new ConflictException(MENSAJE_PROYECTO_EXISTENTE);
-      }
+      await exigirCursoLibre(tx, asignatura.id, periodo.id, grupo);
       return tx.proyecto_docente.create({
         data: {
           id_asignatura: asignatura.id,
@@ -196,8 +186,26 @@ export class ProyectosDocentesService {
         })),
       },
     });
-    // HU-13-01: los docentes asignados se enteran de inmediato. Quien crea el proyecto no se
-    // avisa a sí mismo. `notificar` nunca lanza: un fallo no deshace la creación.
+    await this.avisarAsignacion(
+      creado,
+      docentes.map((docente) => docente.idUsuario),
+      usuario.id,
+    );
+    return aDetalle(creado);
+  }
+
+  /**
+   * HU-13-01: los docentes asignados a un proyecto nuevo (creado o duplicado) se enteran de
+   * inmediato. Quien lo crea no se avisa a sí mismo. `notificar` nunca lanza: un fallo no
+   * deshace la creación.
+   */
+  async avisarAsignacion(
+    creado: Prisma.proyecto_docenteGetPayload<{
+      include: typeof INCLUIR_DETALLE;
+    }>,
+    idsDocentes: number[],
+    idCreador: number,
+  ): Promise<void> {
     const curso = [
       creado.asignatura?.nombre ?? 'sin asignatura',
       creado.grupo ? `grupo ${creado.grupo}` : null,
@@ -209,16 +217,13 @@ export class ProyectosDocentesService {
       .join(' · ');
     await this.notificaciones.notificar({
       tipo: NOTIFICACION.asignacionProyecto,
-      destinatarios: docentes
-        .map((docente) => docente.idUsuario)
-        .filter((idUsuario) => idUsuario !== usuario.id),
+      destinatarios: idsDocentes.filter((idUsuario) => idUsuario !== idCreador),
       titulo: 'Le asignaron un proyecto docente',
       mensaje: `Le asignaron el proyecto docente de ${curso}. Ya puede empezar a diligenciarlo.`,
       entidad: 'proyecto_docente',
       idEntidad: creado.id,
       urlDestino: `/proyectos-docentes/${creado.id}`,
     });
-    return aDetalle(creado);
   }
 
   /** Bandeja de proyectos: cada usuario ve solo los que su rol y su alcance le permiten. */
@@ -293,14 +298,41 @@ export class ProyectosDocentesService {
     }
     return condiciones.length > 0 ? { OR: condiciones } : null;
   }
+}
 
-  private validarDocentes({ docentes }: CrearProyectoDocenteDto): void {
-    const ids = new Set(docentes.map((docente) => docente.idUsuario));
-    if (ids.size !== docentes.length) {
-      throw new BadRequestException(MENSAJE_DOCENTES_REPETIDOS);
-    }
-    if (docentes.filter((docente) => docente.responsable).length !== 1) {
-      throw new BadRequestException(MENSAJE_UN_RESPONSABLE);
-    }
+/** HU-05-03: sin docentes repetidos y con un único responsable. */
+export function validarDocentes(
+  docentes: { idUsuario: number; responsable: boolean }[],
+): void {
+  const ids = new Set(docentes.map((docente) => docente.idUsuario));
+  if (ids.size !== docentes.length) {
+    throw new BadRequestException(MENSAJE_DOCENTES_REPETIDOS);
+  }
+  if (docentes.filter((docente) => docente.responsable).length !== 1) {
+    throw new BadRequestException(MENSAJE_UN_RESPONSABLE);
+  }
+}
+
+/**
+ * RF-08, p6, RF-09, excepción de p5, y HU-05-06: un curso es asignatura + período + grupo,
+ * sin importar el docente. Se comprueba aquí porque el índice único de MySQL no impide
+ * duplicados con grupo nulo. Antes se bloquea la fila de la asignatura: en REPEATABLE READ
+ * dos creaciones simultáneas (un doble clic) leerían las dos «no existe» y crearían dos
+ * proyectos. Con el bloqueo, las creaciones de una misma asignatura se atienden de a una.
+ * Va dentro de la transacción que crea el proyecto.
+ */
+export async function exigirCursoLibre(
+  tx: Prisma.TransactionClient,
+  idAsignatura: number,
+  idPeriodo: number,
+  grupo: string | null,
+): Promise<void> {
+  await tx.$queryRaw`SELECT id FROM asignatura WHERE id = ${idAsignatura} FOR UPDATE`;
+  const existente = await tx.proyecto_docente.findFirst({
+    where: { id_asignatura: idAsignatura, id_periodo: idPeriodo, grupo },
+    select: { id: true },
+  });
+  if (existente) {
+    throw new ConflictException(MENSAJE_PROYECTO_EXISTENTE);
   }
 }

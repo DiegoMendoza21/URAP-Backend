@@ -360,6 +360,14 @@ export class ProyectoDocenteDetalleDto extends ProyectoDocenteResumenDto {
   })
   origen: string | null;
 
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    example: 12,
+    description: 'Proyecto del que se copió, si es un duplicado (RF-09, p6)',
+  })
+  idProyectoOrigen: number | null;
+
   @ApiProperty({ type: PeriodoAcademicoDto, nullable: true })
   periodoAcademico: PeriodoAcademicoDto | null;
 

@@ -8,6 +8,8 @@ import { ProyectosDocentesModule } from '../proyectos-docentes/proyectos-docente
 import { ALMACENAMIENTO_DOCUMENTAL } from './almacenamiento/almacenamiento-documental.js';
 import { AlmacenamientoLocal } from './almacenamiento/almacenamiento-local.js';
 import { ArchivosEvidenciaInterceptor } from './archivos-evidencia.interceptor.js';
+import { EvidenciasLiderRapController } from './evidencias-lider-rap.controller.js';
+import { EvidenciasLiderRapService } from './evidencias-lider-rap.service.js';
 import { EvidenciasController } from './evidencias.controller.js';
 import { EvidenciasService } from './evidencias.service.js';
 
@@ -19,9 +21,10 @@ import { EvidenciasService } from './evidencias.service.js';
 @Module({
   // ParametrosModule y AuditoriaModule son globales.
   imports: [ProyectosDocentesModule],
-  controllers: [EvidenciasController],
+  controllers: [EvidenciasController, EvidenciasLiderRapController],
   providers: [
     EvidenciasService,
+    EvidenciasLiderRapService,
     ArchivosEvidenciaInterceptor,
     {
       provide: ALMACENAMIENTO_DOCUMENTAL,
