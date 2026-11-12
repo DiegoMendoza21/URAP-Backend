@@ -40,7 +40,12 @@ const CURSOS_NOMBRADOS = 3;
 @Injectable()
 export class RecordatoriosService {
   private readonly logger = new Logger(RecordatoriosService.name);
-  /** Evita que la revisión programada y un envío manual corran a la vez y dupliquen avisos. */
+  /**
+   * Evita que la revisión programada y un envío manual corran a la vez y dupliquen avisos.
+   * Vive en memoria: basta con un solo backend, como en el despliegue actual. Con dos réplicas,
+   * las dos correrían a las 7:00 y enviarían dos veces; entonces haría falta un candado de MySQL
+   * (`GET_LOCK('urap_recordatorio_sesiones', 0)`) sobre una misma conexión, con el mismo 409.
+   */
   private enCurso = false;
 
   constructor(

@@ -799,6 +799,10 @@ describe('SesionesService', () => {
             periodo_academico: {
               is: { OR: [{ cerrado: false }, { cerrado: null }] },
             },
+            // RF-20: solo los proyectos en los que ya se pueden registrar clases.
+            estado_proyecto: {
+              is: { codigo: { in: ['aprobado', 'en_ejecucion'] } },
+            },
           },
         }),
       );

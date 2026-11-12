@@ -54,6 +54,17 @@ import type {
   SesionCalendarioDto,
 } from './dto/respuestas.dto.js';
 
+/**
+ * RF-20, precondición: las clases se registran cuando el proyecto docente está aprobado o en
+ * ejecución (códigos de `estado_proyecto`, RF-17). Es la única línea que cambia si el programa
+ * decide otra cosa. Las alertas del panel (RF-23) y el recordatorio (RF-26) solo cuentan esos
+ * proyectos: no tiene sentido pedir que se registre lo que todavía no se puede registrar.
+ */
+export const ESTADOS_QUE_PERMITEN_REGISTRO: readonly string[] = [
+  'aprobado',
+  'en_ejecucion',
+];
+
 /** Estados de `sesion_clase` (DBML). «Vencida» lo calcula RF-23; no se guarda aquí. */
 export const ESTADO_PROGRAMADA = 'programada';
 export const ESTADO_REGISTRADA = 'registrada';
@@ -370,8 +381,9 @@ export class SesionesService {
   }
 
   /**
-   * RF-23: los proyectos de los docentes que cumplen `docentes`, con el período abierto, que
-   * tienen sesiones vencidas o por vencer, los más atrasados primero. Cada uno lleva sus
+   * RF-23: los proyectos de los docentes que cumplen `docentes`, con el período abierto y en un
+   * estado que permite registrar clases (RF-20), que tienen sesiones vencidas o por vencer, los
+   * más atrasados primero. Cada uno lleva sus
    * docentes activos. Las sesiones de un período cerrado ya son incumplimientos (excepción
    * p4): no hay nada que diligenciar.
    */
@@ -390,6 +402,11 @@ export class SesionesService {
           proyecto_docente_docente: { some: docentes },
           periodo_academico: {
             is: { OR: [{ cerrado: false }, { cerrado: null }] },
+          },
+          // RF-20: solo los proyectos en los que ya se pueden registrar clases. Un proyecto en
+          // diligenciamiento puede tener calendario, pero sus clases todavía no se registran.
+          estado_proyecto: {
+            is: { codigo: { in: [...ESTADOS_QUE_PERMITEN_REGISTRO] } },
           },
         },
         select: {

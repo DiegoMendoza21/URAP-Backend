@@ -60,6 +60,7 @@ describe('Calendario de sesiones (e2e) · RF-19, HU-08-02 y HU-08-03', () => {
     asignaturas: [] as number[],
     usuarios: [] as number[],
     proyectos: [] as number[],
+    estados: [] as number[],
   };
   const tokens: Record<string, string> = {};
   const usuarios: Record<string, number> = {};
@@ -194,6 +195,21 @@ describe('Calendario de sesiones (e2e) · RF-19, HU-08-02 y HU-08-03', () => {
     return creado.id;
   }
 
+  /** Un estado del proyecto por su código; la CI no corre el seed, así que puede faltar. */
+  async function estadoProyecto(codigo: string): Promise<number> {
+    const existente = await prisma.estado_proyecto.findUnique({
+      where: { codigo },
+    });
+    if (existente) {
+      return existente.id;
+    }
+    const creado = await prisma.estado_proyecto.create({
+      data: { codigo, nombre: codigo },
+    });
+    creados.estados.push(creado.id);
+    return creado.id;
+  }
+
   beforeAll(async () => {
     const modulo = await Test.createTestingModule({
       imports: [AppModule],
@@ -322,6 +338,9 @@ describe('Calendario de sesiones (e2e) · RF-19, HU-08-02 y HU-08-03', () => {
       await prisma.proyecto_docente_docente.deleteMany({ where: deProyectos });
       await prisma.proyecto_docente.deleteMany({
         where: { id: { in: creados.proyectos } },
+      });
+      await prisma.estado_proyecto.deleteMany({
+        where: { id: { in: creados.estados } },
       });
       await prisma.asignatura.deleteMany({
         where: { id: { in: creados.asignaturas } },
@@ -763,6 +782,8 @@ describe('Calendario de sesiones (e2e) · RF-19, HU-08-02 y HU-08-03', () => {
     const hoy = fechaDeHoy();
     let parametroAnterior: string | null | undefined;
     let proyectoAlertas: number;
+    /** En diligenciamiento y con calendario: sus clases todavía no se registran (RF-20). */
+    let proyectoBorrador: number;
     let proyectoAlertasCerrado: number;
     let periodoAlertasCerrado: number;
     let idFestivo: number;
@@ -847,6 +868,29 @@ describe('Calendario de sesiones (e2e) · RF-19, HU-08-02 y HU-08-03', () => {
           fecha_registro: new Date(),
           id_registrado_por: usuarios.docente,
         },
+      });
+
+      // RF-20: el proyecto de las alertas está aprobado, así que sus clases se registran. Otro
+      // del mismo docente sigue en diligenciamiento: tiene calendario, pero ni el panel ni el
+      // recordatorio deben pedirle que lo registre.
+      await prisma.proyecto_docente.update({
+        where: { id: proyectoAlertas },
+        data: { id_estado: await estadoProyecto('aprobado') },
+      });
+      proyectoBorrador = await crearProyecto(periodoAbierto, 'BOR');
+      await como('docente')
+        .put(`/proyectos-docentes/${proyectoBorrador}/horario`, todosLosDias)
+        .expect(200);
+      await como('docente')
+        .post(`/proyectos-docentes/${proyectoBorrador}/calendario`)
+        .expect(200);
+      await prisma.sesion_clase.updateMany({
+        where: { id_proyecto_docente: proyectoBorrador },
+        data: { id_tipo_sesion: tipoClase.id, id_dia_festivo: null },
+      });
+      await prisma.proyecto_docente.update({
+        where: { id: proyectoBorrador },
+        data: { id_estado: await estadoProyecto('en_diligenciamiento') },
       });
 
       // Período ya terminado: se genera abierto y luego se cierra (excepción p4).
@@ -999,6 +1043,24 @@ describe('Calendario de sesiones (e2e) · RF-19, HU-08-02 y HU-08-03', () => {
           mayorAtraso: calendario.body.resumen.mayorAtraso,
         }),
       ]);
+    });
+
+    it('el panel no cuenta un proyecto que todavía no permite registrar clases (RF-20)', async () => {
+      const borrador = await como('docente').get(
+        `/proyectos-docentes/${proyectoBorrador}/calendario`,
+      );
+      // Tiene clases pasadas sin registrar, pero no está aprobado.
+      expect(borrador.body.resumen.vencidas).toBeGreaterThan(0);
+
+      const respuesta = await como('docente')
+        .get('/sesiones/pendientes')
+        .expect(200);
+
+      expect(
+        (respuesta.body.elementos as { idProyectoDocente: number }[]).map(
+          (p) => p.idProyectoDocente,
+        ),
+      ).toEqual([proyectoAlertas]);
     });
 
     it('el panel de pendientes es solo del docente (403 para Departamento y Estudiante)', async () => {

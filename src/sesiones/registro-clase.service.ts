@@ -31,6 +31,7 @@ import {
   aSesion,
   contextoDeAlerta,
   ESTADO_REGISTRADA,
+  ESTADOS_QUE_PERMITEN_REGISTRO,
   horasDelHorario,
   INCLUIR_SESION,
   type ProyectoConHorario,
@@ -38,15 +39,9 @@ import {
   SesionesService,
 } from './sesiones.service.js';
 
-/**
- * RF-20, precondición: las clases se registran cuando el proyecto docente está aprobado o en
- * ejecución (códigos de `estado_proyecto`, RF-17). Es la única línea que cambia si el programa
- * decide otra cosa.
- */
-export const ESTADOS_QUE_PERMITEN_REGISTRO: readonly string[] = [
-  'aprobado',
-  'en_ejecucion',
-];
+// RF-20, precondición. Vive en sesiones.service.ts porque también la usan las alertas del
+// panel y el recordatorio (RF-23 y RF-26); aquí se reexporta para quien ya la importaba.
+export { ESTADOS_QUE_PERMITEN_REGISTRO };
 
 export const MENSAJE_SESION_NO_EXISTE =
   'La sesión no existe o no es de este proyecto docente.';
