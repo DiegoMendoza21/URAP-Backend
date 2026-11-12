@@ -496,8 +496,9 @@ function electiva2502(
  * - Electiva VIII no está en el plan público: va sin componente ni tipo de curso.
  * - Ninguna fuente trae las horas ni los prerrequisitos de estas asignaturas: quedan vacíos, y
  *   sus proyectos docentes salen con información incompleta (RF-08 p7).
- * - Las asignaturas de los semestres 1 a 5 que no tienen formato diligenciado siguen sin
- *   componente: cargarlo cambiaría filas que ya están sembradas.
+ * - En los semestres 1 a 5, el componente también es el del plan público, salvo en las tres
+ *   asignaturas con formato diligenciado, que lo llevan en su ficha. NC2505 sigue
+ *   «Profesional», como en su formato, aunque el plan público la ubique en el básico.
  *
  * Sin mapeo a RAP: el programa todavía no lo entrega, así que sus asignaturas no tienen filas en
  * `asignatura_rap` y el asistente de RF-08 deja elegir entre todos los RAP del programa. Que el
@@ -506,10 +507,10 @@ function electiva2502(
  */
 export const PLAN_2502: AsignaturaPlan[] = [
   // Semestre 1
-  delPlan2502(1, 'FN23003', 'Inglés I', 2),
-  delPlan2502(1, 'FN72726', 'Cátedra institucional', 2),
-  delPlan2502(1, 'FN72727', 'Producción y comprensión textual I', 2),
-  delPlan2502(1, 'NC2501', 'Matemática I', 4),
+  delPlan2502(1, 'FN23003', 'Inglés I', 2, 'BASICO'),
+  delPlan2502(1, 'FN72726', 'Cátedra institucional', 2, 'BASICO'),
+  delPlan2502(1, 'FN72727', 'Producción y comprensión textual I', 2, 'BASICO'),
+  delPlan2502(1, 'NC2501', 'Matemática I', 4, 'BASICO'),
   {
     ...delPlan2502(1, 'NC2507', 'Fundamentos de administración', 3),
     ficha: {
@@ -521,24 +522,30 @@ export const PLAN_2502: AsignaturaPlan[] = [
       prerrequisitos: [],
     },
   },
-  delPlan2502(1, 'NC2508', 'Fundamentos de contabilidad', 3),
-  delPlan2502(1, 'NC2509', 'Fundamentos de economía', 3),
+  delPlan2502(1, 'NC2508', 'Fundamentos de contabilidad', 3, 'PROFESIONAL'),
+  delPlan2502(1, 'NC2509', 'Fundamentos de economía', 3, 'PROFESIONAL'),
   // Semestre 2
-  delPlan2502(2, 'FN24033', 'Inglés II', 2),
-  delPlan2502(2, 'FN24047', 'Humanidades', 2),
-  delPlan2502(2, 'FN72732', 'Producción y comprensión textual II', 2),
-  delPlan2502(2, 'IX24100', 'Costos', 2),
-  delPlan2502(2, 'IX24165', 'Teoría general de la administración', 3),
-  delPlan2502(2, 'NC2502', 'Matemática II', 4),
-  delPlan2502(2, 'NC2503', 'Estadística I', 3),
-  delPlan2502(2, 'NC2506', 'Derecho constitucional', 2),
+  delPlan2502(2, 'FN24033', 'Inglés II', 2, 'BASICO'),
+  delPlan2502(2, 'FN24047', 'Humanidades', 2, 'BASICO'),
+  delPlan2502(2, 'FN72732', 'Producción y comprensión textual II', 2, 'BASICO'),
+  delPlan2502(2, 'IX24100', 'Costos', 2, 'PROFESIONAL'),
+  delPlan2502(
+    2,
+    'IX24165',
+    'Teoría general de la administración',
+    3,
+    'PROFESIONAL',
+  ),
+  delPlan2502(2, 'NC2502', 'Matemática II', 4, 'BASICO'),
+  delPlan2502(2, 'NC2503', 'Estadística I', 3, 'BASICO'),
+  delPlan2502(2, 'NC2506', 'Derecho constitucional', 2, 'BASICO'),
   // Semestre 3
-  delPlan2502(3, 'CFBD294', 'Matemáticas III', 4),
-  delPlan2502(3, 'FN24035', 'Inglés III', 2),
-  delPlan2502(3, 'FN72725', 'Ética', 2),
-  delPlan2502(3, 'IX24182', 'Planeación y control', 3),
-  delPlan2502(3, 'IX25263', 'Desarrollo del espíritu emprendedor', 2),
-  delPlan2502(3, 'NC2504', 'Estadística II', 3),
+  delPlan2502(3, 'CFBD294', 'Matemáticas III', 4, 'BASICO'),
+  delPlan2502(3, 'FN24035', 'Inglés III', 2, 'BASICO'),
+  delPlan2502(3, 'FN72725', 'Ética', 2, 'BASICO'),
+  delPlan2502(3, 'IX24182', 'Planeación y control', 3, 'PROFESIONAL'),
+  delPlan2502(3, 'IX25263', 'Desarrollo del espíritu emprendedor', 2, 'BASICO'),
+  delPlan2502(3, 'NC2504', 'Estadística II', 3, 'BASICO'),
   // El formato llama a su prerrequisito «Comprensión y producción de textos II»: en el 2502
   // esa asignatura es Producción y comprensión textual II (FN72732).
   {
@@ -553,20 +560,26 @@ export const PLAN_2502: AsignaturaPlan[] = [
     },
   },
   // Semestre 4
-  delPlan2502(4, 'CFBD297', 'Investigación aplicada', 3),
-  delPlan2502(4, 'FN24036', 'Inglés IV', 2),
-  delPlan2502(4, 'IX24184', 'Organización y dirección', 3),
-  delPlan2502(4, 'IX24185', 'Matemática financiera', 3),
-  delPlan2502(4, 'IX24186', 'Analítica de datos I', 3),
-  delPlan2502(4, 'IX24187', 'Dibujo técnico - expresión gráfica', 2),
-  delPlan2502(4, 'NC2510', 'Microeconomía I', 3),
+  delPlan2502(4, 'CFBD297', 'Investigación aplicada', 3, 'BASICO'),
+  delPlan2502(4, 'FN24036', 'Inglés IV', 2, 'BASICO'),
+  delPlan2502(4, 'IX24184', 'Organización y dirección', 3, 'PROFESIONAL'),
+  delPlan2502(4, 'IX24185', 'Matemática financiera', 3, 'PROFESIONAL'),
+  delPlan2502(4, 'IX24186', 'Analítica de datos I', 3, 'PROFESIONAL'),
+  delPlan2502(
+    4,
+    'IX24187',
+    'Dibujo técnico - expresión gráfica',
+    2,
+    'PROFESIONAL',
+  ),
+  delPlan2502(4, 'NC2510', 'Microeconomía I', 3, 'PROFESIONAL'),
   // Semestre 5
-  delPlan2502(5, 'FN24037', 'Inglés V', 2),
-  delPlan2502(5, 'IX24188', 'Química industrial', 3),
-  delPlan2502(5, 'IX24189', 'Finanzas a corto plazo', 3),
-  delPlan2502(5, 'IX24190', 'Analítica de datos II', 3),
-  delPlan2502(5, 'IX24191', 'Sistema de producción', 2),
-  delPlan2502(5, 'IX24192', 'Macroeconomía', 2),
+  delPlan2502(5, 'FN24037', 'Inglés V', 2, 'BASICO'),
+  delPlan2502(5, 'IX24188', 'Química industrial', 3, 'PROFESIONAL'),
+  delPlan2502(5, 'IX24189', 'Finanzas a corto plazo', 3, 'PROFESIONAL'),
+  delPlan2502(5, 'IX24190', 'Analítica de datos II', 3, 'PROFESIONAL'),
+  delPlan2502(5, 'IX24191', 'Sistema de producción', 2, 'PROFESIONAL'),
+  delPlan2502(5, 'IX24192', 'Macroeconomía', 2, 'PROFESIONAL'),
   // El mismo formato que la del plan 1702, salvo el código.
   {
     ...delPlan2502(5, 'IX24193', 'Comportamiento organizacional', 2),

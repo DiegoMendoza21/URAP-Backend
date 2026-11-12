@@ -384,7 +384,8 @@ async function sembrarRubrica(
  * RF-05, RF-08 p5). Cada plan tiene su propia fila de cada asignatura: Comportamiento
  * organizacional queda dos veces, FP15503 en el 1702 e IX24193 en el 2502.
  *
- * Una asignatura que ya está sembrada no se crea otra vez ni se modifica (`buscarAsignatura`).
+ * Una asignatura que ya está sembrada no se crea otra vez (`buscarAsignatura`) ni se modifica,
+ * salvo para completar su componente si lo tiene vacío (`completarComponente`).
  * Los prerrequisitos se buscan por nombre dentro del mismo plan (HU-03-04).
  */
 export async function sembrarPlanesDeEstudio(
@@ -404,8 +405,16 @@ export async function sembrarPlanesDeEstudio(
     const ids: number[] = [];
     for (const semilla of asignaturas) {
       const { ficha } = semilla;
+      const existente = await buscarAsignatura(tx, plan.id, semilla);
+      if (existente) {
+        await completarComponente(
+          tx,
+          existente,
+          ficha?.componente ?? semilla.componente,
+        );
+      }
       const asignatura =
-        (await buscarAsignatura(tx, plan.id, semilla)) ??
+        existente ??
         (await tx.asignatura.create({
           data: {
             id_plan_estudio: plan.id,
@@ -481,6 +490,32 @@ export async function sembrarPlanesDeEstudio(
   }
 }
 
+/** Lo que el sembrado necesita de una asignatura que ya está en la base. */
+interface AsignaturaSembrada {
+  id: number;
+  componente: string | null;
+}
+
+/**
+ * Una asignatura ya sembrada no se modifica, con una excepción: si no tiene componente y la
+ * lista sí lo trae, se completa. Así, una base sembrada antes de que el plan 2502 tuviera el
+ * componente de sus semestres 1 a 5 lo recibe al volver a sembrar, sin sembrar desde cero.
+ * Un componente que ya está nunca se cambia, aunque la lista diga otro: puede venir de un
+ * formato diligenciado o haberlo corregido el programa.
+ */
+async function completarComponente(
+  tx: Transaccion,
+  existente: AsignaturaSembrada,
+  componente: string | undefined,
+): Promise<void> {
+  if (componente && existente.componente === null) {
+    await tx.asignatura.update({
+      where: { id: existente.id },
+      data: { componente },
+    });
+  }
+}
+
 /**
  * La fila ya sembrada de una asignatura de la lista, o nada si hay que crearla.
  *
@@ -496,21 +531,21 @@ async function buscarAsignatura(
   tx: Transaccion,
   idPlan: number,
   { nombre, codigo_interno }: AsignaturaPlan,
-): Promise<{ id: number } | null> {
+): Promise<AsignaturaSembrada | null> {
   if (!codigo_interno) {
     return tx.asignatura.findFirst({
       where: { id_plan_estudio: idPlan, nombre },
-      select: { id: true },
+      select: { id: true, componente: true },
     });
   }
   return (
     (await tx.asignatura.findFirst({
       where: { id_plan_estudio: idPlan, codigo_interno },
-      select: { id: true },
+      select: { id: true, componente: true },
     })) ??
     tx.asignatura.findFirst({
       where: { id_plan_estudio: idPlan, nombre, codigo_interno: null },
-      select: { id: true },
+      select: { id: true, componente: true },
     })
   );
 }
