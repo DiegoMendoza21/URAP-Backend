@@ -5,6 +5,9 @@ import { PrismaService } from '../common/prisma/prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { porcentaje } from '../mediciones/consolidado.js';
 import { AlcanceService } from '../proyectos-docentes/alcance.service.js';
+import { fechaDeHoy } from '../sesiones/alertas.js';
+import { aTextoFecha } from '../sesiones/calendario.js';
+import { SESION_VIGENTE } from '../sesiones/sesiones.service.js';
 import type {
   ConsultarContribucionDto,
   ConsultarCumplimientoDto,
@@ -13,7 +16,20 @@ import type {
   ReporteCumplimientoDto,
   ResumenCumplimientoDto,
 } from './dto/academicos.dto.js';
+import type {
+  ConsultarEjecucionDto,
+  CursoEjecucionDto,
+  ReporteEjecucionDto,
+  ResumenEjecucionDto,
+} from './dto/ejecucion.dto.js';
 import type { ProyectoSeguimientoDto } from './dto/seguimiento.dto.js';
+import {
+  ejecucionDelCurso,
+  ETIQUETA_ESTADO_TEMA,
+  type SesionCalendario,
+  type TemaMarcado,
+  type TemaPlaneado,
+} from './ejecucion-contenidos.js';
 import {
   type ArchivoExcel,
   encabezado,
@@ -28,6 +44,7 @@ import { ReportesService, ROLES_PROGRAMA } from './reportes.service.js';
 import {
   contarPendientes,
   ETIQUETA_COLOR,
+  type FilasExportacion,
   nombreCompleto,
   SeguimientoService,
 } from './seguimiento.service.js';
@@ -46,13 +63,30 @@ export const SIN_ESTADO = {
 export const TIPO_REPORTE = {
   cumplimiento: 'cumplimiento_periodo',
   contribucion: 'contribucion_rac_rap',
+  ejecucion: 'ejecucion_contenidos',
 } as const;
+
+/**
+ * HU-12-04: el registro de clase todavía no permite escribir temas fuera del contenido
+ * programático (HU-08-05). Se dice en el reporte para que el cero no se lea como un dato.
+ */
+/** HU-12-04: el máximo exportable cuenta las filas de temas del archivo. */
+export const FILAS_TEMAS: FilasExportacion = {
+  unidad: 'temas',
+  filtros: 'programa o asignatura',
+};
+
+export const NOTA_ADICIONALES =
+  'El registro de clase todavía no permite anotar temas fuera del contenido programático: los temas adicionales no planeados aparecen en cero hasta que se habilite.';
 
 /**
  * Reportes académicos (RF-28):
  * - Cumplimiento por período (HU-12-03): los proyectos, su estado y su diligenciamiento, con
  *   las mismas reglas del tablero de seguimiento (RF-25). Para el Administrador, el
  *   Departamento y la Dirección, sobre su programa.
+ * - Ejecución de contenidos (HU-12-04): por curso, los temas planeados en el punto 6 frente a
+ *   los marcados en las clases registradas (ver `ejecucion-contenidos.ts`). Con los roles y el
+ *   alcance del de cumplimiento: es un reporte del programa.
  * - Contribución de los RAC a los RAP (HU-12-05): por RAP, las asignaturas del período que
  *   contribuyen, sus docentes, sus RAC asociados y las evidencias cargadas. El Líder RAP solo
  *   ve los RAP que lidera en el período; los roles de programa, los de su programa.
@@ -192,6 +226,220 @@ export class ReportesAcademicosService {
             { width: 12 },
             { width: 10 },
             { width: 28 },
+          ],
+        },
+      ]),
+    };
+  }
+
+  /** HU-12-04: temas planeados, dictados, no dictados y adicionales, por curso. */
+  ejecucion(
+    usuario: UsuarioSesion,
+    consulta: ConsultarEjecucionDto,
+  ): Promise<ReporteEjecucionDto> {
+    return this.generarEjecucion(usuario, consulta, false);
+  }
+
+  /**
+   * Arma el reporte de ejecución y registra su generación. Los cursos y el alcance son los del
+   * tablero de seguimiento (RF-25), como en el reporte de cumplimiento. Al exportar, antes de
+   * registrar, comprueba el máximo de filas con las filas de temas que lleva el archivo.
+   */
+  private async generarEjecucion(
+    usuario: UsuarioSesion,
+    consulta: ConsultarEjecucionDto,
+    exportar: boolean,
+  ): Promise<ReporteEjecucionDto> {
+    const { periodo, filas } = await this.seguimiento.consultar(
+      usuario,
+      consulta,
+    );
+    const ids = filas.map((fila) => fila.idProyecto);
+    const [contenidos, sesiones] =
+      ids.length === 0
+        ? [[], []]
+        : await Promise.all([
+            this.prisma.contenido_programatico.findMany({
+              where: { id_proyecto_docente: { in: ids } },
+              select: {
+                id: true,
+                id_proyecto_docente: true,
+                semana: true,
+                tema: true,
+              },
+            }),
+            this.prisma.sesion_clase.findMany({
+              where: { id_proyecto_docente: { in: ids }, ...SESION_VIGENTE },
+              select: {
+                id_proyecto_docente: true,
+                semana: true,
+                fecha: true,
+                sesion_tema: {
+                  select: { id_contenido: true, tema_adicional: true },
+                },
+              },
+            }),
+          ]);
+
+    const planeadosPor = new Map<number, TemaPlaneado[]>();
+    for (const contenido of contenidos) {
+      const id = contenido.id_proyecto_docente as number;
+      planeadosPor.set(id, [
+        ...(planeadosPor.get(id) ?? []),
+        {
+          idContenido: contenido.id,
+          semana: contenido.semana,
+          tema: contenido.tema,
+        },
+      ]);
+    }
+    const calendarioPor = new Map<number, SesionCalendario[]>();
+    const marcadosPor = new Map<number, TemaMarcado[]>();
+    for (const sesion of sesiones) {
+      const id = sesion.id_proyecto_docente as number;
+      const fecha = sesion.fecha ? aTextoFecha(sesion.fecha) : null;
+      calendarioPor.set(id, [
+        ...(calendarioPor.get(id) ?? []),
+        { semana: sesion.semana, fecha },
+      ]);
+      marcadosPor.set(id, [
+        ...(marcadosPor.get(id) ?? []),
+        ...sesion.sesion_tema.map((tema) => ({
+          idContenido: tema.id_contenido,
+          temaAdicional: tema.tema_adicional,
+          fecha,
+        })),
+      ]);
+    }
+
+    const hoy = fechaDeHoy();
+    const cursos: CursoEjecucionDto[] = filas.map((fila) => ({
+      idProyecto: fila.idProyecto,
+      asignatura: fila.asignatura,
+      grupo: fila.grupo,
+      programa: fila.programa,
+      docentes: fila.docentes,
+      estado: fila.estado,
+      ...ejecucionDelCurso(
+        planeadosPor.get(fila.idProyecto) ?? [],
+        marcadosPor.get(fila.idProyecto) ?? [],
+        calendarioPor.get(fila.idProyecto) ?? [],
+        hoy,
+      ),
+    }));
+
+    if (exportar) {
+      await this.seguimiento.exigirTamanoExportable(
+        filasExportables(cursos),
+        FILAS_TEMAS,
+      );
+    }
+    const generado = new Date();
+    await this.registrar(usuario.id, {
+      tipo: TIPO_REPORTE.ejecucion,
+      nombre: `Ejecución de contenidos del período ${periodo?.codigo ?? 'sin definir'}`,
+      idPrograma: consulta.idPrograma ?? null,
+      idPeriodo: periodo?.id ?? null,
+      parametros: { ...consulta, cursos: cursos.length },
+      fecha: generado,
+    });
+    return {
+      periodo,
+      generado: generado.toISOString(),
+      resumen: resumenEjecucion(cursos),
+      cursos,
+    };
+  }
+
+  async ejecucionExcel(
+    usuario: UsuarioSesion,
+    consulta: ConsultarEjecucionDto,
+  ): Promise<ArchivoExcel> {
+    const reporte = await this.generarEjecucion(usuario, consulta, true);
+    const { resumen } = reporte;
+    const curso = (fila: CursoEjecucionDto) => [
+      fila.asignatura,
+      fila.grupo,
+      fila.docentes.join(', '),
+    ];
+    const datos = [
+      [titulo('Reporte de ejecución de contenidos')],
+      [`Período académico ${reporte.periodo?.codigo ?? 'sin definir'}`],
+      [`Generado el ${fechaGeneracion(new Date(reporte.generado))}`],
+      [textoLargo(NOTA_ADICIONALES)],
+      [],
+      encabezado(['Indicador', 'Valor']),
+      ['Cursos', numero(resumen.cursos, false)],
+      ['Temas planeados', numero(resumen.planeados, false)],
+      ['Temas dictados', numero(resumen.dictados, false)],
+      ['% de temas dictados', numero(resumen.porcentajeDictados)],
+      ['Temas no dictados', numero(resumen.noDictados, false)],
+      ['Temas por dictar', numero(resumen.porDictar, false)],
+      ['Temas adicionales no planeados', numero(resumen.adicionales, false)],
+      [],
+      encabezado([
+        'Asignatura',
+        'Grupo',
+        'Docentes',
+        'Planeados',
+        'Dictados',
+        '% dictados',
+        'No dictados',
+        'Por dictar',
+        'Adicionales',
+      ]),
+      ...reporte.cursos.map((fila) => [
+        ...curso(fila),
+        numero(fila.planeados, false),
+        numero(fila.dictados, false),
+        numero(fila.porcentajeDictados),
+        numero(fila.noDictados, false),
+        numero(fila.porDictar, false),
+        numero(fila.adicionales, false),
+      ]),
+      [],
+      encabezado([
+        'Asignatura',
+        'Grupo',
+        'Docentes',
+        'Semana',
+        'Tema',
+        'Estado',
+        'Fechas en que se dictó',
+      ]),
+      ...reporte.cursos.flatMap((fila) => [
+        ...fila.temas.map((tema) => [
+          ...curso(fila),
+          numero(tema.semana, false),
+          textoLargo(tema.tema),
+          ETIQUETA_ESTADO_TEMA[tema.estado],
+          tema.fechas.join(', ') || null,
+        ]),
+        ...fila.temasAdicionales.map((tema) => [
+          ...curso(fila),
+          null,
+          textoLargo(tema.tema),
+          'Adicional no planeado',
+          tema.fechas.join(', ') || null,
+        ]),
+      ]),
+    ];
+    return {
+      nombreArchivo: `ejecucion-contenidos-${nombreSeguro(reporte.periodo?.codigo ?? 'sin-periodo')}.xlsx`,
+      contenido: await libro([
+        {
+          sheet: 'Ejecución de contenidos',
+          data: datos,
+          columns: [
+            { width: 34 },
+            { width: 10 },
+            { width: 28 },
+            { width: 11 },
+            { width: 40 },
+            { width: 14 },
+            { width: 24 },
+            { width: 11 },
+            { width: 12 },
           ],
         },
       ]),
@@ -527,6 +775,32 @@ export class ReportesAcademicosService {
       valorNuevo: { tipo: datos.tipo, parametros: datos.parametros },
     });
   }
+}
+
+/** Filas de temas que lleva la exportación: las que cuenta el máximo exportable (RF-25, p5). */
+export function filasExportables(cursos: readonly CursoEjecucionDto[]): number {
+  return suma(
+    cursos,
+    (curso) => curso.temas.length + curso.temasAdicionales.length,
+  );
+}
+
+/** El resumen suma temas de todos los cursos: no promedia porcentajes. */
+export function resumenEjecucion(
+  cursos: readonly CursoEjecucionDto[],
+): ResumenEjecucionDto {
+  const planeados = suma(cursos, (curso) => curso.planeados);
+  const dictados = suma(cursos, (curso) => curso.dictados);
+  return {
+    cursos: cursos.length,
+    planeados,
+    dictados,
+    noDictados: suma(cursos, (curso) => curso.noDictados),
+    porDictar: suma(cursos, (curso) => curso.porDictar),
+    adicionales: suma(cursos, (curso) => curso.adicionales),
+    porcentajeDictados:
+      planeados === 0 ? null : porcentaje(dictados, planeados),
+  };
 }
 
 function suma<T>(filas: readonly T[], valor: (fila: T) => number): number {

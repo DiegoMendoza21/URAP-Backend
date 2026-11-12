@@ -75,13 +75,25 @@ export const RANGO_EXPORTACION_MAXIMA =
 
 export const MENSAJE_PERIODO_NO_EXISTE = 'El período académico no existe.';
 
+/** Qué cuenta una exportación y con qué filtros se acota. Por defecto, los del tablero. */
+export interface FilasExportacion {
+  unidad: string;
+  filtros: string;
+}
+
+export const FILAS_PROYECTOS: FilasExportacion = {
+  unidad: 'proyectos',
+  filtros: 'programa, asignatura o docente',
+};
+
 export function mensajeExportacionGrande(
   filas: number,
   maximo: number,
+  { unidad, filtros }: FilasExportacion = FILAS_PROYECTOS,
 ): string {
   return (
-    `La consulta tiene ${filas} proyectos y se pueden exportar hasta ${maximo}. ` +
-    'Restrinja los filtros (programa, asignatura o docente) y vuelva a exportar.'
+    `La consulta tiene ${filas} ${unidad} y se pueden exportar hasta ${maximo}. ` +
+    `Restrinja los filtros (${filtros}) y vuelva a exportar.`
   );
 }
 
@@ -477,14 +489,17 @@ export class SeguimientoService {
   }
 
   /** RF-25, excepción de p5: por encima del máximo se piden filtros más estrechos. */
-  async exigirTamanoExportable(filas: number): Promise<void> {
+  async exigirTamanoExportable(
+    filas: number,
+    cuenta: FilasExportacion = FILAS_PROYECTOS,
+  ): Promise<void> {
     const maximo = await this.parametros.leerEntero(
       PARAMETRO_EXPORTACION_MAXIMA,
       RANGO_EXPORTACION_MAXIMA,
     );
     if (maximo !== null && filas > maximo) {
       throw new UnprocessableEntityException(
-        mensajeExportacionGrande(filas, maximo),
+        mensajeExportacionGrande(filas, maximo, cuenta),
       );
     }
   }
