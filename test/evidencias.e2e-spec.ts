@@ -916,14 +916,14 @@ describe('Evidencias (e2e) · RF-24, HU-10-01', () => {
         },
       });
 
-      // RF-29: fotos de clase, datos personales. Queda como consulta sensible con el id del RAP.
+      // RF-29: fotos de clase, datos personales. Queda como consulta sensible del RAP.
       await expect
         .poll(
           () =>
             prisma.auditoria.count({
               where: {
                 accion: 'consulta_sensible',
-                tabla_afectada: 'evidencia_rap',
+                tabla_afectada: 'rap',
                 id_registro: rap2,
                 id_usuario: usuarios.lider,
                 ip: { not: null },
@@ -959,7 +959,7 @@ describe('Evidencias (e2e) · RF-24, HU-10-01', () => {
         await prisma.auditoria.count({
           where: {
             accion: 'consulta_sensible',
-            tabla_afectada: 'evidencia_rap',
+            tabla_afectada: 'rap',
             id_registro: rap1,
             id_usuario: usuarios.lider,
           },

@@ -56,9 +56,10 @@ export class EvidenciasLiderRapController {
 
   @Get(':idRap/evidencias')
   @Permiso('documentos', 'leer')
-  // Fotos de clase: datos personales (Ley 1581). Como las matrículas, la consulta queda en la
-  // auditoría con la tabla consultada y el id de la ruta, aquí el del RAP.
-  @AuditarConsulta('evidencia_rap', 'idRap')
+  // Fotos de clase: datos personales (Ley 1581). Queda como consulta de `rap` con el id del RAP,
+  // y no de `evidencia_rap`: ahí el id es el de la evidencia que se descarga, y un mismo número
+  // diría dos cosas distintas en la auditoría.
+  @AuditarConsulta('rap', 'idRap')
   @ApiOperation({
     summary:
       'Evidencias de un RAP a cargo, en todas las asignaturas (HU-10-04)',
@@ -66,7 +67,7 @@ export class EvidenciasLiderRapController {
       'Paginadas, las más recientes primero, con la asignatura, el grupo, el período y el ' +
       'docente responsable de cada una. Solo de los proyectos docentes de los períodos en ' +
       'que el usuario lidera el RAP. La consulta queda en la auditoría como consulta ' +
-      'sensible de `evidencia_rap`, con el id del RAP.',
+      'sensible de `rap`, con el id del RAP.',
   })
   @ApiOkResponse({ type: PaginaEvidenciasRapACargoDto })
   @ApiBadRequestResponse({
