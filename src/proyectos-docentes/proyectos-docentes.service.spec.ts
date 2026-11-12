@@ -7,6 +7,10 @@ import type { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import type { PrismaService } from '../common/prisma/prisma.service.js';
+import {
+  NOTIFICACION,
+  type NotificacionesService,
+} from '../notificaciones/notificaciones.service.js';
 import type { AlcanceService } from './alcance.service.js';
 import type { AsistenteService } from './asistente.service.js';
 import type { CrearProyectoDocenteDto } from './dto/crear-proyecto-docente.dto.js';
@@ -139,11 +143,13 @@ describe('ProyectosDocentesService', () => {
   const alcance = { alcance: vi.fn() };
   const asistente = { exigirPrograma: vi.fn(), periodoVigente: vi.fn() };
   const auditoria = { registrar: vi.fn() };
+  const notificaciones = { notificar: vi.fn() };
   const servicio = new ProyectosDocentesService(
     prisma as unknown as PrismaService,
     alcance as unknown as AlcanceService,
     asistente as unknown as AsistenteService,
     auditoria as unknown as AuditoriaService,
+    notificaciones as unknown as NotificacionesService,
   );
 
   beforeEach(() => {
@@ -158,6 +164,7 @@ describe('ProyectosDocentesService', () => {
     prisma.rap.count.mockResolvedValue(2);
     prisma.usuario.count.mockResolvedValue(2);
     auditoria.registrar.mockResolvedValue(undefined);
+    notificaciones.notificar.mockResolvedValue(undefined);
     tx.proyecto_docente.findFirst.mockResolvedValue(null);
     tx.proyecto_docente.create.mockImplementation(({ data }) =>
       Promise.resolve(proyectoCreado(data)),
@@ -165,6 +172,39 @@ describe('ProyectosDocentesService', () => {
   });
 
   describe('crear', () => {
+    it('avisa a los docentes asignados, con el enlace al proyecto (HU-13-01)', async () => {
+      await servicio.crear(usuarioDepartamento, datosValidos());
+
+      expect(notificaciones.notificar).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tipo: NOTIFICACION.asignacionProyecto,
+          destinatarios: [20, 21],
+          entidad: 'proyecto_docente',
+          idEntidad: 99,
+          urlDestino: '/proyectos-docentes/99',
+        }),
+      );
+      const { mensaje } = notificaciones.notificar.mock.calls[0][0];
+      expect(mensaje).toContain(asignatura.nombre);
+      expect(mensaje).toContain('2026-2');
+    });
+
+    it('no se avisa a sí mismo quien crea un proyecto en el que también es docente', async () => {
+      await servicio.crear(
+        usuarioDepartamento,
+        datosValidos({
+          docentes: [
+            { idUsuario: usuarioDepartamento.id, responsable: true },
+            { idUsuario: 21, responsable: false },
+          ],
+        }),
+      );
+
+      expect(notificaciones.notificar.mock.calls[0][0].destinatarios).toEqual([
+        21,
+      ]);
+    });
+
     it('crea en diligenciamiento, en el período vigente, con el responsable primero', async () => {
       const creado = await servicio.crear(usuarioDepartamento, datosValidos());
 

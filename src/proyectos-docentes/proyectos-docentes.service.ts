@@ -11,6 +11,10 @@ import { ROL } from '../auth/roles.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
+import {
+  NOTIFICACION,
+  NotificacionesService,
+} from '../notificaciones/notificaciones.service.js';
 import { AlcanceService } from './alcance.service.js';
 import {
   AsistenteService,
@@ -67,6 +71,7 @@ export class ProyectosDocentesService {
     private readonly alcance: AlcanceService,
     private readonly asistente: AsistenteService,
     private readonly auditoria: AuditoriaService,
+    private readonly notificaciones: NotificacionesService,
   ) {}
 
   /**
@@ -190,6 +195,28 @@ export class ProyectosDocentesService {
           responsable,
         })),
       },
+    });
+    // HU-13-01: los docentes asignados se enteran de inmediato. Quien crea el proyecto no se
+    // avisa a sí mismo. `notificar` nunca lanza: un fallo no deshace la creación.
+    const curso = [
+      creado.asignatura?.nombre ?? 'sin asignatura',
+      creado.grupo ? `grupo ${creado.grupo}` : null,
+      creado.periodo_academico?.codigo
+        ? `período ${creado.periodo_academico.codigo}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    await this.notificaciones.notificar({
+      tipo: NOTIFICACION.asignacionProyecto,
+      destinatarios: docentes
+        .map((docente) => docente.idUsuario)
+        .filter((idUsuario) => idUsuario !== usuario.id),
+      titulo: 'Le asignaron un proyecto docente',
+      mensaje: `Le asignaron el proyecto docente de ${curso}. Ya puede empezar a diligenciarlo.`,
+      entidad: 'proyecto_docente',
+      idEntidad: creado.id,
+      urlDestino: `/proyectos-docentes/${creado.id}`,
     });
     return aDetalle(creado);
   }
