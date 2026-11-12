@@ -52,7 +52,8 @@ export class TemaEjecucionDto {
     description:
       'dictado: se marcó en al menos una clase registrada. no_dictado: no se marcó y su ' +
       'semana ya terminó (su última sesión del calendario ya pasó). por_dictar: no se marcó ' +
-      'y su semana todavía no termina.',
+      'y su semana todavía no termina; no cuenta como incumplimiento. La semana es la del ' +
+      'calendario de RF-19, que no cuenta las semanas de receso.',
   })
   estado: EstadoTema;
 
@@ -129,6 +130,21 @@ export class CursoEjecucionDto {
     description: 'Dictados sobre planeados; nulo si no hay temas planeados',
   })
   porcentajeDictados: number | null;
+
+  @ApiProperty({
+    example: 32,
+    description:
+      'Sesiones vigentes del calendario del curso (RF-19); 0 si todavía no tiene calendario',
+  })
+  sesiones: number;
+
+  @ApiProperty({
+    example: 14,
+    description:
+      'Clases ya registradas (RF-20). Con 0, el reporte no puede saber qué se dictó: la ' +
+      'pantalla lo dice en vez de presentarlo como incumplimiento.',
+  })
+  clasesRegistradas: number;
 
   @ApiProperty({ type: [TemaEjecucionDto] })
   temas: TemaEjecucionDto[];

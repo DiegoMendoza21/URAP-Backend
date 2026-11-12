@@ -546,6 +546,9 @@ describe('Reportes académicos (e2e) · RF-28, HU-12-03, HU-12-04 y HU-12-05', (
         porDictar: 1,
         adicionales: 0,
         porcentajeDictados: 50,
+        // La clase retirada no cuenta como sesión del calendario.
+        sesiones: 3,
+        clasesRegistradas: 1,
       });
       expect(
         aprobado?.temas.map(({ semana, estado }) => [semana, estado]),
@@ -559,7 +562,13 @@ describe('Reportes académicos (e2e) · RF-28, HU-12-03, HU-12-04 y HU-12-05', (
       // Un curso sin contenido programático: sin temas y sin porcentaje.
       expect(
         cursos.find((curso) => curso.idProyecto === proyectos.diligenciamiento),
-      ).toMatchObject({ planeados: 0, dictados: 0, porcentajeDictados: null });
+      ).toMatchObject({
+        planeados: 0,
+        dictados: 0,
+        porcentajeDictados: null,
+        sesiones: 0,
+        clasesRegistradas: 0,
+      });
       expect(body).toMatchObject({
         resumen: {
           cursos: 2,

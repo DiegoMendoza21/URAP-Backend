@@ -10,9 +10,16 @@
  *   p4; HU-08-05). Hoy el registro de clase no permite escribirlos: la columna sale en cero
  *   hasta que se construya HU-08-05, y entonces se cuenta sin cambiar este reporte.
  *
+ * Regla (decisión de implementación, aprobada por la coordinación el 2026-11-12): un tema cuya
+ * semana no ha terminado se muestra como por dictar y no cuenta como incumplimiento.
+ *
  * Cuándo termina una semana lo dice el calendario del curso (RF-19): con la última sesión de esa
  * semana ya en el pasado. Es la misma frontera de RF-23: una sesión de hoy todavía no está
- * vencida. Una semana sin sesiones en el calendario no se da por terminada.
+ * vencida. La semana y la fecha de cada sesión son las que asignó `planificarSesiones`
+ * (`sesiones/calendario.ts`) al generar el calendario, que salta las semanas de receso sin
+ * contarlas: no se calculan aquí con «inicio del período + 7 días», así que el reporte y el
+ * calendario del docente dicen la misma semana. Una semana sin sesiones en el calendario no se da
+ * por terminada.
  *
  * Las fechas son textos `YYYY-MM-DD`, como los devuelve `aTextoFecha`.
  */
@@ -44,6 +51,8 @@ export interface TemaMarcado {
 export interface SesionCalendario {
   semana: number | null;
   fecha: string | null;
+  /** Si el docente ya registró la clase (RF-20). */
+  registrada?: boolean;
 }
 
 export interface EjecucionTema {
@@ -67,6 +76,10 @@ export interface EjecucionCurso {
   adicionales: number;
   /** Dictados sobre planeados; nulo si el curso no tiene temas planeados. */
   porcentajeDictados: number | null;
+  /** Sesiones vigentes del calendario del curso; cero si todavía no lo tiene. */
+  sesiones: number;
+  /** Clases ya registradas; con cero, el reporte no puede saber qué se dictó. */
+  clasesRegistradas: number;
   temas: EjecucionTema[];
   temasAdicionales: TemaAdicional[];
 }
@@ -183,6 +196,8 @@ export function ejecucionDelCurso(
       temas.length === 0
         ? null
         : Math.round((dictados * 10_000) / temas.length) / 100,
+    sesiones: sesiones.length,
+    clasesRegistradas: sesiones.filter((sesion) => sesion.registrada).length,
     temas,
     temasAdicionales,
   };

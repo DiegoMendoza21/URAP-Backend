@@ -7,7 +7,10 @@ import { porcentaje } from '../mediciones/consolidado.js';
 import { AlcanceService } from '../proyectos-docentes/alcance.service.js';
 import { fechaDeHoy } from '../sesiones/alertas.js';
 import { aTextoFecha } from '../sesiones/calendario.js';
-import { SESION_VIGENTE } from '../sesiones/sesiones.service.js';
+import {
+  ESTADO_REGISTRADA,
+  SESION_VIGENTE,
+} from '../sesiones/sesiones.service.js';
 import type {
   ConsultarContribucionDto,
   ConsultarCumplimientoDto,
@@ -274,6 +277,7 @@ export class ReportesAcademicosService {
                 id_proyecto_docente: true,
                 semana: true,
                 fecha: true,
+                estado: true,
                 sesion_tema: {
                   select: { id_contenido: true, tema_adicional: true },
                 },
@@ -300,7 +304,12 @@ export class ReportesAcademicosService {
       const fecha = sesion.fecha ? aTextoFecha(sesion.fecha) : null;
       calendarioPor.set(id, [
         ...(calendarioPor.get(id) ?? []),
-        { semana: sesion.semana, fecha },
+        // La semana y la fecha las asignó el calendario de RF-19, que no cuenta el receso.
+        {
+          semana: sesion.semana,
+          fecha,
+          registrada: sesion.estado === ESTADO_REGISTRADA,
+        },
       ]);
       marcadosPor.set(id, [
         ...(marcadosPor.get(id) ?? []),
@@ -381,6 +390,7 @@ export class ReportesAcademicosService {
         'Asignatura',
         'Grupo',
         'Docentes',
+        'Clases registradas',
         'Planeados',
         'Dictados',
         '% dictados',
@@ -390,6 +400,12 @@ export class ReportesAcademicosService {
       ]),
       ...reporte.cursos.map((fila) => [
         ...curso(fila),
+        // Sin clases registradas, el reporte no puede saber qué se dictó: se dice en vez de un 0.
+        fila.clasesRegistradas > 0
+          ? numero(fila.clasesRegistradas, false)
+          : fila.sesiones > 0
+            ? 'Ninguna todavía'
+            : 'Sin calendario todavía',
         numero(fila.planeados, false),
         numero(fila.dictados, false),
         numero(fila.porcentajeDictados),
@@ -438,6 +454,7 @@ export class ReportesAcademicosService {
             { width: 40 },
             { width: 14 },
             { width: 24 },
+            { width: 11 },
             { width: 11 },
             { width: 12 },
           ],

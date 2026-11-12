@@ -5,6 +5,7 @@ import {
   type TemaMarcado,
   type TemaPlaneado,
 } from './ejecucion-contenidos.js';
+import { aFechaColumna, planificarSesiones } from '../sesiones/calendario.js';
 
 const HOY = '2026-09-16';
 
@@ -187,6 +188,20 @@ describe('Ejecución de contenidos (RF-28, HU-12-04)', () => {
       ]);
     });
 
+    it('cuenta las clases registradas y las sesiones del calendario del curso', () => {
+      const sesiones = calendario(3).map((sesion, indice) => ({
+        ...sesion,
+        registrada: indice < 2,
+      }));
+      expect(ejecucionDelCurso(plan(['Uno']), [], sesiones, HOY)).toMatchObject(
+        { sesiones: 6, clasesRegistradas: 2 },
+      );
+      expect(ejecucionDelCurso(plan(['Uno']), [], [], HOY)).toMatchObject({
+        sesiones: 0,
+        clasesRegistradas: 0,
+      });
+    });
+
     it('un tema marcado en una clase sin fecha cuenta como dictado', () => {
       const resultado = ejecucionDelCurso(
         plan(['Uno']),
@@ -201,5 +216,63 @@ describe('Ejecución de contenidos (RF-28, HU-12-04)', () => {
         fechas: [],
       });
     });
+  });
+});
+
+/*
+ * La semana de cada tema es la que numera el calendario de RF-19 (`planificarSesiones`), que no
+ * cuenta la semana de receso. Calendario 2026-2: del 3 de agosto al 27 de noviembre, 16
+ * semanas, con el receso del 9 al 14 de noviembre (Acuerdo 46 de 2026).
+ */
+describe('Ejecución de contenidos con la semana de receso (RF-19)', () => {
+  const receso = new Set(
+    [9, 10, 11, 12, 13, 14].map(
+      (dia) => `2026-11-${String(dia).padStart(2, '0')}`,
+    ),
+  );
+  // Martes y jueves, como en la demo.
+  const sesiones = planificarSesiones({
+    fechaInicio: aFechaColumna('2026-08-03'),
+    fechaFin: aFechaColumna('2026-11-27'),
+    numeroSemanas: 16,
+    diasClase: [2, 4],
+    diasSinClase: receso,
+  });
+  const planeados: TemaPlaneado[] = Array.from({ length: 16 }, (_, indice) => ({
+    idContenido: 200 + indice,
+    semana: indice + 1,
+    tema: `Tema de la semana ${indice + 1}`,
+  }));
+  const estadoDe = (semana: number, hoy: string) =>
+    ejecucionDelCurso(planeados, [], sesiones, hoy).temas.find(
+      (tema) => tema.semana === semana,
+    )?.estado;
+
+  it('el calendario salta el receso: la semana 15 empieza después de él', () => {
+    const fechasDe = (semana: number) =>
+      sesiones.filter((sesion) => sesion.semana === semana).map((s) => s.fecha);
+    expect(fechasDe(14)).toEqual(['2026-11-03', '2026-11-05']);
+    expect(fechasDe(15)).toEqual(['2026-11-17', '2026-11-19']);
+    expect(sesiones.some((sesion) => receso.has(sesion.fecha))).toBe(false);
+  });
+
+  it('el lunes después del receso, la semana 14 ya terminó y la 15 sigue por dictar', () => {
+    // Con «inicio + 7 días por semana», la semana 15 sería la del receso y ya habría
+    // terminado: el tema saldría «no dictado» antes de su primera clase.
+    expect(estadoDe(14, '2026-11-16')).toBe('no_dictado');
+    expect(estadoDe(15, '2026-11-16')).toBe('por_dictar');
+    expect(estadoDe(16, '2026-11-16')).toBe('por_dictar');
+  });
+
+  it('durante el receso no se vence ninguna semana nueva', () => {
+    const enReceso = ejecucionDelCurso(planeados, [], sesiones, '2026-11-12');
+    const antes = ejecucionDelCurso(planeados, [], sesiones, '2026-11-06');
+    expect(enReceso.noDictados).toBe(antes.noDictados);
+    expect(enReceso.noDictados).toBe(14);
+  });
+
+  it('la semana 15 se vence cuando pasa su última clase, el 19 de noviembre', () => {
+    expect(estadoDe(15, '2026-11-19')).toBe('por_dictar');
+    expect(estadoDe(15, '2026-11-20')).toBe('no_dictado');
   });
 });
