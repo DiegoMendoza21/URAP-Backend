@@ -18,6 +18,10 @@ import type { UsuarioSesion } from '../auth/tipos.js';
 import { RespuestaErrorDto } from '../common/dto/respuesta-error.dto.js';
 import { ReportesAcademicosService } from './academicos.service.js';
 import {
+  ConsultarEjecucionDto,
+  ReporteEjecucionDto,
+} from './dto/ejecucion.dto.js';
+import {
   ConsultarContribucionDto,
   ConsultarCumplimientoDto,
   ReporteContribucionDto,
@@ -106,6 +110,63 @@ export class ReportesAcademicosController {
     @Query() consulta: ConsultarCumplimientoDto,
   ): Promise<StreamableFile> {
     return aDescarga(await this.reportes.cumplimientoExcel(usuario, consulta));
+  }
+
+  @Get('ejecucion-contenidos')
+  @Roles(ROL.administrador, ROL.departamento, ROL.direccion)
+  @ApiOperation({
+    summary: 'Reporte de ejecución de contenidos (RF-28, HU-12-04)',
+    description:
+      'Por curso: los temas planeados en el punto 6 del proyecto docente, los dictados (marcados ' +
+      'en una clase registrada), los no dictados (su semana ya terminó), los que siguen por ' +
+      'dictar y los adicionales no planeados, con filtros por período, programa y asignatura. ' +
+      'Los roles y el alcance son los del reporte de cumplimiento. Queda registrado en ' +
+      'reporte_academico con el usuario y la fecha.',
+  })
+  @ApiOkResponse({ type: ReporteEjecucionDto })
+  @ApiForbiddenResponse({
+    type: RespuestaErrorDto,
+    description:
+      'No es Administrador, Departamento académico ni Dirección del programa',
+  })
+  @ApiNotFoundResponse({
+    type: RespuestaErrorDto,
+    description: 'El período no existe',
+  })
+  ejecucion(
+    @UsuarioActual() usuario: UsuarioSesion,
+    @Query() consulta: ConsultarEjecucionDto,
+  ): Promise<ReporteEjecucionDto> {
+    return this.reportes.ejecucion(usuario, consulta);
+  }
+
+  @Get('ejecucion-contenidos/excel')
+  @Roles(ROL.administrador, ROL.departamento, ROL.direccion)
+  @ApiOperation({
+    summary:
+      'Exporta el reporte de ejecución de contenidos a Excel (RF-28, p5)',
+  })
+  @ApiProduces(TIPO_EXCEL)
+  @ApiOkResponse(ARCHIVO_EXCEL)
+  @ApiForbiddenResponse({
+    type: RespuestaErrorDto,
+    description:
+      'No es Administrador, Departamento académico ni Dirección del programa',
+  })
+  @ApiNotFoundResponse({
+    type: RespuestaErrorDto,
+    description: 'El período no existe',
+  })
+  @ApiUnprocessableEntityResponse({
+    type: RespuestaErrorDto,
+    description:
+      'Supera el máximo de filas exportables: hay que restringir los filtros',
+  })
+  async ejecucionExcel(
+    @UsuarioActual() usuario: UsuarioSesion,
+    @Query() consulta: ConsultarEjecucionDto,
+  ): Promise<StreamableFile> {
+    return aDescarga(await this.reportes.ejecucionExcel(usuario, consulta));
   }
 
   @Get('contribucion-rac-rap')
