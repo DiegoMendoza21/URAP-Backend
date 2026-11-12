@@ -1,6 +1,6 @@
 # Datos institucionales reales — Administración Industrial
 
-**Versión 3.2 — 10 de noviembre de 2026.** Los cambios de cada versión están al final, apartado por
+**Versión 3.3 — 11 de noviembre de 2026.** Los cambios de cada versión están al final, apartado por
 apartado. **Este archivo es público:** no lleva nombres de personas, cédulas ni correos; a las
 personas se las nombra por su función.
 
@@ -20,6 +20,13 @@ Fuentes:
   estudiantes: ese archivo no entra al repositorio, ni siquiera a `docs/fuentes/`.** Aquí solo
   están sus datos agregados.
 - `Acuerdo No. 46 del 26 de mayo de 2026` — Consejo Académico, calendario académico 2026-2.
+- `Plan de estudios del programa de Administración Industrial` — documento público de la
+  Facultad de Ciencias Económicas (febrero de 2026): asignaturas por componente y créditos. No
+  trae códigos, semestres ni horas.
+- `Malla del pénsum en el SMA` — programa 049, consultada el 11 de noviembre de 2026: semestre,
+  código, nombre y créditos de las asignaturas del plan 2502. **La consulta se hizo desde la
+  cuenta de una estudiante: de ahí no se copió ningún dato personal, y la captura no entra al
+  repositorio.**
 - `Una mirada a los resultados de aprendizaje` — Ministerio de Educación Nacional (2022),
   capítulo 2: las tablas de estrategias de enseñanza y de aprendizaje del apartado 7.
 - `Programación académica por programa 2026-1` — SMA, reporte RAK152 del 27/01/2026. **Trae
@@ -348,55 +355,144 @@ curricular; confírmalo con el plan oficial. El código de Electiva III GPO, 491
 trae la programación 2026-1, pero rompe la serie de las demás electivas (4917023, 4917025): por
 la serie se esperaría 4917024. Se carga como viene y se pregunta (apartado 8, pregunta 11).
 
-### Plan 2502: lo que muestra la programación 2026-1
+### Plan 2502: asignaturas
 
-Solo semestres 1 a 5, porque la primera cohorte del 2502 todavía no llega al 6. Trae asignaturas
-que no existen en el 1702 (Inglés I a V, Analítica de datos I y II, Desarrollo del espíritu
-emprendedor, Costos) y **no tiene mapeo a RAP conocido**. Hasta que llegue, sus asignaturas van
-al seed sin filas en `asignatura_rap`, y el asistente de RF-08 deja elegir entre todos los RAP
-del programa. Que el 2502 use los mismos RAP 1 a 7 es un supuesto (SUP-16).
+Son 74 filas, con código y créditos para los diez semestres. Los semestres 1 a 5 ya estaban,
+por la programación 2026-1; se agrega una asignatura del semestre 5 (FC72731) y los semestres
+6 a 10 completos. El plan trae asignaturas que no existen en el 1702 (Inglés I a VI, Analítica
+de datos I y II, Desarrollo del espíritu emprendedor, Costos) y **no tiene mapeo a RAP
+conocido**. Hasta que llegue, sus asignaturas van al seed sin filas en `asignatura_rap`, y el
+asistente de RF-08 deja elegir entre todos los RAP del programa. Que el 2502 use los mismos RAP
+1 a 7 es un supuesto (SUP-16).
 
-| Sem. | Código | Asignatura | Créd. |
-|---|---|---|---|
-| 1 | FN23003 | Inglés I | 2 |
-| 1 | FN72726 | Cátedra institucional | 2 |
-| 1 | FN72727 | Producción y comprensión textual I | 2 |
-| 1 | NC2501 | Matemática I | 4 |
-| 1 | NC2507 | Fundamentos de administración | 3 |
-| 1 | NC2508 | Fundamentos de contabilidad | 3 |
-| 1 | NC2509 | Fundamentos de economía | 3 |
-| 2 | FN24033 | Inglés II | 2 |
-| 2 | FN24047 | Humanidades | 2 |
-| 2 | FN72732 | Producción y comprensión textual II | 2 |
-| 2 | IX24100 | Costos | 2 |
-| 2 | IX24165 | Teoría general de la administración | 3 |
-| 2 | NC2502 | Matemática II | 4 |
-| 2 | NC2503 | Estadística I | 3 |
-| 2 | NC2506 | Derecho constitucional | 2 |
-| 3 | CFBD294 | Matemáticas III | 4 |
-| 3 | FN24035 | Inglés III | 2 |
-| 3 | FN72725 | Ética | 2 |
-| 3 | IX24182 | Planeación y control | 3 |
-| 3 | IX25263 | Desarrollo del espíritu emprendedor | 2 |
-| 3 | NC2504 | Estadística II | 3 |
-| 3 | NC2505 | Fundamentos de investigación científica | 3 |
-| 4 | CFBD297 | Investigación aplicada | 3 |
-| 4 | FN24036 | Inglés IV | 2 |
-| 4 | IX24184 | Organización y dirección | 3 |
-| 4 | IX24185 | Matemática financiera | 3 |
-| 4 | IX24186 | Analítica de datos I | 3 |
-| 4 | IX24187 | Dibujo técnico - expresión gráfica | 2 |
-| 4 | NC2510 | Microeconomía I | 3 |
-| 5 | FN24037 | Inglés V | 2 |
-| 5 | IX24188 | Química industrial | 3 |
-| 5 | IX24189 | Finanzas a corto plazo | 3 |
-| 5 | IX24190 | Analítica de datos II | 3 |
-| 5 | IX24191 | Sistema de producción | 2 |
-| 5 | IX24192 | Macroeconomía | 2 |
-| 5 | IX24193 | Comportamiento organizacional | 2 |
+**De dónde sale cada columna.** El semestre, el código y los créditos son de la malla del SMA.
+El nombre es el de la programación 2026-1 en los semestres 1 a 5; en los semestres 6 a 10, la
+malla lo muestra cortado y se completó con el plan de estudios público. El componente es el del
+plan de estudios público, y usa los tres valores de `asignatura.componente`. Ninguna asignatura
+del plan público quedó sin fila en la malla, salvo «Prácticas empresariales».
 
-El reporte no separa las horas TDE, TDP y TI: trae horas semanales (HRS) e intensidad (INT),
-cuya relación con el formato no está documentada, así que esas columnas no se llenan con él.
+**Las cuentas cuadran con las dos fuentes.** Por semestre son 19, 20, 19, 19, 19, 20, 19, 22, 30
+y 16 créditos, que suman 203. Eso cuenta las dos líneas de cada electiva (GA y GP). Un estudiante
+cursa una sola línea, y así el total es 177, el mismo del plan de estudios público.
+
+| Sem. | Código | Asignatura | Créd. | Componente |
+|---|---|---|---|---|
+| 1 | FN23003 | Inglés I | 2 | Básico |
+| 1 | FN72726 | Cátedra institucional | 2 | Básico |
+| 1 | FN72727 | Producción y comprensión textual I | 2 | Básico |
+| 1 | NC2501 | Matemática I | 4 | Básico |
+| 1 | NC2507 | Fundamentos de administración | 3 | Profesional |
+| 1 | NC2508 | Fundamentos de contabilidad | 3 | Profesional |
+| 1 | NC2509 | Fundamentos de economía | 3 | Profesional |
+| 2 | FN24033 | Inglés II | 2 | Básico |
+| 2 | FN24047 | Humanidades | 2 | Básico |
+| 2 | FN72732 | Producción y comprensión textual II | 2 | Básico |
+| 2 | IX24100 | Costos | 2 | Profesional |
+| 2 | IX24165 | Teoría general de la administración | 3 | Profesional |
+| 2 | NC2502 | Matemática II | 4 | Básico |
+| 2 | NC2503 | Estadística I | 3 | Básico |
+| 2 | NC2506 | Derecho constitucional | 2 | Básico |
+| 3 | CFBD294 | Matemáticas III | 4 | Básico |
+| 3 | FN24035 | Inglés III | 2 | Básico |
+| 3 | FN72725 | Ética | 2 | Básico |
+| 3 | IX24182 | Planeación y control | 3 | Profesional |
+| 3 | IX25263 | Desarrollo del espíritu emprendedor | 2 | Básico |
+| 3 | NC2504 | Estadística II | 3 | Básico |
+| 3 | NC2505 | Fundamentos de investigación científica | 3 | Por confirmar |
+| 4 | CFBD297 | Investigación aplicada | 3 | Básico |
+| 4 | FN24036 | Inglés IV | 2 | Básico |
+| 4 | IX24184 | Organización y dirección | 3 | Profesional |
+| 4 | IX24185 | Matemática financiera | 3 | Profesional |
+| 4 | IX24186 | Analítica de datos I | 3 | Profesional |
+| 4 | IX24187 | Dibujo técnico - expresión gráfica | 2 | Profesional |
+| 4 | NC2510 | Microeconomía I | 3 | Profesional |
+| 5 | FN24037 | Inglés V | 2 | Básico |
+| 5 | IX24188 | Química industrial | 3 | Profesional |
+| 5 | IX24189 | Finanzas a corto plazo | 3 | Profesional |
+| 5 | IX24190 | Analítica de datos II | 3 | Profesional |
+| 5 | IX24191 | Sistema de producción | 2 | Profesional |
+| 5 | IX24192 | Macroeconomía | 2 | Profesional |
+| 5 | IX24193 | Comportamiento organizacional | 2 | Profesional |
+| 5 | FC72731 | Formación humana | 2 | Complementario |
+| 6 | IX24194 | Procesos de manufactura | 4 | Profesional |
+| 6 | IX24195 | Estudio del trabajo | 3 | Profesional |
+| 6 | IX24197 | Finanzas y negocios internacionales | 3 | Profesional |
+| 6 | IX24198 | Mercados | 3 | Profesional |
+| 6 | IX24199 | Procesos industriales | 3 | Profesional |
+| 6 | IX24200 | Legislación laboral | 2 | Profesional |
+| 6 | FN24038 | Inglés VI | 2 | Básico |
+| 7 | IX24201 | Emprendimiento e innovación | 3 | Profesional |
+| 7 | IX24202 | Planeación y organización de la producción | 3 | Profesional |
+| 7 | IX24203 | Investigación de operaciones I | 3 | Profesional |
+| 7 | IX24204 | Gestión del talento humano | 2 | Profesional |
+| 7 | IX24205 | Gestión de la cadena de suministro | 2 | Profesional |
+| 7 | IX24206 | Seguridad y salud en el trabajo | 2 | Profesional |
+| 7 | FC72737 | Formación humana | 2 | Complementario |
+| 7 | FC72738 | Formación humana | 2 | Complementario |
+| 8 | IX24222 | Gestión de la calidad | 3 | Profesional |
+| 8 | IX24224 | Control de la producción | 3 | Profesional |
+| 8 | IX24225 | Formulación y evaluación de proyectos | 3 | Profesional |
+| 8 | IX24226 | Investigación de operaciones II | 3 | Profesional |
+| 8 | IX24227 | Gestión ambiental | 2 | Profesional |
+| 8 | FC72739 | Formación humana | 2 | Complementario |
+| 8 | IX24207 | Electiva I - GA | 3 | Profesional |
+| 8 | IX24208 | Electiva I - GP | 3 | Profesional |
+| 9 | IX24209 | Electiva II - GA | 3 | Profesional |
+| 9 | IX24210 | Electiva II - GP | 3 | Profesional |
+| 9 | IX24211 | Electiva III - GA | 3 | Profesional |
+| 9 | IX24212 | Electiva III - GP | 3 | Profesional |
+| 9 | IX24213 | Electiva IV - GA | 3 | Profesional |
+| 9 | IX24214 | Electiva IV - GP | 3 | Profesional |
+| 9 | IX24215 | Electiva V - GA | 3 | Profesional |
+| 9 | IX24216 | Electiva V - GPO | 3 | Profesional |
+| 9 | IX24217 | Electiva VI - GA | 3 | Profesional |
+| 9 | IX24218 | Electiva VI - GP | 3 | Profesional |
+| 10 | IX24219 | Electiva VII - GA | 3 | Profesional |
+| 10 | IX24220 | Electiva VII - GP | 3 | Profesional |
+| 10 | IX24221 | Electiva VIII - GA | 5 | — |
+| 10 | IX24228 | Electiva VIII - GP | 5 | — |
+
+**Lo que hay que saber antes de cargarlas:**
+
+- **Electivas.** La malla solo dice «Electiva II - GA» o «Electiva II - GP». Cárgalas con ese
+  nombre, y con «Electivo» en `tipo_curso`. El plan público sí nombra cada una (tabla siguiente),
+  pero falta que el programa confirme que GA es la primera línea y GP la línea GPO.
+- **Formación humana.** Son cuatro asignaturas con el mismo nombre y códigos distintos. El plan
+  público las llama «Curso de formación humana I a IV»; la malla no dice cuál es cuál. No les
+  pongas número.
+- **Electiva VIII.** Vale 5 créditos y no está en el plan público, que en su lugar trae
+  «Prácticas empresariales», también de 5 créditos y en el componente complementario. Parece la
+  misma, pero ninguna fuente lo dice. Cárgala con el nombre de la malla y sin componente.
+- **IX24225.** La malla empieza «Formulación, ge…» y el plan público dice «Formulación y
+  evaluación de proyectos». Se dejó el nombre del plan público.
+- **Componente de NC2505.** El formato diligenciado de Fundamentos de investigación científica
+  dice «Profesional», y el plan público la ubica en el componente básico. No cambies el seed:
+  sigue como en el formato hasta que el programa responda. En las otras dos asignaturas del 2502
+  con formato (NC2507 e IX24193), el formato y el plan público coinciden.
+- **Componente básico.** El plan público lo divide en formación disciplinaria y no
+  disciplinaria. El modelo tiene un solo valor, `BASICO`, y no hace falta más.
+- **Horas y requisitos.** Ninguna de las dos fuentes trae las horas TDE, TDP y TI. La malla dibuja
+  los prerrequisitos con líneas que no se leen con seguridad, así que no se copió ninguno. Esas
+  columnas quedan vacías.
+
+**Nombres de las electivas según el plan de estudios público** (por confirmar con el programa):
+
+| Electiva | Línea GA | Línea GP (GPO) |
+|---|---|---|
+| I | Estudios prospectivos | Control estadístico de la calidad |
+| II | Administración de la calidad y la productividad | Mejoramiento de procesos |
+| III | Sistemas de información gerencial | Simulación de procesos |
+| IV | Administración de sueldos y salarios | Tópicos avanzados de productividad |
+| V | Gestión logística del comercio internacional | Administración del mantenimiento industrial |
+| VI | Sistema de gestión de recursos empresariales (ERP) | Diseño de planta |
+| VII | Sistemas integrados de gestión | Diseño de producto |
+
+Coinciden con las electivas I a VII del plan 1702, con diferencias menores de redacción en la
+II y la VI.
+
+El reporte de la programación 2026-1 no separa las horas TDE, TDP y TI: trae horas semanales
+(HRS) e intensidad (INT), cuya relación con el formato no está documentada, así que esas columnas
+no se llenan con él.
 También trae la ponderación de cada corte: 30 %, 30 % y 40 % en casi todas las asignaturas,
 20 %, 20 %, 20 % y 40 % en algunos grupos de inglés, y todo el peso en el tercer corte para
 Taller de manufactura y la práctica. Es dato del sistema académico, útil para el punto 5 del
@@ -560,7 +656,7 @@ para después de la entrega.
 | 2 | Si se confirma la regla del logro del RAP (apartado 3) o se exige la meta a cada indicador | Regla del apartado 3 | No: una función |
 | 3 | Si un miembro del Departamento puede aprobar un proyecto en el que es docente; RF-18 no lo prohíbe | No se permite: parámetro `revision_bloquear_autoaprobacion`, encendido | No: una regla y un parámetro |
 | 4 | Qué es un proyecto «publicado», que es lo que ve el Estudiante (RF-27) | Propuesta: aprobado o en ejecución | Solo si exige publicar a mano |
-| 5 | Los planes oficiales 1702 y 2502, con código, créditos y horas (TDE, TDP y TI) de cada asignatura. Del 1702 faltan 33 códigos y 34 créditos: el código y los créditos de todas las asignaturas de I a III, de casi todas las de IV y V y de una de VI, y los créditos de Finanzas a corto plazo, que sí tiene código | Campos vacíos | No |
+| 5 | Las horas (TDE, TDP y TI) y los requisitos de cada asignatura de los dos planes. Del plan 2502 ya están el código y los créditos de todas (apartado 4). Del 1702 faltan además 33 códigos y 34 créditos: el código y los créditos de todas las asignaturas de I a III, de casi todas las de IV y V y de una de VI, y los créditos de Finanzas a corto plazo, que sí tiene código | Campos vacíos | No |
 | 6 | Si el plan 2502 tiene RAP propios (SUP-16) y qué asignaturas del 2502 tributan a cada RAP | RAP del programa; asignaturas del 2502 sin vínculo | Solo si tiene RAP propios |
 | 7 | Las rúbricas de los RAP 1, 3, 4, 5, 6 y 7 | Textos «PROVISIONAL —» | No |
 | 8 | El calendario académico 2027-1 | — | No |
@@ -568,6 +664,8 @@ para después de la entrega.
 | 10 | Qué significa «cohorte» en el FO-DO/PC-023 (SUP-14) | Igual a la muestra | No |
 | 11 | Si el código de Electiva III GPO (Simulación de procesos) es 4917204, como sale en la programación 2026-1, o 4917024, que es el que sigue la serie | 4917204, como viene en la programación | No |
 | 12 | Si un grupo con estudiantes de los dos planes es un solo proyecto docente o uno por plan | Uno por plan: el proyecto apunta a una asignatura y la asignatura a un plan, como en los dos formatos reales de Comportamiento organizacional (apartado 4) | Sí, si es uno solo: queda para después de la entrega |
+| 13 | Del plan 2502: qué nombre tiene cada código de electiva (si GA es la línea general y GP la GPO), cuál de las cuatro «Formación humana» es la I, la II, la III y la IV, y si la Electiva VIII es «Prácticas empresariales» | Nombres de la malla, sin número y sin componente en la Electiva VIII | No |
+| 14 | Si Fundamentos de investigación científica (NC2505) es del componente básico, como dice el plan de estudios público, o del profesional, como dice su formato diligenciado | «Profesional», como en el formato | No |
 
 Sobre la 3, la regla tiene respaldo propio: separar quien elabora de quien aprueba es un
 principio de control interno (Ley 87 de 1993), y en el programa el caso es real: en el informe
@@ -586,6 +684,23 @@ toma por defecto el tamaño de la muestra y ningún cálculo lo usa.
 ---
 
 ## Registro de cambios
+
+**v3.3 — 11 de noviembre de 2026.** Completa el plan 2502 con dos fuentes nuevas: el plan de
+estudios público del programa y la malla del SMA que leyó Claude Code. **No cambia el modelo ni
+ningún requisito.** Son datos para el seed, y no cambian la demo.
+
+- *Fuentes:* se agregan el plan de estudios público y la malla del SMA. De la malla no se copió
+  ningún dato personal.
+- *Apartado 4:* la tabla del plan 2502 pasa de 36 a 74 filas. Se agregan 38: una del semestre 5
+  (FC72731) y 37 de los semestres 6 a 10, contando las dos líneas de cada electiva. Las 36 que
+  ya estaban no cambian de código, nombre ni créditos. Se agrega la columna «Componente» y la
+  tabla de nombres de las electivas, por confirmar. Origen: hechos de las dos fuentes.
+- *Apartado 8:* la pregunta 5 ya no pide el código y los créditos del plan 2502; siguen faltando
+  las horas y los requisitos de los dos planes, y los códigos y créditos del 1702. Se agregan la
+  pregunta 13 (electivas, Formación humana y Electiva VIII del 2502) y la 14 (componente de
+  NC2505). Ninguna cambia el modelo.
+- *Historias:* ninguna cambia. Los datos sirven a HU-03-02 (asignaturas de cada plan) y al
+  asistente de RF-08.
 
 **v3.2 — 10 de noviembre de 2026.** Parte de la versión del repositorio (la v3.0 con sus ajustes
 del 10 de noviembre) y responde el parte de Claude Code de ese día.
