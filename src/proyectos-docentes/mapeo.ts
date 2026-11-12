@@ -168,6 +168,7 @@ export function aDetalle(proyecto: ProyectoDetalle): ProyectoDocenteDetalleDto {
   return {
     ...aResumen(proyecto),
     origen: proyecto.origen,
+    idProyectoOrigen: proyecto.id_proyecto_origen,
     periodoAcademico: aPeriodo(proyecto.periodo_academico),
     informacion: aInformacionInstitucional(asignatura),
     raps: proyecto.proyecto_docente_rap.map((relacion) => aRap(relacion.rap)),
