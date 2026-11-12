@@ -4,6 +4,17 @@ import { ESTADO_MATRICULA, type EstadoMatricula } from '../estados.js';
 /* Respuestas de la lista de estudiantes matriculados (RF-22, HU-09-01). Los ejemplos son
    ficticios: nunca datos reales de estudiantes (Ley 1581 de 2012). */
 
+export class SesionInasistenciaDto {
+  @ApiProperty({ example: 31, description: 'Sesión de clase en que faltó' })
+  idSesion: number;
+
+  @ApiProperty({ example: '2026-09-14', format: 'date' })
+  fecha: string;
+
+  @ApiProperty({ example: 6, nullable: true, type: Number })
+  semana: number | null;
+}
+
 export class MatriculadoDto {
   @ApiProperty({ example: 41, description: 'Identificador de la matrícula' })
   idMatricula: number;
@@ -26,6 +37,21 @@ export class MatriculadoDto {
 
   @ApiProperty({ enum: Object.values(ESTADO_MATRICULA) })
   estado: EstadoMatricula;
+
+  @ApiProperty({
+    example: 2,
+    description:
+      'Inasistencias acumuladas en las clases del curso (HU-09-03): las sesiones en que el ' +
+      'docente lo marcó ausente al registrar la clase (RF-22)',
+  })
+  inasistencias: number;
+
+  @ApiProperty({
+    type: [SesionInasistenciaDto],
+    description:
+      'Las sesiones en que faltó, de la más antigua a la más reciente (HU-09-03)',
+  })
+  sesionesInasistencia: SesionInasistenciaDto[];
 }
 
 export class UltimaCargaDto {

@@ -118,15 +118,18 @@ export class MatriculasController {
   // Datos personales (Ley 1581): cada consulta exitosa queda en auditoría con usuario e IP.
   @AuditarConsulta(TABLA_AUDITORIA, 'idProyecto')
   @ApiOperation({
-    summary: 'Lista de estudiantes del curso (RF-22)',
+    summary:
+      'Lista de estudiantes del curso, con sus inasistencias acumuladas (RF-22, HU-09-03)',
     description:
-      'Datos personales (Ley 1581 de 2012): solo el Administrador y los docentes asignados ' +
-      'al proyecto. `ultimaCarga` es nulo si el curso todavía no tiene lista.',
+      'Por cada estudiante, el número de inasistencias y las sesiones en que faltó. Se puede ' +
+      'ordenar por inasistencias, de más a menos. Datos personales (Ley 1581 de 2012): solo ' +
+      'el Administrador y los docentes asignados al proyecto, y cada consulta queda en la ' +
+      'auditoría. `ultimaCarga` es nulo si el curso todavía no tiene lista.',
   })
   @ApiOkResponse({ type: PaginaMatriculadosDto })
   @ApiBadRequestResponse({
     type: RespuestaErrorDto,
-    description: 'Paginación o estado inválidos',
+    description: 'Paginación, estado u orden inválidos',
   })
   @ApiForbiddenResponse({
     type: RespuestaErrorDto,

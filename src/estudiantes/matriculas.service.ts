@@ -138,7 +138,7 @@ export class MatriculasService {
   async listar(
     usuario: UsuarioSesion,
     idProyecto: number,
-    { pagina, tamano, estado }: ConsultarMatriculadosDto,
+    { pagina, tamano, estado, orden }: ConsultarMatriculadosDto,
   ): Promise<PaginaMatriculadosDto> {
     const proyecto = await this.exigirProyecto(
       usuario,
@@ -146,6 +146,11 @@ export class MatriculasService {
       'consultar',
     );
     const delProyecto = { id_proyecto_docente: proyecto.id };
+    const porApellidos: Prisma.matriculaOrderByWithRelationInput[] = [
+      { estudiante: { apellidos: 'asc' } },
+      { estudiante: { nombres: 'asc' } },
+      { id: 'asc' },
+    ];
 
     const [porEstado, filas, ultima] = await Promise.all([
       this.prisma.matricula.groupBy({
@@ -166,12 +171,18 @@ export class MatriculasService {
               email: true,
             },
           },
+          // HU-09-03: las inasistencias acumuladas, con las sesiones en que faltó.
+          inasistencia: {
+            select: {
+              sesion_clase: { select: { id: true, fecha: true, semana: true } },
+            },
+            orderBy: [{ sesion_clase: { fecha: 'asc' } }, { id_sesion: 'asc' }],
+          },
         },
-        orderBy: [
-          { estudiante: { apellidos: 'asc' } },
-          { estudiante: { nombres: 'asc' } },
-          { id: 'asc' },
-        ],
+        orderBy:
+          orden === 'inasistencias'
+            ? [{ inasistencia: { _count: 'desc' } }, ...porApellidos]
+            : porApellidos,
         skip: (pagina - 1) * tamano,
         take: tamano,
       }),
@@ -409,6 +420,9 @@ function aMatriculado(fila: {
     apellidos: string | null;
     email: string | null;
   } | null;
+  inasistencia: {
+    sesion_clase: { id: number; fecha: Date | null; semana: number | null };
+  }[];
 }): MatriculadoDto {
   return {
     idMatricula: fila.id,
@@ -420,6 +434,13 @@ function aMatriculado(fila: {
       fila.estado === ESTADO_MATRICULA.retirado
         ? ESTADO_MATRICULA.retirado
         : ESTADO_MATRICULA.matriculado,
+    inasistencias: fila.inasistencia.length,
+    sesionesInasistencia: fila.inasistencia.map(({ sesion_clase: sesion }) => ({
+      idSesion: sesion.id,
+      // Columna DATE: la fecha llega a medianoche UTC.
+      fecha: sesion.fecha ? sesion.fecha.toISOString().slice(0, 10) : '',
+      semana: sesion.semana,
+    })),
   };
 }
 
