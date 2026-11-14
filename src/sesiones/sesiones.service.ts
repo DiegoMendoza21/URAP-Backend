@@ -1086,6 +1086,7 @@ export function aSesion(
         : null,
     estado: sesion.estado,
     festivo: sesion.dia_festivo?.nombre ?? null,
+    descripcion: sesion.descripcion,
     diligenciada: esDiligenciada(sesion),
     numeroTemas: sesion._count.sesion_tema,
     numeroAusentes: sesion._count.inasistencia,
