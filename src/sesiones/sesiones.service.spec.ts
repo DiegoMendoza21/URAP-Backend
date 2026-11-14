@@ -46,9 +46,25 @@ const administrador: UsuarioSesion = {
   roles: [ROL.administrador],
 };
 
-const TIPO_CLASE = { id: 1, codigo: 'clase', nombre: 'Clase' };
-const TIPO_FESTIVO = { id: 3, codigo: 'festivo', nombre: 'Festivo' };
-const TIPO_PARCIAL = { id: 2, codigo: 'parcial', nombre: 'Parcial' };
+// RF-21: en el festivo no hay clase (`cuenta_como_dictada`); en la clase y el parcial, sí.
+const TIPO_CLASE = {
+  id: 1,
+  codigo: 'clase',
+  nombre: 'Clase',
+  cuenta_como_dictada: true,
+};
+const TIPO_FESTIVO = {
+  id: 3,
+  codigo: 'festivo',
+  nombre: 'Festivo',
+  cuenta_como_dictada: false,
+};
+const TIPO_PARCIAL = {
+  id: 2,
+  codigo: 'parcial',
+  nombre: 'Parcial',
+  cuenta_como_dictada: true,
+};
 
 function proyecto(cambios: Record<string, unknown> = {}) {
   return {

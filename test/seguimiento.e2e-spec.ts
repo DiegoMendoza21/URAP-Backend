@@ -90,7 +90,13 @@ describe('Tablero de seguimiento (e2e) · RF-25, HU-12-01 y HU-12-02', () => {
       return existente.id;
     }
     const tipo = await prisma.tipo_sesion.create({
-      data: { codigo, nombre: codigo },
+      // Como en el catálogo (catalogos.ts): el festivo no cuenta como sesión dictada (RF-21).
+      data: {
+        codigo,
+        nombre: codigo,
+        exige_tema: codigo === 'clase',
+        cuenta_como_dictada: codigo !== 'festivo',
+      },
     });
     creados.tipos.push(tipo.id);
     return tipo.id;
