@@ -132,7 +132,7 @@ const CAMPOS_ALERTA = {
   estado: true,
   fecha_registro: true,
   id_registrado_por: true,
-  tipo_sesion: { select: { codigo: true } },
+  tipo_sesion: { select: { codigo: true, cuenta_como_dictada: true } },
 } as const satisfies Prisma.sesion_claseSelect;
 
 const INCLUIR_PROYECTO = {
@@ -615,7 +615,12 @@ export class SesionesService {
             }
             continue;
           }
-          if (!fecha || tieneDatosDelDocente(sesion)) {
+          // RF-21, excepción de p2: una sesión en fecha festiva que es «clase» la cambió el
+          // docente, porque sí se dictó; la recalculación no la vuelve a marcar festivo.
+          const festivoDictado =
+            sesion.id_tipo_sesion === tipoClase.id &&
+            sesion.id_dia_festivo !== null;
+          if (!fecha || tieneDatosDelDocente(sesion) || festivoDictado) {
             conservadas++;
             continue;
           }
@@ -1040,10 +1045,22 @@ function alertaDeFila(
     {
       fecha: aTextoFecha(sesion.fecha),
       diligenciada: esDiligenciada(sesion),
-      esFestivo: sesion.tipo_sesion?.codigo === TIPO_FESTIVO,
+      esFestivo: !seDicta(sesion.tipo_sesion),
     },
     contexto,
   );
+}
+
+/**
+ * RF-21: si en una sesión de este tipo hay clase (`tipo_sesion.cuenta_como_dictada`). La clase,
+ * el parcial y la actividad complementaria sí; el festivo no. Lo dice el catálogo, no el código:
+ * un tipo nuevo, como una cancelación institucional, se comporta como diga su fila. Sin tipo,
+ * se trata como clase.
+ */
+export function seDicta(
+  tipo: { cuenta_como_dictada: boolean | null } | null | undefined,
+): boolean {
+  return tipo?.cuenta_como_dictada !== false;
 }
 
 export function aSesion(

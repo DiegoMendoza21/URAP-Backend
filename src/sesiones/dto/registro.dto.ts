@@ -16,6 +16,9 @@ import { SesionCalendarioDto } from './respuestas.dto.js';
 
 /* Registro de la clase (RF-20, HU-08-04) y de los estudiantes ausentes (RF-22, HU-09-02). */
 
+/** RF-21: largo de la descripción de un parcial o una actividad; la columna es varchar(255). */
+export const DESCRIPCION_SESION_MAXIMO = 255;
+
 /** Tope de las observaciones de la sesión: la columna es `text`, pero se escriben desde el teléfono. */
 export const OBSERVACIONES_MAXIMO = 2000;
 
@@ -125,6 +128,81 @@ export class RegistrarSesionDto {
   @IsOptional()
   @IsBoolean({ message: 'Indique si confirma que faltó todo el grupo.' })
   confirmarTodoElGrupo?: boolean;
+
+  @ApiPropertyOptional({
+    example: 'Primer parcial escrito: unidades 1 a 3.',
+    maxLength: DESCRIPCION_SESION_MAXIMO,
+    description:
+      'Solo para una sesión de un tipo que no lleva temas pero sí hay clase, como el parcial ' +
+      '(RF-21, p4). Sin el campo se conserva la que ya tiene; la sesión no se registra sin ' +
+      'descripción (RF-21, excepción de p5). En una clase se ignora.',
+  })
+  @IsOptional()
+  @Transform(recortar)
+  @IsString({ message: 'La descripción debe ser un texto.' })
+  @MaxLength(DESCRIPCION_SESION_MAXIMO, {
+    message: `La descripción no puede superar ${DESCRIPCION_SESION_MAXIMO} caracteres.`,
+  })
+  descripcion?: string;
+}
+
+/** RF-21, HU-08-06: el tipo nuevo de una sesión y, si no lleva temas, su descripción. */
+export class CambiarTipoSesionDto {
+  @ApiProperty({
+    example: 'parcial',
+    description:
+      'Código del tipo de sesión del catálogo (`tipo_sesion`): clase, parcial, festivo, ' +
+      'actividad_complementaria u otro que agregue el programa',
+  })
+  @Transform(recortar)
+  @IsString({ message: 'Elija el tipo de sesión.' })
+  @MaxLength(50, { message: 'El tipo de sesión no es válido.' })
+  tipo: string;
+
+  @ApiPropertyOptional({
+    example: 'Primer parcial escrito: unidades 1 a 3.',
+    maxLength: DESCRIPCION_SESION_MAXIMO,
+    description:
+      'Obligatoria si el tipo no lleva temas (RF-21, p3 y p4). En una clase se ignora.',
+  })
+  @IsOptional()
+  @Transform(recortar)
+  @IsString({ message: 'La descripción debe ser un texto.' })
+  @MaxLength(DESCRIPCION_SESION_MAXIMO, {
+    message: `La descripción no puede superar ${DESCRIPCION_SESION_MAXIMO} caracteres.`,
+  })
+  descripcion?: string;
+
+  @ApiPropertyOptional({
+    example: false,
+    description:
+      'Confirma que se quiten los temas o los ausentes ya registrados que el tipo nuevo no ' +
+      'admite. Sin esta confirmación, el cambio responde 409 y dice qué se quitaría.',
+  })
+  @IsOptional()
+  @IsBoolean({ message: 'Indique si confirma quitar lo ya registrado.' })
+  confirmarQuitarRegistro?: boolean;
+}
+
+/** Un tipo de sesión del catálogo, para elegirlo en la sesión (RF-21, p2). */
+export class TipoSesionOpcionDto {
+  @ApiProperty({ example: 'parcial' })
+  codigo: string;
+
+  @ApiProperty({ example: 'Parcial' })
+  nombre: string;
+
+  @ApiProperty({
+    description:
+      'Si la sesión lleva temas del contenido programático. Si no, pide una descripción.',
+  })
+  llevaTemas: boolean;
+
+  @ApiProperty({
+    description:
+      'Si en la sesión hay clase: se toma la asistencia y cuenta para las alertas. El festivo no.',
+  })
+  hayClase: boolean;
 }
 
 export class TemaContenidoDto {
@@ -273,4 +351,28 @@ export class DetalleSesionDto {
 
   @ApiProperty({ type: RegistroSesionDto, nullable: true })
   registro: RegistroSesionDto | null;
+
+  @ApiProperty({
+    example: 'Primer parcial escrito: unidades 1 a 3.',
+    nullable: true,
+    type: String,
+    description: 'Descripción del parcial o de la actividad (RF-21, p4)',
+  })
+  descripcion: string | null;
+
+  @ApiProperty({
+    example: true,
+    description:
+      'Si el usuario puede cambiar el tipo de la sesión (RF-21): docente asignado o ' +
+      'administrador, con el proyecto aprobado o en ejecución y el período abierto. También ' +
+      'en una sesión futura, para marcar un parcial con anticipación.',
+  })
+  puedeCambiarTipo: boolean;
+
+  @ApiProperty({
+    type: [TipoSesionOpcionDto],
+    description:
+      'Tipos de sesión activos del catálogo, para elegir (RF-21, p2)',
+  })
+  tiposSesion: TipoSesionOpcionDto[];
 }

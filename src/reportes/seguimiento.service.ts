@@ -34,7 +34,7 @@ import { aTextoFecha } from '../sesiones/calendario.js';
 import {
   esDiligenciada,
   SESION_VIGENTE,
-  TIPO_FESTIVO,
+  seDicta,
 } from '../sesiones/sesiones.service.js';
 import type {
   FiltrarSeguimientoDto,
@@ -132,7 +132,7 @@ const SELECCION_SESION = {
   estado: true,
   fecha_registro: true,
   id_registrado_por: true,
-  tipo_sesion: { select: { codigo: true } },
+  tipo_sesion: { select: { codigo: true, cuenta_como_dictada: true } },
 } satisfies Prisma.sesion_claseSelect;
 
 /** Período consultado y filas calculadas, para el tablero y los reportes de RF-28. */
@@ -532,7 +532,8 @@ function aFila(
     .filter(({ estado }) => estado !== ESTADO_SECCION.completa)
     .map(({ seccion }) => `${seccion.numero}. ${seccion.titulo}`);
 
-  // Sesiones: programadas son las del calendario sin festivos; la alerta es la de RF-23.
+  // Sesiones: programadas son las del calendario en que hay clase (sin festivos, RF-21); la
+  // alerta es la de RF-23.
   const periodo = proyecto.periodo_academico;
   const contexto = {
     hoy,
@@ -540,9 +541,7 @@ function aFila(
     periodoCerrado: Boolean(periodo?.cerrado),
     fechaFinPeriodo: periodo?.fecha_fin ? aTextoFecha(periodo.fecha_fin) : null,
   };
-  const programadas = sesiones.filter(
-    (sesion) => sesion.tipo_sesion?.codigo !== TIPO_FESTIVO,
-  );
+  const programadas = sesiones.filter((sesion) => seDicta(sesion.tipo_sesion));
   const alertas = resumirAlertas(
     programadas
       .filter((sesion) => sesion.fecha !== null)
