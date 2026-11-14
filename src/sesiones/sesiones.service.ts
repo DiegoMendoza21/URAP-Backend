@@ -499,7 +499,59 @@ export class SesionesService {
     usuario: UsuarioSesion,
     idProyecto: number,
   ): Promise<ResultadoGeneracionDto> {
-    const proyecto = await this.proyectoEditable(usuario, idProyecto);
+    return this.calcularCalendario(
+      await this.proyectoEditable(usuario, idProyecto),
+    );
+  }
+
+  /**
+   * HU-08-01 (RF-19, excepción p5): cuando el administrador cambia la tabla de festivos, se
+   * recalculan los calendarios ya generados de los períodos abiertos que tocan esas fechas, con
+   * las mismas reglas de `generarCalendario`: lo diligenciado no se toca. Un calendario que no
+   * se pueda recalcular queda en el registro técnico y no detiene los demás. Devuelve cuántos
+   * se recalcularon.
+   */
+  async recalcularPorFestivos(fechas: Date[]): Promise<number> {
+    if (fechas.length === 0) {
+      return 0;
+    }
+    const tiempos = fechas.map((fecha) => fecha.getTime());
+    const desde = new Date(Math.min(...tiempos));
+    const hasta = new Date(Math.max(...tiempos));
+    const proyectos = await this.prisma.proyecto_docente.findMany({
+      where: {
+        sesion_clase: { some: {} },
+        periodo_academico: {
+          is: {
+            OR: [{ cerrado: false }, { cerrado: null }],
+            // Semanas completas: un día sin clase en la semana del inicio o del final también
+            // cambia la numeración (receso).
+            fecha_inicio: { lte: sabadoDe(hasta) },
+            fecha_fin: { gte: lunesDe(desde) },
+          },
+        },
+      },
+      include: INCLUIR_PROYECTO,
+      orderBy: { id: 'asc' },
+    });
+    let recalculados = 0;
+    for (const proyecto of proyectos) {
+      try {
+        await this.calcularCalendario(proyecto);
+        recalculados++;
+      } catch (error) {
+        this.logger.error(
+          `No se pudo recalcular el calendario del proyecto ${proyecto.id} tras cambiar los festivos.`,
+          error instanceof Error ? error.stack : String(error),
+        );
+      }
+    }
+    return recalculados;
+  }
+
+  private async calcularCalendario(
+    proyecto: ProyectoConHorario,
+  ): Promise<ResultadoGeneracionDto> {
     const periodo = proyecto.periodo_academico;
     if (!periodo?.fecha_inicio || !periodo.fecha_fin) {
       throw new ConflictException(MENSAJE_PERIODO_SIN_FECHAS);
