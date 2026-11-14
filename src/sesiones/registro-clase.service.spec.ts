@@ -21,7 +21,12 @@ import {
   MENSAJE_TEMAS_INVALIDOS,
   mensajeTemaAdicionalPlaneado,
   mensajeTemaAdicionalRepetido,
-  mensajeTipoSinTema,
+  MENSAJE_DESCRIPCION_OBLIGATORIA,
+  MENSAJE_TIPO_SESION_INVALIDO,
+  mensajeConfirmarQuitarRegistro,
+  mensajeEvidenciasSinClase,
+  mensajeTipoSinClase,
+  mensajeTipoSinTemas,
   RegistroClaseService,
   validarTemasAdicionales,
 } from './registro-clase.service.js';
@@ -42,17 +47,30 @@ const docente = {
   idSesion: 20,
 } as UsuarioSesion;
 
+// RF-21: la clase lleva temas; el parcial no, pero sí hay clase; en el festivo no hay clase.
 const TIPO_CLASE = {
   id: 1,
   codigo: 'clase',
   nombre: 'Clase',
   exige_tema: true,
+  cuenta_como_dictada: true,
+  activo: true,
+};
+const TIPO_PARCIAL = {
+  id: 2,
+  codigo: 'parcial',
+  nombre: 'Parcial',
+  exige_tema: false,
+  cuenta_como_dictada: true,
+  activo: true,
 };
 const TIPO_FESTIVO = {
   id: 3,
   codigo: 'festivo',
   nombre: 'Festivo',
   exige_tema: false,
+  cuenta_como_dictada: false,
+  activo: true,
 };
 
 function proyecto(cambios: Record<string, unknown> = {}) {
@@ -89,6 +107,7 @@ function sesionEnTransaccion(cambios: Record<string, unknown> = {}) {
     fecha_registro: null,
     id_registrado_por: null,
     observaciones: null,
+    descripcion: null as string | null,
     tipo_sesion: TIPO_CLASE,
     sesion_tema: [] as Array<{ id_contenido: number | null }>,
     inasistencia: [] as Array<{ id_matricula: number }>,
@@ -132,6 +151,12 @@ describe('RegistroClaseService', () => {
   };
   const prisma = {
     sesion_clase: { findFirst: vi.fn() },
+    tipo_sesion: {
+      findMany: vi
+        .fn()
+        .mockResolvedValue([TIPO_CLASE, TIPO_PARCIAL, TIPO_FESTIVO]),
+      findFirst: vi.fn(),
+    },
     contenido_programatico: { findMany: vi.fn() },
     matricula: { findMany: vi.fn(), count: vi.fn() },
     $transaction: vi.fn(
@@ -387,7 +412,7 @@ describe('RegistroClaseService', () => {
       );
 
       await expect(registrar({})).rejects.toThrow(
-        new ConflictException(mensajeTipoSinTema('Festivo')),
+        new ConflictException(mensajeTipoSinClase('Festivo')),
       );
     });
 
@@ -714,6 +739,209 @@ describe('RegistroClaseService', () => {
         totalMatriculados: 0,
         estudiantes: [],
       });
+    });
+  });
+
+  describe('sesiones especiales (RF-21, HU-08-06)', () => {
+    const cambiar = (datos: Record<string, unknown>) =>
+      servicio.cambiarTipo(docente, 99, 500, datos as never);
+    const enTransaccion = (cambios: Record<string, unknown> = {}) => ({
+      ...sesionEnTransaccion(),
+      _count: { sesion_tema: 0, inasistencia: 0, evidencia_rap: 0 },
+      ...cambios,
+    });
+
+    it('registra un parcial sin temas, con su descripción y la asistencia', async () => {
+      tx.sesion_clase.findFirst.mockResolvedValue(
+        sesionEnTransaccion({
+          tipo_sesion: TIPO_PARCIAL,
+          descripcion: 'Primer parcial escrito',
+        }),
+      );
+
+      await registrar({ idsContenido: [], ausentes: [101] });
+
+      expect(tx.sesion_clase.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            estado: 'registrada',
+            descripcion: 'Primer parcial escrito',
+          }),
+        }),
+      );
+      expect(tx.inasistencia.createMany).toHaveBeenCalled();
+      expect(tx.sesion_tema.createMany).not.toHaveBeenCalled();
+    });
+
+    it('un parcial no lleva temas y no se registra sin descripción (excepción de p5)', async () => {
+      tx.sesion_clase.findFirst.mockResolvedValue(
+        sesionEnTransaccion({ tipo_sesion: TIPO_PARCIAL }),
+      );
+
+      await expect(registrar({ idsContenido: [10] })).rejects.toThrow(
+        new BadRequestException(mensajeTipoSinTemas('Parcial')),
+      );
+      await expect(registrar({ idsContenido: [] })).rejects.toThrow(
+        new BadRequestException(MENSAJE_DESCRIPCION_OBLIGATORIA),
+      );
+      await expect(
+        registrar({ idsContenido: [], descripcion: 'Parcial de la unidad 1' }),
+      ).resolves.toBeDefined();
+    });
+
+    it('cambia una clase a parcial con su descripción, también en una sesión futura, y lo audita', async () => {
+      prisma.tipo_sesion.findFirst.mockResolvedValue(TIPO_PARCIAL);
+      tx.sesion_clase.findFirst.mockResolvedValue(
+        enTransaccion({ fecha: aFechaColumna('2026-11-20') }),
+      );
+
+      await cambiar({ tipo: 'parcial', descripcion: '  Parcial final  ' });
+
+      expect(tx.sesion_clase.update).toHaveBeenCalledWith({
+        where: { id: 500 },
+        data: { id_tipo_sesion: 2, descripcion: 'Parcial final' },
+      });
+      expect(auditoria.registrar).toHaveBeenCalledWith({
+        accion: 'actualizar',
+        tablaAfectada: 'sesion_clase',
+        idRegistro: 500,
+        valorAnterior: { tipo: 'clase', descripcion: null },
+        valorNuevo: { tipo: 'parcial', descripcion: 'Parcial final' },
+      });
+    });
+
+    it('un tipo sin temas exige descripción, y el tipo debe existir y estar activo', async () => {
+      prisma.tipo_sesion.findFirst.mockResolvedValue(TIPO_PARCIAL);
+      await expect(cambiar({ tipo: 'parcial' })).rejects.toThrow(
+        new BadRequestException(MENSAJE_DESCRIPCION_OBLIGATORIA),
+      );
+      prisma.tipo_sesion.findFirst.mockResolvedValue(null);
+      await expect(cambiar({ tipo: 'inventado' })).rejects.toThrow(
+        new BadRequestException(MENSAJE_TIPO_SESION_INVALIDO),
+      );
+      expect(tx.sesion_clase.update).not.toHaveBeenCalled();
+    });
+
+    it('pide confirmar antes de quitar los temas y ausentes que el tipo nuevo no admite', async () => {
+      prisma.tipo_sesion.findFirst.mockResolvedValue(TIPO_FESTIVO);
+      tx.sesion_clase.findFirst.mockResolvedValue(
+        enTransaccion({
+          estado: 'registrada',
+          fecha_registro: new Date(),
+          id_registrado_por: 20,
+          _count: { sesion_tema: 2, inasistencia: 1, evidencia_rap: 0 },
+        }),
+      );
+
+      await expect(
+        cambiar({ tipo: 'festivo', descripcion: 'Día cívico' }),
+      ).rejects.toThrow(
+        new ConflictException(mensajeConfirmarQuitarRegistro('Festivo', 2, 1)),
+      );
+      expect(tx.sesion_tema.deleteMany).not.toHaveBeenCalled();
+
+      await cambiar({
+        tipo: 'festivo',
+        descripcion: 'Día cívico',
+        confirmarQuitarRegistro: true,
+      });
+
+      expect(tx.sesion_tema.deleteMany).toHaveBeenCalledWith({
+        where: { id_sesion: 500 },
+      });
+      expect(tx.inasistencia.deleteMany).toHaveBeenCalledWith({
+        where: { id_sesion: 500 },
+      });
+      // En un festivo no hubo clase: el registro anterior deja de valer.
+      expect(tx.sesion_clase.update).toHaveBeenCalledWith({
+        where: { id: 500 },
+        data: {
+          id_tipo_sesion: 3,
+          descripcion: 'Día cívico',
+          estado: 'programada',
+          fecha_registro: null,
+          id_registrado_por: null,
+        },
+      });
+    });
+
+    it('un festivo que sí se dictó pasa a clase sin descripción (excepción de p2)', async () => {
+      prisma.tipo_sesion.findFirst.mockResolvedValue(TIPO_CLASE);
+      tx.sesion_clase.findFirst.mockResolvedValue(
+        enTransaccion({ tipo_sesion: TIPO_FESTIVO, id_tipo_sesion: 3 }),
+      );
+
+      await cambiar({ tipo: 'clase', descripcion: 'se ignora' });
+
+      expect(tx.sesion_clase.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            id_tipo_sesion: 1,
+            descripcion: null,
+          }),
+        }),
+      );
+    });
+
+    it('no marca sin clase una sesión con evidencias', async () => {
+      prisma.tipo_sesion.findFirst.mockResolvedValue(TIPO_FESTIVO);
+      tx.sesion_clase.findFirst.mockResolvedValue(
+        enTransaccion({
+          _count: { sesion_tema: 0, inasistencia: 0, evidencia_rap: 1 },
+        }),
+      );
+
+      await expect(
+        cambiar({ tipo: 'festivo', descripcion: 'Día cívico' }),
+      ).rejects.toThrow(
+        new ConflictException(mensajeEvidenciasSinClase('Festivo')),
+      );
+    });
+
+    it('sin cambios no escribe ni audita', async () => {
+      prisma.tipo_sesion.findFirst.mockResolvedValue(TIPO_CLASE);
+      tx.sesion_clase.findFirst.mockResolvedValue(
+        enTransaccion({ id_tipo_sesion: 1 }),
+      );
+
+      await cambiar({ tipo: 'clase' });
+
+      expect(tx.sesion_clase.update).not.toHaveBeenCalled();
+      expect(auditoria.registrar).not.toHaveBeenCalled();
+    });
+
+    it('el festivo no se registra; el detalle trae los tipos y dice que se puede cambiar el tipo', async () => {
+      tx.sesion_clase.findFirst.mockResolvedValue(
+        sesionEnTransaccion({ tipo_sesion: TIPO_FESTIVO }),
+      );
+      await expect(registrar({})).rejects.toThrow(
+        new ConflictException(mensajeTipoSinClase('Festivo')),
+      );
+
+      prisma.sesion_clase.findFirst.mockResolvedValue(
+        sesionDetalle({ tipo_sesion: TIPO_FESTIVO }),
+      );
+      const detalle = await servicio.detalle(docente, 99, 500);
+      expect(detalle).toMatchObject({
+        puedeRegistrar: false,
+        motivoNoRegistrable: mensajeTipoSinClase('Festivo'),
+        puedeCambiarTipo: true,
+      });
+      expect(detalle.tiposSesion).toEqual([
+        { codigo: 'clase', nombre: 'Clase', llevaTemas: true, hayClase: true },
+        {
+          codigo: 'parcial',
+          nombre: 'Parcial',
+          llevaTemas: false,
+          hayClase: true,
+        },
+        {
+          codigo: 'festivo',
+          nombre: 'Festivo',
+          llevaTemas: false,
+          hayClase: false,
+        },
+      ]);
     });
   });
 });

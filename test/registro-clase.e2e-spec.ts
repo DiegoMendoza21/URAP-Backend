@@ -16,7 +16,7 @@ import {
   MENSAJE_TEMAS_INVALIDOS,
   mensajeTemaAdicionalPlaneado,
   mensajeTemaAdicionalRepetido,
-  mensajeTipoSinTema,
+  mensajeTipoSinClase,
   TABLA_AUDITORIA_CLASE,
 } from '../src/sesiones/registro-clase.service.js';
 import {
@@ -63,6 +63,7 @@ describe('Registro de clase (e2e) · RF-20 y RF-22, HU-08-04 y HU-09-02', () => 
     usuarios: [] as number[],
     proyectos: [] as number[],
     estudiantes: [] as number[],
+    festivos: [] as number[],
   };
   const tokens: Record<string, string> = {};
   const usuarios: Record<string, number> = {};
@@ -96,6 +97,11 @@ describe('Registro de clase (e2e) · RF-20 y RF-22, HU-08-04 y HU-09-02', () => 
       http()
         .post(`/api${ruta}`)
         .set('Authorization', `Bearer ${tokens[quien]}`),
+    patch: (ruta: string, cuerpo: object) =>
+      http()
+        .patch(`/api${ruta}`)
+        .set('Authorization', `Bearer ${tokens[quien]}`)
+        .send(cuerpo),
   });
   const rutaSesion = (idProyecto: number, idSesion: number) =>
     `/proyectos-docentes/${idProyecto}/sesiones/${idSesion}`;
@@ -130,6 +136,8 @@ describe('Registro de clase (e2e) · RF-20 y RF-22, HU-08-04 y HU-09-02', () => 
   async function tipoPorCodigo(
     codigo: string,
     exigeTema: boolean,
+    // RF-21: el parcial no lleva temas, pero sí hay clase; el festivo, ni lo uno ni lo otro.
+    cuentaComoDictada: boolean = exigeTema,
   ): Promise<number> {
     const existente = await prisma.tipo_sesion.findUnique({
       where: { codigo },
@@ -140,9 +148,9 @@ describe('Registro de clase (e2e) · RF-20 y RF-22, HU-08-04 y HU-09-02', () => 
     const tipo = await prisma.tipo_sesion.create({
       data: {
         codigo,
-        nombre: codigo === 'festivo' ? 'Festivo' : 'Clase',
+        nombre: { festivo: 'Festivo', parcial: 'Parcial' }[codigo] ?? 'Clase',
         exige_tema: exigeTema,
-        cuenta_como_dictada: exigeTema,
+        cuenta_como_dictada: cuentaComoDictada,
       },
     });
     creados.tiposSesion.push(tipo.id);
@@ -304,6 +312,7 @@ describe('Registro de clase (e2e) · RF-20 y RF-22, HU-08-04 y HU-09-02', () => 
 
     idTipoClase = await tipoPorCodigo('clase', true);
     idTipoFestivo = await tipoPorCodigo('festivo', false);
+    await tipoPorCodigo('parcial', false, true);
 
     const facultad = await prisma.facultad.create({
       data: { nombre: `Facultad E2E RC ${sufijo}` },
@@ -399,6 +408,9 @@ describe('Registro de clase (e2e) · RF-20 y RF-22, HU-08-04 y HU-09-02', () => 
         },
       });
       await prisma.sesion_clase.deleteMany({ where: deProyectos });
+      await prisma.dia_festivo.deleteMany({
+        where: { id: { in: creados.festivos } },
+      });
       await prisma.horario_curso.deleteMany({ where: deProyectos });
       await prisma.contenido_programatico.deleteMany({ where: deProyectos });
       await prisma.matricula.deleteMany({ where: deProyectos });
@@ -847,7 +859,180 @@ describe('Registro de clase (e2e) · RF-20 y RF-22, HU-08-04 y HU-09-02', () => 
     );
 
     expect(registro.status).toBe(409);
-    expect(registro.body.mensaje).toBe(mensajeTipoSinTema('Festivo'));
+    expect(registro.body.mensaje).toBe(mensajeTipoSinClase('Festivo'));
+  });
+
+  describe('sesiones especiales (RF-21, HU-08-06)', () => {
+    let proyectoEspecial: number;
+    let matriculaEspecial: number;
+
+    beforeAll(async () => {
+      const periodo = await crearPeriodo(
+        sumarDias(hoy, -14),
+        sumarDias(hoy, 14),
+      );
+      proyectoEspecial = await crearProyecto(periodo, 'RCE', 'aprobado');
+      await prisma.contenido_programatico.create({
+        data: {
+          id_proyecto_docente: proyectoEspecial,
+          semana: 1,
+          tema: 'Tema E2E',
+        },
+      });
+      matriculaEspecial = await crearEstudiante(
+        5,
+        proyectoEspecial,
+        'matriculado',
+      );
+      await crearEstudiante(6, proyectoEspecial, 'matriculado');
+    });
+
+    it('un parcial se marca con descripción y se registra con la asistencia, sin temas', async () => {
+      const sesion = await sesionDe(proyectoEspecial, 'pasada');
+      const ruta = rutaSesion(proyectoEspecial, sesion.id);
+
+      await como('docente')
+        .patch(`${ruta}/tipo`, { tipo: 'parcial' })
+        .expect(400);
+      const cambio = await como('docente')
+        .patch(`${ruta}/tipo`, {
+          tipo: 'parcial',
+          descripcion: 'Primer parcial escrito',
+        })
+        .expect(200);
+      expect(cambio.body).toMatchObject({
+        sesion: { tipo: { codigo: 'parcial' } },
+        descripcion: 'Primer parcial escrito',
+        puedeRegistrar: true,
+      });
+
+      const tema = await prisma.contenido_programatico.findFirstOrThrow({
+        where: { id_proyecto_docente: proyectoEspecial },
+      });
+      await como('docente')
+        .put(`${ruta}/registro`, { idsContenido: [tema.id] })
+        .expect(400);
+      const registro = await como('docente')
+        .put(`${ruta}/registro`, {
+          idsContenido: [],
+          ausentes: [matriculaEspecial],
+        })
+        .expect(200);
+      expect(registro.body).toMatchObject({
+        numeroAusentes: 1,
+        sesion: { diligenciada: true, alerta: null },
+      });
+
+      const auditado = await prisma.auditoria.findFirst({
+        where: {
+          tabla_afectada: TABLA_AUDITORIA_CLASE,
+          id_registro: sesion.id,
+          id_usuario: usuarios.docente,
+        },
+        orderBy: { id: 'asc' },
+      });
+      expect(auditado?.valor_nuevo).toEqual({
+        tipo: 'parcial',
+        descripcion: 'Primer parcial escrito',
+      });
+    });
+
+    it('un parcial futuro se puede marcar con anticipación', async () => {
+      const sesion = await sesionDe(proyectoEspecial, 'futura');
+      await como('docente')
+        .patch(`${rutaSesion(proyectoEspecial, sesion.id)}/tipo`, {
+          tipo: 'parcial',
+          descripcion: 'Parcial final',
+        })
+        .expect(200);
+    });
+
+    it('un festivo que sí se dictó pasa a clase, se registra y el recálculo no lo vuelve a marcar', async () => {
+      const sesion = await sesionDe(proyectoEspecial, 'anterior');
+      const fila = await prisma.sesion_clase.findUniqueOrThrow({
+        where: { id: sesion.id },
+      });
+      const existente = await prisma.dia_festivo.findUnique({
+        where: { fecha: fila.fecha as Date },
+      });
+      if (!existente) {
+        creados.festivos.push(
+          (
+            await prisma.dia_festivo.create({
+              data: {
+                fecha: fila.fecha,
+                nombre: 'Festivo E2E',
+                anio: (fila.fecha as Date).getUTCFullYear(),
+                origen: 'ajuste_manual',
+              },
+            })
+          ).id,
+        );
+      }
+      await como('docente')
+        .post(`/proyectos-docentes/${proyectoEspecial}/calendario`)
+        .expect(200);
+      const ruta = rutaSesion(proyectoEspecial, sesion.id);
+      const marcada = await como('docente').get(ruta).expect(200);
+      expect(marcada.body).toMatchObject({
+        sesion: { tipo: { codigo: 'festivo' }, alerta: null },
+        puedeRegistrar: false,
+        puedeCambiarTipo: true,
+      });
+
+      await como('docente')
+        .patch(`${ruta}/tipo`, { tipo: 'clase' })
+        .expect(200);
+      const tema = await prisma.contenido_programatico.findFirstOrThrow({
+        where: { id_proyecto_docente: proyectoEspecial },
+      });
+      await como('docente')
+        .put(`${ruta}/registro`, { idsContenido: [tema.id] })
+        .expect(200);
+      // Aun sin el registro, el recálculo respeta el cambio del docente.
+      await como('docente')
+        .post(`/proyectos-docentes/${proyectoEspecial}/calendario`)
+        .expect(200);
+      const despues = await prisma.sesion_clase.findUniqueOrThrow({
+        where: { id: sesion.id },
+        include: { tipo_sesion: true },
+      });
+      expect(despues.tipo_sesion?.codigo).toBe('clase');
+    });
+
+    it('pide confirmar antes de quitar lo registrado, y solo cambia el tipo quien registra', async () => {
+      const sesion = await sesionDe(proyectoEspecial, 'anterior');
+      const ruta = rutaSesion(proyectoEspecial, sesion.id);
+
+      const sinConfirmar = await como('docente')
+        .patch(`${ruta}/tipo`, { tipo: 'festivo', descripcion: 'Día cívico' })
+        .expect(409);
+      expect(sinConfirmar.body.mensaje).toContain('1 tema registrado');
+      await como('departamento')
+        .patch(`${ruta}/tipo`, {
+          tipo: 'festivo',
+          descripcion: 'Día cívico',
+          confirmarQuitarRegistro: true,
+        })
+        .expect(403);
+
+      const confirmado = await como('docente')
+        .patch(`${ruta}/tipo`, {
+          tipo: 'festivo',
+          descripcion: 'Día cívico',
+          confirmarQuitarRegistro: true,
+        })
+        .expect(200);
+      expect(confirmado.body).toMatchObject({
+        sesion: { tipo: { codigo: 'festivo' }, diligenciada: false },
+        temas: expect.not.arrayContaining([
+          expect.objectContaining({ seleccionado: true }),
+        ]),
+      });
+      await como('docente')
+        .patch(`${ruta}/tipo`, { tipo: 'inventado', descripcion: 'x' })
+        .expect(400);
+    });
   });
 
   describe('permisos y datos personales (Ley 1581)', () => {

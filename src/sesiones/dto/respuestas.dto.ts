@@ -86,6 +86,15 @@ export class SesionCalendarioDto {
   festivo: string | null;
 
   @ApiProperty({
+    example: 'Primer parcial escrito',
+    nullable: true,
+    type: String,
+    description:
+      'Qué fue la sesión cuando no es una clase: parcial, actividad o festivo (RF-21)',
+  })
+  descripcion: string | null;
+
+  @ApiProperty({
     example: false,
     description:
       'Si el docente ya la diligenció. Una sesión diligenciada no se recalcula.',

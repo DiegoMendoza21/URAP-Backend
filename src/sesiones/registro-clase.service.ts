@@ -23,21 +23,25 @@ import {
 } from './alertas.js';
 import { aTextoFecha } from './calendario.js';
 import {
+  type CambiarTipoSesionDto,
   type DetalleSesionDto,
   MENSAJE_SIN_TEMAS,
   MENSAJE_TEMA_ADICIONAL_VACIO,
   type RegistrarSesionDto,
   type TemaContenidoDto,
+  type TipoSesionOpcionDto,
 } from './dto/registro.dto.js';
 import {
   aSesion,
   contextoDeAlerta,
+  ESTADO_PROGRAMADA,
   ESTADO_REGISTRADA,
   ESTADOS_QUE_PERMITEN_REGISTRO,
   horasDelHorario,
   INCLUIR_SESION,
   type ProyectoConHorario,
   SESION_VIGENTE,
+  seDicta,
   SesionesService,
 } from './sesiones.service.js';
 
@@ -122,10 +126,50 @@ export function validarTemasAdicionales(
   return [...adicionales];
 }
 
-export function mensajeTipoSinTema(tipo: string | null): string {
+/** RF-21: la sesión es de un tipo en que no hay clase, como el festivo. */
+export function mensajeTipoSinClase(tipo: string | null): string {
   return (
-    `Esta sesión está marcada como «${tipo ?? 'sin tipo'}» y no lleva temas. Si sí hubo clase, ` +
-    'cambie primero su tipo (HU-08-06).'
+    `Esta sesión está marcada como «${tipo ?? 'sin tipo'}»: ese día no hubo clase. Si sí la ` +
+    'hubo, cambie el tipo de la sesión a «Clase» y regístrela.'
+  );
+}
+
+/** RF-21, p3: a un parcial o una actividad no se le seleccionan temas. */
+export function mensajeTipoSinTemas(tipo: string | null): string {
+  return (
+    `Una sesión de tipo «${tipo ?? 'sin tipo'}» no lleva temas del contenido programático: ` +
+    'registre su descripción y la asistencia.'
+  );
+}
+
+/** RF-21, p3 y p4, y excepción de p5: el parcial y la actividad llevan descripción. */
+export const MENSAJE_DESCRIPCION_OBLIGATORIA =
+  'Escriba una descripción breve de la sesión: por ejemplo, qué evaluó el parcial o qué actividad se hizo.';
+export const MENSAJE_TIPO_SESION_INVALIDO =
+  'Ese tipo de sesión no existe o no está activo.';
+
+export function mensajeEvidenciasSinClase(tipo: string | null): string {
+  return (
+    `La sesión tiene evidencias cargadas, así que no se puede marcar como «${tipo ?? 'sin tipo'}»: ` +
+    'ese tipo dice que no hubo clase.'
+  );
+}
+
+/** Lo que se quitaría al cambiar el tipo, para que el docente lo confirme. */
+export function mensajeConfirmarQuitarRegistro(
+  tipo: string | null,
+  temas: number,
+  ausentes: number,
+): string {
+  const partes = [
+    temas > 0 &&
+      (temas === 1 ? '1 tema registrado' : `${temas} temas registrados`),
+    ausentes > 0 &&
+      (ausentes === 1 ? '1 ausente marcado' : `${ausentes} ausentes marcados`),
+  ].filter(Boolean);
+  return (
+    `Al cambiar la sesión a «${tipo ?? 'sin tipo'}» se quitan ${partes.join(' y ')}, que ese ` +
+    'tipo no admite. Confirme el cambio.'
   );
 }
 
@@ -152,6 +196,8 @@ export interface ContenidoDelRegistro {
   temasAdicionales: string[];
   ausentes: number[];
   observaciones: string | null;
+  /** RF-21, p4: descripción del parcial o de la actividad. */
+  descripcion: string | null;
 }
 
 /**
@@ -238,14 +284,33 @@ export class RegistroClaseService {
         if (!sesion?.fecha) {
           throw new NotFoundException(MENSAJE_SESION_NO_EXISTE);
         }
-        if (sesion.tipo_sesion?.exige_tema === false) {
+        // RF-21: en un festivo no hay clase que registrar; en un parcial o una actividad sí
+        // (descripción y asistencia), pero sin temas.
+        if (!seDicta(sesion.tipo_sesion)) {
           throw new ConflictException(
-            mensajeTipoSinTema(sesion.tipo_sesion.nombre),
+            mensajeTipoSinClase(sesion.tipo_sesion?.nombre ?? null),
           );
         }
+        const llevaTemas = sesion.tipo_sesion?.exige_tema !== false;
         // RF-20, excepción p6: el día de la clase ya se puede registrar; antes, no.
         if (aTextoFecha(sesion.fecha) > hoy) {
           throw new ConflictException(MENSAJE_FECHA_FUTURA);
+        }
+        if (
+          !llevaTemas &&
+          (datos.idsContenido.length > 0 ||
+            (datos.temasAdicionales?.length ?? 0) > 0)
+        ) {
+          throw new BadRequestException(
+            mensajeTipoSinTemas(sesion.tipo_sesion?.nombre ?? null),
+          );
+        }
+        // Sin el campo se conserva la descripción; solo la llevan los tipos sin temas.
+        const descripcion = llevaTemas
+          ? sesion.descripcion
+          : (datos.descripcion ?? sesion.descripcion)?.trim() || null;
+        if (!llevaTemas && !descripcion) {
+          throw new BadRequestException(MENSAJE_DESCRIPCION_OBLIGATORIA);
         }
 
         const temasActuales = new Set(
@@ -285,8 +350,13 @@ export class RegistroClaseService {
                 datos.temasAdicionales,
                 delProyecto.map((contenido) => contenido.tema),
               );
-        // RF-20, p4: al menos un tema, del contenido programático o no planeado.
-        if (datos.idsContenido.length === 0 && temasAdicionales.length === 0) {
+        // RF-20, p4: al menos un tema, del contenido programático o no planeado. El parcial y
+        // la actividad no llevan temas (RF-21, p3).
+        if (
+          llevaTemas &&
+          datos.idsContenido.length === 0 &&
+          temasAdicionales.length === 0
+        ) {
           throw new BadRequestException(MENSAJE_SIN_TEMAS);
         }
 
@@ -392,6 +462,7 @@ export class RegistroClaseService {
             fecha_registro: sesion.fecha_registro ?? new Date(),
             id_registrado_por: sesion.id_registrado_por ?? usuario.id,
             observaciones,
+            descripcion,
           },
         });
         return {
@@ -401,6 +472,7 @@ export class RegistroClaseService {
             temasAdicionales: adicionalesActuales,
             ausentes: [...ausentesActuales],
             observaciones: sesion.observaciones,
+            descripcion: sesion.descripcion,
           } satisfies ContenidoDelRegistro,
           nuevo: {
             estado: ESTADO_REGISTRADA,
@@ -408,6 +480,7 @@ export class RegistroClaseService {
             temasAdicionales,
             ausentes,
             observaciones,
+            descripcion,
           } satisfies ContenidoDelRegistro,
         };
       },
@@ -421,6 +494,151 @@ export class RegistroClaseService {
         this.auditoria.registrar(evento),
       ),
     );
+    const [sesion, umbralDias] = await Promise.all([
+      this.buscarSesion(proyecto.id, idSesion),
+      this.parametros.leerEntero(PARAMETRO_UMBRAL_ALERTA, RANGO_UMBRAL_ALERTA),
+    ]);
+    return this.construirDetalle(proyecto, sesion, true, umbralDias);
+  }
+
+  /**
+   * RF-21, HU-08-06: cambia el tipo de una sesión (clase, parcial, festivo, actividad o el que
+   * agregue el programa al catálogo). Un tipo sin temas exige descripción. Lo que el tipo nuevo
+   * no admite se quita con confirmación: los temas, si no lleva temas; los ausentes, si no hay
+   * clase. Se puede hacer en una sesión futura, para marcar un parcial con anticipación.
+   */
+  async cambiarTipo(
+    usuario: UsuarioSesion,
+    idProyecto: number,
+    idSesion: number,
+    datos: CambiarTipoSesionDto,
+  ): Promise<DetalleSesionDto> {
+    const proyecto = await this.sesiones.proyectoVisible(usuario, idProyecto);
+    if (!(await this.sesiones.tienePermisoEdicion(usuario, proyecto))) {
+      throw new ForbiddenException(MENSAJE_SOLO_QUIEN_REGISTRA);
+    }
+    const motivoDelProyecto = motivoDelProyectoNoRegistrable(proyecto);
+    if (motivoDelProyecto) {
+      throw new ConflictException(motivoDelProyecto);
+    }
+    const nuevoTipo = await this.prisma.tipo_sesion.findFirst({
+      where: {
+        codigo: datos.tipo,
+        OR: [{ activo: true }, { activo: null }],
+      },
+    });
+    if (!nuevoTipo) {
+      throw new BadRequestException(MENSAJE_TIPO_SESION_INVALIDO);
+    }
+    const llevaTemas = nuevoTipo.exige_tema !== false;
+    const hayClase = seDicta(nuevoTipo);
+    const descripcion = llevaTemas ? null : datos.descripcion?.trim() || null;
+    if (!llevaTemas && !descripcion) {
+      throw new BadRequestException(MENSAJE_DESCRIPCION_OBLIGATORIA);
+    }
+
+    const cambio = await this.prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT id FROM sesion_clase WHERE id = ${idSesion} FOR UPDATE`;
+        const sesion = await tx.sesion_clase.findFirst({
+          where: {
+            id: idSesion,
+            id_proyecto_docente: proyecto.id,
+            ...SESION_VIGENTE,
+          },
+          include: {
+            tipo_sesion: true,
+            _count: {
+              select: {
+                sesion_tema: true,
+                inasistencia: true,
+                evidencia_rap: true,
+              },
+            },
+          },
+        });
+        if (!sesion) {
+          throw new NotFoundException(MENSAJE_SESION_NO_EXISTE);
+        }
+        if (
+          sesion.id_tipo_sesion === nuevoTipo.id &&
+          (sesion.descripcion ?? null) === descripcion
+        ) {
+          return null;
+        }
+        if (!hayClase && sesion._count.evidencia_rap > 0) {
+          throw new ConflictException(
+            mensajeEvidenciasSinClase(nuevoTipo.nombre),
+          );
+        }
+        const temasQueSeQuitan = llevaTemas ? 0 : sesion._count.sesion_tema;
+        const ausentesQueSeQuitan = hayClase ? 0 : sesion._count.inasistencia;
+        if (
+          temasQueSeQuitan + ausentesQueSeQuitan > 0 &&
+          !datos.confirmarQuitarRegistro
+        ) {
+          throw new ConflictException(
+            mensajeConfirmarQuitarRegistro(
+              nuevoTipo.nombre,
+              temasQueSeQuitan,
+              ausentesQueSeQuitan,
+            ),
+          );
+        }
+        if (temasQueSeQuitan > 0) {
+          await tx.sesion_tema.deleteMany({ where: { id_sesion: sesion.id } });
+        }
+        if (ausentesQueSeQuitan > 0) {
+          await tx.inasistencia.deleteMany({ where: { id_sesion: sesion.id } });
+        }
+        // El registro anterior deja de valer si cambia lo que se registra: en un festivo no hubo
+        // clase, y una clase que antes era parcial necesita sus temas. Entre parcial y
+        // actividad, lo registrado (asistencia y descripción) sigue sirviendo.
+        const llevabaTemas = sesion.tipo_sesion?.exige_tema !== false;
+        const reiniciar = !hayClase || (llevaTemas && !llevabaTemas);
+        await tx.sesion_clase.update({
+          where: { id: sesion.id },
+          data: {
+            id_tipo_sesion: nuevoTipo.id,
+            descripcion,
+            ...(reiniciar && {
+              estado: ESTADO_PROGRAMADA,
+              fecha_registro: null,
+              id_registrado_por: null,
+            }),
+          },
+        });
+        return {
+          anterior: {
+            tipo: sesion.tipo_sesion?.codigo ?? null,
+            descripcion: sesion.descripcion,
+            estado: sesion.estado,
+          },
+          nuevo: {
+            tipo: nuevoTipo.codigo,
+            descripcion,
+            estado: reiniciar ? ESTADO_PROGRAMADA : sesion.estado,
+            ...(temasQueSeQuitan > 0 && { temasQuitados: temasQueSeQuitan }),
+            ...(ausentesQueSeQuitan > 0 && {
+              ausentesQuitados: ausentesQueSeQuitan,
+            }),
+          },
+        };
+      },
+      { timeout: 10_000 },
+    );
+
+    // RF-29: después de confirmar y solo con lo que cambió.
+    const diferencia = cambio && soloCambios(cambio.anterior, cambio.nuevo);
+    if (diferencia) {
+      await this.auditoria.registrar({
+        accion: 'actualizar',
+        tablaAfectada: TABLA_AUDITORIA_CLASE,
+        idRegistro: idSesion,
+        valorAnterior: diferencia.anterior,
+        valorNuevo: diferencia.nuevo,
+      });
+    }
     const [sesion, umbralDias] = await Promise.all([
       this.buscarSesion(proyecto.id, idSesion),
       this.parametros.leerEntero(PARAMETRO_UMBRAL_ALERTA, RANGO_UMBRAL_ALERTA),
@@ -460,7 +678,7 @@ export class RegistroClaseService {
     const ausentes = new Set(
       sesion.inasistencia.map((fila) => fila.id_matricula),
     );
-    const [contenidos, matriculas, conLista] = await Promise.all([
+    const [contenidos, matriculas, conLista, tipos] = await Promise.all([
       this.prisma.contenido_programatico.findMany({
         where: {
           id_proyecto_docente: proyecto.id,
@@ -495,7 +713,19 @@ export class RegistroClaseService {
             where: { id_proyecto_docente: proyecto.id },
           })
         : Promise.resolve(0),
+      this.prisma.tipo_sesion.findMany({
+        where: { OR: [{ activo: true }, { activo: null }] },
+        orderBy: { id: 'asc' },
+      }),
     ]);
+    const tiposSesion: TipoSesionOpcionDto[] = tipos
+      .filter((tipo) => tipo.codigo)
+      .map((tipo) => ({
+        codigo: tipo.codigo as string,
+        nombre: tipo.nombre ?? (tipo.codigo as string),
+        llevaTemas: tipo.exige_tema !== false,
+        hayClase: seDicta(tipo),
+      }));
 
     const temas: TemaContenidoDto[] = contenidos.map((contenido) => ({
       idContenido: contenido.id,
@@ -505,10 +735,14 @@ export class RegistroClaseService {
       seleccionado: seleccionados.has(contenido.id),
     }));
     const contexto = contextoDeAlerta(proyecto.periodo_academico, umbralDias);
+    const llevaTemas = sesion.tipo_sesion?.exige_tema !== false;
+    const motivoDelProyecto = puedeVerDatos
+      ? motivoDelProyectoNoRegistrable(proyecto)
+      : null;
     const motivo = puedeVerDatos
-      ? (motivoDelProyectoNoRegistrable(proyecto) ??
+      ? (motivoDelProyecto ??
         motivoDeLaSesionNoRegistrable(sesion, contexto.hoy) ??
-        (contenidos.some((contenido) => contenido.tema !== null)
+        (!llevaTemas || contenidos.some((contenido) => contenido.tema !== null)
           ? null
           : MENSAJE_SIN_CONTENIDO))
       : null;
@@ -552,6 +786,9 @@ export class RegistroClaseService {
               : null,
           }
         : null,
+      descripcion: sesion.descripcion,
+      puedeCambiarTipo: puedeVerDatos && motivoDelProyecto === null,
+      tiposSesion,
     };
   }
 }
@@ -573,13 +810,13 @@ function motivoDelProyectoNoRegistrable(
   return null;
 }
 
-/** La sesión: de un tipo que lleva temas (RF-21) y de hoy o de antes (RF-20, excepción p6). */
+/** La sesión: de un tipo en que hay clase (RF-21) y de hoy o de antes (RF-20, excepción p6). */
 function motivoDeLaSesionNoRegistrable(
   sesion: SesionRegistrada,
   hoy: string,
 ): string | null {
-  if (sesion.tipo_sesion?.exige_tema === false) {
-    return mensajeTipoSinTema(sesion.tipo_sesion.nombre);
+  if (!seDicta(sesion.tipo_sesion)) {
+    return mensajeTipoSinClase(sesion.tipo_sesion?.nombre ?? null);
   }
   if (sesion.fecha && aTextoFecha(sesion.fecha) > hoy) {
     return MENSAJE_FECHA_FUTURA;
@@ -606,12 +843,15 @@ export function eventosDelRegistro(
       temas: ordenados(anterior.temas),
       temasAdicionales: anterior.temasAdicionales,
       observaciones: anterior.observaciones,
+      // La descripción del parcial o de la actividad va con su texto, como los temas.
+      descripcion: anterior.descripcion,
     },
     {
       estado: nuevo.estado,
       temas: ordenados(nuevo.temas),
       temasAdicionales: nuevo.temasAdicionales,
       observaciones: nuevo.observaciones,
+      descripcion: nuevo.descripcion,
     },
   );
   if (clase) {
