@@ -297,7 +297,7 @@ export const PARAMETROS = [
 
 /**
  * RF-19: festivos de Colombia en 2026, con el traslado al lunes de la Ley 51 de 1983. El
- * calendario de 2026 tiene 18.
+ * calendario de 2026 tiene 19: los 18 de siempre y el de la Ley 2578 de 2026 (Chiquinquirá).
  */
 export const FESTIVOS_2026 = [
   { fecha: '2026-01-01', nombre: 'Año Nuevo' },
@@ -310,6 +310,7 @@ export const FESTIVOS_2026 = [
   { fecha: '2026-06-08', nombre: 'Corpus Christi' },
   { fecha: '2026-06-15', nombre: 'Sagrado Corazón de Jesús' },
   { fecha: '2026-06-29', nombre: 'San Pedro y San Pablo' },
+  { fecha: '2026-07-13', nombre: 'Nuestra Señora del Rosario de Chiquinquirá' },
   { fecha: '2026-07-20', nombre: 'Día de la Independencia' },
   { fecha: '2026-08-07', nombre: 'Batalla de Boyacá' },
   { fecha: '2026-08-17', nombre: 'Asunción de la Virgen' },
