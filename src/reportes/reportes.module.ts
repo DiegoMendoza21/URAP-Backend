@@ -4,6 +4,7 @@ import { MedicionesModule } from '../mediciones/mediciones.module.js';
 import { ProyectosDocentesModule } from '../proyectos-docentes/proyectos-docentes.module.js';
 import { ReportesAcademicosController } from './academicos.controller.js';
 import { ReportesAcademicosService } from './academicos.service.js';
+import { RegistroReportesService } from './registro-reportes.service.js';
 import { ReportesController } from './reportes.controller.js';
 import { ReportesService } from './reportes.service.js';
 import { SeguimientoController } from './seguimiento.controller.js';
@@ -20,6 +21,11 @@ import { SeguimientoService } from './seguimiento.service.js';
     ReportesAcademicosController,
     SeguimientoController,
   ],
-  providers: [ReportesService, ReportesAcademicosService, SeguimientoService],
+  providers: [
+    ReportesService,
+    ReportesAcademicosService,
+    SeguimientoService,
+    RegistroReportesService,
+  ],
 })
 export class ReportesModule {}
