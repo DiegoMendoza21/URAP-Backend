@@ -358,6 +358,33 @@ describe('Diligenciamiento del proyecto docente (e2e) · RF-11, RF-12, HU-06-01 
       expect(auditoria?.valor_nuevo).toEqual({ descripcion: texto });
     });
 
+    it('lo que intenta un docente no asignado no se guarda ni queda en la auditoría (caso PA-01)', async () => {
+      const antes = await prisma.proyecto_docente.findUniqueOrThrow({
+        where: { id: proyecto },
+        select: { descripcion: true, fecha_actualizacion: true },
+      });
+      await como('docenteNoAsignado')
+        .put(`/proyectos-docentes/${proyecto}/descripcion`, {
+          texto: 'Texto de un docente que no está asignado',
+        })
+        .expect(404);
+      await expect(
+        prisma.proyecto_docente.findUniqueOrThrow({
+          where: { id: proyecto },
+          select: { descripcion: true, fecha_actualizacion: true },
+        }),
+      ).resolves.toEqual(antes);
+      await expect(
+        prisma.auditoria.count({
+          where: {
+            id_usuario: usuarios.docenteNoAsignado,
+            tabla_afectada: 'proyecto_docente',
+            accion: 'actualizar',
+          },
+        }),
+      ).resolves.toBe(0);
+    });
+
     it('cualquier docente asignado puede diligenciarlo, no solo el responsable', async () => {
       await como('codocente')
         .put(`/proyectos-docentes/${proyecto}/descripcion`, {

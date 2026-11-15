@@ -1209,6 +1209,21 @@ describe('Medición de RAP (e2e) · RF-30, HU-11-01 a HU-11-03', () => {
       ).expect(400);
     });
 
+    it('no identifica a ningún estudiante: ni nombres ni documentos (NFR-020, caso PN-09)', async () => {
+      // El reporte es agregado (RF-32): los 34 estudiantes valorados cuentan, pero no aparecen.
+      const { body } = await conToken(
+        'departamento',
+        http().get(consulta()),
+      ).expect(200);
+      const texto = JSON.stringify(body);
+      expect(texto).not.toContain(prefijoDocumento);
+      expect(texto).not.toContain('Ficticio E2E');
+      expect(texto).not.toMatch(/Estudiante (anterior )?\d/);
+      expect(texto).not.toMatch(
+        /"(identificacion|nombres|apellidos|idEstudiante)"/,
+      );
+    });
+
     it('ofrece los filtros según el alcance', async () => {
       const { body } = await conToken(
         'lider',
