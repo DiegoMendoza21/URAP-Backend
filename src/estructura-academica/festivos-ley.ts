@@ -26,7 +26,13 @@ const FIJOS: [mes: number, dia: number, nombre: string][] = [
   [12, 25, 'Navidad'],
 ];
 
-const TRASLADABLES: [mes: number, dia: number, nombre: string][] = [
+/** El cuarto valor, si está, es el primer año en que rige: los creados por leyes posteriores. */
+const TRASLADABLES: [
+  mes: number,
+  dia: number,
+  nombre: string,
+  desde?: number,
+][] = [
   [1, 6, 'Día de los Reyes Magos'],
   [3, 19, 'Día de San José'],
   [6, 29, 'San Pedro y San Pablo'],
@@ -34,6 +40,11 @@ const TRASLADABLES: [mes: number, dia: number, nombre: string][] = [
   [10, 12, 'Día de la Raza'],
   [11, 1, 'Día de Todos los Santos'],
   [11, 11, 'Independencia de Cartagena'],
+  // Ley 2578 del 1 de junio de 2026, trasladado al lunes por la Ley 51 de 1983 (13 de julio
+  // de 2026, 12 de julio de 2027). Hay una demanda en la Corte Constitucional sobre si se
+  // traslada o se celebra el 9: si cambia, se corrige desde «Días festivos», que lo deja
+  // editable, y aquí.
+  [7, 9, 'Nuestra Señora del Rosario de Chiquinquirá', 2026],
 ];
 
 /** Días después del Domingo de Pascua, y si se trasladan al lunes. */
@@ -88,10 +99,12 @@ export function festivosDeLey(anio: number): FestivoCalculado[] {
       fecha: new Date(Date.UTC(anio, mes - 1, dia)),
       nombre,
     })),
-    ...TRASLADABLES.map(([mes, dia, nombre]) => ({
-      fecha: alLunes(new Date(Date.UTC(anio, mes - 1, dia))),
-      nombre,
-    })),
+    ...TRASLADABLES.filter(([, , , desde]) => !desde || anio >= desde).map(
+      ([mes, dia, nombre]) => ({
+        fecha: alLunes(new Date(Date.UTC(anio, mes - 1, dia))),
+        nombre,
+      }),
+    ),
     ...DE_PASCUA.map(([dias, trasladable, nombre]) => {
       const fecha = sumarDias(pascua, dias);
       return { fecha: trasladable ? alLunes(fecha) : fecha, nombre };

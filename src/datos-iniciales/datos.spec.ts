@@ -115,9 +115,9 @@ describe('Datos iniciales', () => {
     ).toEqual(['clase']);
   });
 
-  it('trae los 18 festivos de 2026, en orden y sin repetir', () => {
+  it('trae los 19 festivos de 2026, en orden y sin repetir', () => {
     const fechas = FESTIVOS_2026.map(({ fecha }) => fecha);
-    expect(fechas).toHaveLength(18);
+    expect(fechas).toHaveLength(19);
     expect(repetidos(fechas)).toEqual([]);
     expect([...fechas].sort()).toEqual(fechas);
     for (const fecha of fechas) {

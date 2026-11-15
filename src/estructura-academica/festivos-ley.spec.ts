@@ -30,6 +30,7 @@ describe('festivos de ley (Ley 51 de 1983, HU-08-01)', () => {
       'Corpus Christi': '2027-05-31',
       'Sagrado Corazón de Jesús': '2027-06-07',
       'San Pedro y San Pablo': '2027-07-05',
+      'Nuestra Señora del Rosario de Chiquinquirá': '2027-07-12',
       'Día de la Independencia': '2027-07-20',
       'Batalla de Boyacá': '2027-08-07',
       'Asunción de la Virgen': '2027-08-16',
@@ -42,15 +43,23 @@ describe('festivos de ley (Ley 51 de 1983, HU-08-01)', () => {
     });
   });
 
-  it('son 18 por año, en fechas distintas', () => {
+  it('son 19 por año desde 2026, en fechas distintas', () => {
     for (const anio of [2026, 2027, 2028, 2029]) {
       const festivos = festivosDeLey(anio);
-      expect(festivos).toHaveLength(18);
-      expect(new Set(festivos.map((festivo) => festivo.fecha)).size).toBe(18);
+      expect(festivos).toHaveLength(19);
+      expect(new Set(festivos.map((festivo) => festivo.fecha)).size).toBe(19);
       expect(
         festivos.every((festivo) => festivo.fecha.startsWith(`${anio}-`)),
       ).toBe(true);
     }
+  });
+
+  it('suma el de Chiquinquirá (Ley 2578) solo desde 2026, trasladado al lunes', () => {
+    const nombre = 'Nuestra Señora del Rosario de Chiquinquirá';
+    expect(festivosDeLey(2025).some((f) => f.nombre === nombre)).toBe(false);
+    expect(festivosDeLey(2026)).toContainEqual({ fecha: '2026-07-13', nombre });
+    // El 9 de julio de 2029 es lunes: no se mueve.
+    expect(festivosDeLey(2029)).toContainEqual({ fecha: '2029-07-09', nombre });
   });
 
   it('junta en un día los que caen en el mismo lunes (2025 y 2030)', () => {
