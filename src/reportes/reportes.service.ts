@@ -22,6 +22,7 @@ import {
 } from './registro-reportes.service.js';
 import {
   type FilasExportacion,
+  filasPorAsignatura,
   SeguimientoService,
 } from './seguimiento.service.js';
 import type {
@@ -87,6 +88,12 @@ type MedicionReporte = Prisma.medicion_rapGetPayload<{
   select: typeof SELECCION_MEDICION;
 }>;
 
+/** HU-12-06: el máximo exportable cuenta las filas de la hoja de logro por asignatura. */
+export const FILAS_LOGRO: FilasExportacion = {
+  unidad: 'filas',
+  filtros: 'RAP',
+};
+
 /**
  * Reporte de logro de los RAP del programa (RF-32, HU-11-08). Consolida las mediciones
  * cerradas del período: por cada RAP, las asignaturas que lo evaluaron y su porcentaje en los
@@ -96,22 +103,6 @@ type MedicionReporte = Prisma.medicion_rapGetPayload<{
  * y la Dirección, sobre su programa; el Líder RAP, sobre los RAP que lidera en el período. El
  * Docente ve el consolidado de sus propias mediciones en la hoja de cada una.
  */
-/** HU-12-06: el máximo exportable cuenta las filas de la hoja de logro por asignatura. */
-export const FILAS_LOGRO: FilasExportacion = {
-  unidad: 'filas',
-  filtros: 'RAP',
-};
-
-/** Filas de la hoja principal del Excel: una por asignatura, o una por el RAP no evaluado. */
-export function filasDeLogro(
-  raps: readonly { asignaturas: readonly unknown[] }[],
-): number {
-  return raps.reduce(
-    (total, rap) => total + Math.max(rap.asignaturas.length, 1),
-    0,
-  );
-}
-
 @Injectable()
 export class ReportesService {
   constructor(
@@ -315,7 +306,7 @@ export class ReportesService {
 
     if (exportar) {
       await this.seguimiento.exigirTamanoExportable(
-        filasDeLogro(reporte.raps),
+        filasPorAsignatura(reporte.raps),
         FILAS_LOGRO,
       );
     }

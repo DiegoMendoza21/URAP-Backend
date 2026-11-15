@@ -22,11 +22,11 @@ import {
 } from '../src/mediciones/consolidado.js';
 import {
   FILAS_LOGRO,
-  filasDeLogro,
   MOTIVO_SIN_PERIODOS_ANTERIORES,
 } from '../src/reportes/reportes.service.js';
 import { TIPO_REPORTE } from '../src/reportes/registro-reportes.service.js';
 import {
+  filasPorAsignatura,
   mensajeExportacionGrande,
   PARAMETRO_EXPORTACION_MAXIMA,
 } from '../src/reportes/seguimiento.service.js';
@@ -1196,12 +1196,13 @@ describe('Medición de RAP (e2e) · RF-30, HU-11-01 a HU-11-03', () => {
       expect((unRap.body.raps as { id: number }[]).map((r) => r.id)).toEqual([
         raps.sinRubrica,
       ]);
-      // La consulta del reporte queda en auditoría con el usuario y la IP (RF-29).
+      // La generación del reporte queda en reporte_academico (HU-12-06) y su creación en la
+      // auditoría, con el usuario y la IP (RF-29).
       const auditada = await prisma.auditoria.findFirst({
         where: {
           id_usuario: usuarios.direccion,
-          accion: 'consulta_sensible',
-          tabla_afectada: 'programa',
+          accion: 'crear',
+          tabla_afectada: 'reporte_academico',
         },
       });
       expect(auditada?.ip).toBeTruthy();
@@ -1274,7 +1275,9 @@ describe('Medición de RAP (e2e) · RF-30, HU-11-01 a HU-11-03', () => {
         parametros: { idPrograma, idPeriodo, idRap: null },
       });
 
-      const filas = filasDeLogro(body.raps as { asignaturas: unknown[] }[]);
+      const filas = filasPorAsignatura(
+        body.raps as { asignaturas: unknown[] }[],
+      );
       expect(filas).toBeGreaterThan(1);
       const original = await prisma.parametro_sistema.findUnique({
         where: { clave: PARAMETRO_EXPORTACION_MAXIMA },

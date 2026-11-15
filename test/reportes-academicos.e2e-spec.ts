@@ -9,11 +9,11 @@ import { configurarAplicacion } from '../src/configurar-aplicacion.js';
 import {
   FILAS_CONTRIBUCION,
   FILAS_TEMAS,
-  filasDeContribucion,
   SIN_ESTADO,
   TIPO_REPORTE,
 } from '../src/reportes/academicos.service.js';
 import {
+  filasPorAsignatura,
   mensajeExportacionGrande,
   PARAMETRO_EXPORTACION_MAXIMA,
 } from '../src/reportes/seguimiento.service.js';
@@ -784,7 +784,7 @@ describe('Reportes académicos (e2e) · RF-28, HU-12-03, HU-12-04 y HU-12-05', (
         'departamento',
         conPeriodo('contribucion-rac-rap'),
       ).expect(200);
-      const filas = filasDeContribucion(
+      const filas = filasPorAsignatura(
         body.raps as { asignaturas: unknown[] }[],
       );
       expect(filas).toBeGreaterThan(1);

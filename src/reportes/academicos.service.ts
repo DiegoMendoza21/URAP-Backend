@@ -51,6 +51,7 @@ import {
   contarPendientes,
   ETIQUETA_COLOR,
   type FilasExportacion,
+  filasPorAsignatura,
   nombreCompleto,
   SeguimientoService,
 } from './seguimiento.service.js';
@@ -72,16 +73,6 @@ export const FILAS_CONTRIBUCION: FilasExportacion = {
   unidad: 'filas',
   filtros: 'período o RAP',
 };
-
-/** Filas del Excel de contribución: una por asignatura, o una por el RAP que no tiene. */
-export function filasDeContribucion(
-  raps: readonly { asignaturas: readonly unknown[] }[],
-): number {
-  return raps.reduce(
-    (total, rap) => total + Math.max(rap.asignaturas.length, 1),
-    0,
-  );
-}
 
 /** HU-12-04: el máximo exportable cuenta las filas de temas del archivo. */
 export const FILAS_TEMAS: FilasExportacion = {
@@ -606,7 +597,7 @@ export class ReportesAcademicosService {
 
     if (exportar) {
       await this.seguimiento.exigirTamanoExportable(
-        filasDeContribucion(resultado),
+        filasPorAsignatura(resultado),
         FILAS_CONTRIBUCION,
       );
     }
