@@ -16,6 +16,14 @@ import {
 } from '../mediciones/consolidado.js';
 import { ConsolidadoService } from '../mediciones/consolidado.service.js';
 import { AlcanceService } from '../proyectos-docentes/alcance.service.js';
+import {
+  RegistroReportesService,
+  TIPO_REPORTE,
+} from './registro-reportes.service.js';
+import {
+  type FilasExportacion,
+  SeguimientoService,
+} from './seguimiento.service.js';
 import type {
   AsignaturaEvaluadaDto,
   ComparacionPeriodoDto,
@@ -88,12 +96,30 @@ type MedicionReporte = Prisma.medicion_rapGetPayload<{
  * y la Dirección, sobre su programa; el Líder RAP, sobre los RAP que lidera en el período. El
  * Docente ve el consolidado de sus propias mediciones en la hoja de cada una.
  */
+/** HU-12-06: el máximo exportable cuenta las filas de la hoja de logro por asignatura. */
+export const FILAS_LOGRO: FilasExportacion = {
+  unidad: 'filas',
+  filtros: 'RAP',
+};
+
+/** Filas de la hoja principal del Excel: una por asignatura, o una por el RAP no evaluado. */
+export function filasDeLogro(
+  raps: readonly { asignaturas: readonly unknown[] }[],
+): number {
+  return raps.reduce(
+    (total, rap) => total + Math.max(rap.asignaturas.length, 1),
+    0,
+  );
+}
+
 @Injectable()
 export class ReportesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly alcance: AlcanceService,
     private readonly consolidados: ConsolidadoService,
+    private readonly seguimiento: SeguimientoService,
+    private readonly registro: RegistroReportesService,
   ) {}
 
   /** RF-32, p1: programas, RAP y períodos que el usuario puede consultar. */
@@ -147,10 +173,24 @@ export class ReportesService {
     };
   }
 
-  async logroRap(
+  logroRap(
     usuario: UsuarioSesion,
-    { idPrograma, idPeriodo, idRap }: ConsultarLogroRapDto,
+    consulta: ConsultarLogroRapDto,
   ): Promise<ReporteLogroRapDto> {
+    return this.generarLogro(usuario, consulta, false);
+  }
+
+  /**
+   * Arma el reporte de logro y registra su generación en `reporte_academico` con el usuario,
+   * la fecha y los filtros (HU-12-06). Al exportar, antes de registrar, comprueba que no supere
+   * el máximo de filas (RF-25, excepción de p5).
+   */
+  private async generarLogro(
+    usuario: UsuarioSesion,
+    consulta: ConsultarLogroRapDto,
+    exportar: boolean,
+  ): Promise<ReporteLogroRapDto> {
+    const { idPrograma, idPeriodo, idRap } = consulta;
     const [programa, periodo, completo, liderazgos] = await Promise.all([
       this.prisma.programa.findUnique({
         where: { id: idPrograma },
@@ -273,6 +313,25 @@ export class ReportesService {
       }),
     };
 
+    if (exportar) {
+      await this.seguimiento.exigirTamanoExportable(
+        filasDeLogro(reporte.raps),
+        FILAS_LOGRO,
+      );
+    }
+    await this.registro.registrar(usuario.id, {
+      tipo: TIPO_REPORTE.logro,
+      nombre: `Logro de los RAP del período ${reporte.periodo.codigo}`,
+      idPrograma,
+      idPeriodo,
+      parametros: {
+        idPrograma,
+        idPeriodo,
+        idRap: idRap ?? null,
+        raps: reporte.raps.length,
+      },
+      fecha: new Date(reporte.generado),
+    });
     return reporte;
   }
 
@@ -281,7 +340,7 @@ export class ReportesService {
     usuario: UsuarioSesion,
     consulta: ConsultarLogroRapDto,
   ): Promise<{ nombreArchivo: string; contenido: Buffer }> {
-    const reporte = await this.logroRap(usuario, consulta);
+    const reporte = await this.generarLogro(usuario, consulta, true);
     const resultado = (alcanzado: boolean | null) =>
       alcanzado === null
         ? reporte.metaDefinida

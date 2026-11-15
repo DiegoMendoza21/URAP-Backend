@@ -7,6 +7,7 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiProduces,
+  ApiUnprocessableEntityResponse,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
@@ -68,7 +69,8 @@ export class ReportesController {
     description:
       'Por cada RAP: las asignaturas que lo evaluaron con medición cerrada en el período, su ' +
       'porcentaje en los niveles de cumplimiento frente al esperado y la comparación con ' +
-      'períodos anteriores. Un RAP sin mediciones cerradas aparece como no evaluado.',
+      'períodos anteriores. Un RAP sin mediciones cerradas aparece como no evaluado. Cada ' +
+      'generación queda en reporte_academico con el usuario, la fecha y los filtros (HU-12-06).',
   })
   @ApiOkResponse({ type: ReporteLogroRapDto })
   @ApiBadRequestResponse({
@@ -109,6 +111,11 @@ export class ReportesController {
     type: RespuestaErrorDto,
     description:
       'El programa, el período o el RAP no existen o el usuario no tiene alcance sobre ellos',
+  })
+  @ApiUnprocessableEntityResponse({
+    type: RespuestaErrorDto,
+    description:
+      'Supera el máximo de filas exportables: hay que restringir los filtros',
   })
   async excel(
     @UsuarioActual() usuario: UsuarioSesion,

@@ -7,7 +7,9 @@ import { ROL } from '../src/auth/roles.js';
 import { PrismaService } from '../src/common/prisma/prisma.service.js';
 import { configurarAplicacion } from '../src/configurar-aplicacion.js';
 import {
+  FILAS_CONTRIBUCION,
   FILAS_TEMAS,
+  filasDeContribucion,
   SIN_ESTADO,
   TIPO_REPORTE,
 } from '../src/reportes/academicos.service.js';
@@ -775,6 +777,64 @@ describe('Reportes académicos (e2e) · RF-28, HU-12-03, HU-12-04 y HU-12-05', (
       expect(libro.headers['content-disposition']).toContain(
         'contribucion-rac-rap',
       );
+    });
+
+    it('respeta el máximo de filas al exportar (HU-12-06)', async () => {
+      const { body } = await pedir(
+        'departamento',
+        conPeriodo('contribucion-rac-rap'),
+      ).expect(200);
+      const filas = filasDeContribucion(
+        body.raps as { asignaturas: unknown[] }[],
+      );
+      expect(filas).toBeGreaterThan(1);
+      const original = await prisma.parametro_sistema.findUnique({
+        where: { clave: PARAMETRO_EXPORTACION_MAXIMA },
+      });
+      await prisma.parametro_sistema.upsert({
+        where: { clave: PARAMETRO_EXPORTACION_MAXIMA },
+        create: {
+          clave: PARAMETRO_EXPORTACION_MAXIMA,
+          valor: String(filas - 1),
+          tipo_dato: 'entero',
+        },
+        update: { valor: String(filas - 1) },
+      });
+      try {
+        const antes = await prisma.reporte_academico.count({
+          where: {
+            id_generado_por: usuarios.departamento,
+            tipo: TIPO_REPORTE.contribucion,
+          },
+        });
+        const grande = await pedir(
+          'departamento',
+          conPeriodo('contribucion-rac-rap/excel'),
+        ).expect(422);
+        expect(grande.body.mensaje).toBe(
+          mensajeExportacionGrande(filas, filas - 1, FILAS_CONTRIBUCION),
+        );
+        // Una exportación rechazada no queda como reporte generado.
+        expect(
+          await prisma.reporte_academico.count({
+            where: {
+              id_generado_por: usuarios.departamento,
+              tipo: TIPO_REPORTE.contribucion,
+            },
+          }),
+        ).toBe(antes);
+      } finally {
+        if (original) {
+          await prisma.parametro_sistema.update({
+            where: { clave: PARAMETRO_EXPORTACION_MAXIMA },
+            data: { valor: original.valor },
+          });
+        } else {
+          await prisma.parametro_sistema.deleteMany({
+            where: { clave: PARAMETRO_EXPORTACION_MAXIMA },
+          });
+        }
+      }
     });
   });
 });
