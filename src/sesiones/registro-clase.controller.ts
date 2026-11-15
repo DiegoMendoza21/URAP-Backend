@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   ParseIntPipe,
+  Patch,
   Put,
 } from '@nestjs/common';
 import {
@@ -22,7 +23,11 @@ import { Permiso } from '../auth/decoradores/permiso.decorator.js';
 import { UsuarioActual } from '../auth/decoradores/usuario-actual.decorator.js';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import { RespuestaErrorDto } from '../common/dto/respuesta-error.dto.js';
-import { DetalleSesionDto, RegistrarSesionDto } from './dto/registro.dto.js';
+import {
+  CambiarTipoSesionDto,
+  DetalleSesionDto,
+  RegistrarSesionDto,
+} from './dto/registro.dto.js';
 import {
   RegistroClaseService,
   TABLA_AUDITORIA_INASISTENCIA,
@@ -86,8 +91,8 @@ export class RegistroClaseController {
   @ApiBadRequestResponse({
     type: RespuestaErrorDto,
     description:
-      'Sin temas, temas de otro proyecto o sin tema, o estudiantes que no están matriculados ' +
-      'en el curso',
+      'Sin temas, temas de otro proyecto o sin tema, estudiantes que no están matriculados ' +
+      'en el curso, o un parcial o una actividad con temas o sin descripción',
   })
   @ApiForbiddenResponse({
     type: RespuestaErrorDto,
@@ -99,8 +104,8 @@ export class RegistroClaseController {
   @ApiConflictResponse({
     type: RespuestaErrorDto,
     description:
-      'Sesión de fecha futura, período cerrado, proyecto sin aprobar, sesión de un tipo que no ' +
-      'lleva temas, o todo el grupo ausente sin confirmar',
+      'Sesión de fecha futura, período cerrado, proyecto sin aprobar, sesión de un tipo en que ' +
+      'no hay clase (festivo), o todo el grupo ausente sin confirmar',
   })
   registrar(
     @UsuarioActual() usuario: UsuarioSesion,
@@ -109,5 +114,47 @@ export class RegistroClaseController {
     @Body() datos: RegistrarSesionDto,
   ): Promise<DetalleSesionDto> {
     return this.registro.registrar(usuario, idProyecto, idSesion, datos);
+  }
+
+  @Patch('tipo')
+  @Permiso('clases', 'actualizar')
+  @ApiOperation({
+    summary:
+      'Cambia el tipo de la sesión: clase, parcial, festivo o actividad complementaria (RF-21, HU-08-06)',
+    description:
+      'Los tipos salen del catálogo `tipo_sesion`. Uno que no lleva temas exige una ' +
+      'descripción. El parcial y la actividad se registran después con su asistencia y sin ' +
+      'temas; en el festivo no hay clase. Una sesión que el calendario marcó festivo se puede ' +
+      'pasar a clase si sí se dictó (excepción de p2), y la recalculación no la vuelve a marcar. ' +
+      'Si el tipo nuevo no admite lo ya registrado (temas o ausentes), pide ' +
+      '`confirmarQuitarRegistro` y responde 409 diciendo qué se quitaría. Se puede cambiar en ' +
+      'una sesión futura, para marcar un parcial con anticipación.',
+  })
+  @ApiOkResponse({ type: DetalleSesionDto })
+  @ApiBadRequestResponse({
+    type: RespuestaErrorDto,
+    description:
+      'Tipo que no existe o está inactivo, o un tipo sin temas sin descripción',
+  })
+  @ApiForbiddenResponse({
+    type: RespuestaErrorDto,
+    description:
+      'Ninguno de los roles del usuario registra clases, o ve el proyecto pero no es su ' +
+      'docente asignado ni el administrador',
+  })
+  @ApiNotFoundResponse(NO_VISIBLE)
+  @ApiConflictResponse({
+    type: RespuestaErrorDto,
+    description:
+      'Período cerrado, proyecto sin aprobar, evidencias en una sesión que pasaría a no tener ' +
+      'clase, o temas o ausentes que se quitarían sin confirmar',
+  })
+  cambiarTipo(
+    @UsuarioActual() usuario: UsuarioSesion,
+    @Param('idProyecto', ParseIntPipe) idProyecto: number,
+    @Param('idSesion', ParseIntPipe) idSesion: number,
+    @Body() datos: CambiarTipoSesionDto,
+  ): Promise<DetalleSesionDto> {
+    return this.registro.cambiarTipo(usuario, idProyecto, idSesion, datos);
   }
 }
