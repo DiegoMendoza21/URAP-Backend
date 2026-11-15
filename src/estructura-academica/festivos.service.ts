@@ -109,15 +109,16 @@ export class FestivosService {
       },
       include: CON_CONTEO,
     });
+    const calendariosRecalculados = await this.sesiones.recalcularPorFestivos([
+      fecha,
+    ]);
+    // Con su efecto: quien revise la auditoría ve por qué cambió el calendario de un curso.
     await this.auditoria.registrar({
       accion: 'crear',
       tablaAfectada: TABLA_FESTIVOS,
       idRegistro: creado.id,
-      valorNuevo: camposAuditados(creado),
+      valorNuevo: { ...camposAuditados(creado), calendariosRecalculados },
     });
-    const calendariosRecalculados = await this.sesiones.recalcularPorFestivos([
-      fecha,
-    ]);
     return {
       festivo: aFestivo(await this.buscar(creado.id)),
       calendariosRecalculados,
@@ -161,19 +162,19 @@ export class FestivosService {
       camposAuditados(anterior),
       camposAuditados(nuevo),
     );
+    const calendariosRecalculados =
+      cambiaFecha && anterior.fecha && fecha
+        ? await this.sesiones.recalcularPorFestivos([anterior.fecha, fecha])
+        : 0;
     if (cambios) {
       await this.auditoria.registrar({
         accion: 'actualizar',
         tablaAfectada: TABLA_FESTIVOS,
         idRegistro: id,
         valorAnterior: cambios.anterior,
-        valorNuevo: cambios.nuevo,
+        valorNuevo: { ...cambios.nuevo, calendariosRecalculados },
       });
     }
-    const calendariosRecalculados =
-      cambiaFecha && anterior.fecha && fecha
-        ? await this.sesiones.recalcularPorFestivos([anterior.fecha, fecha])
-        : 0;
     return {
       festivo: aFestivo(await this.buscar(id)),
       calendariosRecalculados,
@@ -194,15 +195,16 @@ export class FestivosService {
       }),
       this.prisma.dia_festivo.delete({ where: { id } }),
     ]);
+    const calendariosRecalculados = anterior.fecha
+      ? await this.sesiones.recalcularPorFestivos([anterior.fecha])
+      : 0;
     await this.auditoria.registrar({
       accion: 'eliminar',
       tablaAfectada: TABLA_FESTIVOS,
       idRegistro: id,
       valorAnterior: camposAuditados(anterior),
+      valorNuevo: { calendariosRecalculados },
     });
-    const calendariosRecalculados = anterior.fecha
-      ? await this.sesiones.recalcularPorFestivos([anterior.fecha])
-      : 0;
     return { festivo: null, calendariosRecalculados };
   }
 
@@ -233,17 +235,22 @@ export class FestivosService {
         }),
       ),
     );
+    const calendariosRecalculados = await this.sesiones.recalcularPorFestivos(
+      creados.flatMap((creado) => (creado.fecha ? [creado.fecha] : [])),
+    );
+    // Cada festivo cargado lleva el efecto de la carga completa: el recálculo es uno solo.
     for (const creado of creados) {
       await this.auditoria.registrar({
         accion: 'crear',
         tablaAfectada: TABLA_FESTIVOS,
         idRegistro: creado.id,
-        valorNuevo: camposAuditados(creado),
+        valorNuevo: {
+          ...camposAuditados(creado),
+          cargaDeLey: anio,
+          calendariosRecalculados,
+        },
       });
     }
-    const calendariosRecalculados = await this.sesiones.recalcularPorFestivos(
-      creados.flatMap((creado) => (creado.fecha ? [creado.fecha] : [])),
-    );
     return {
       anio,
       creados: creados.length,

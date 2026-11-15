@@ -331,6 +331,7 @@ describe('Días festivos (e2e) · RF-19, HU-08-01', () => {
     expect((await sesionDel(viernesSanto)).tipo_sesion?.codigo).toBe('clase');
   });
 
+  // Audita cada festivo y recalcula los calendarios del año: es lenta por naturaleza.
   it('carga los festivos de ley y marca la Semana Santa en el calendario', async () => {
     const carga = await como('administrador')
       .post('/festivos/ley', { anio: ANIO })
@@ -363,7 +364,7 @@ describe('Días festivos (e2e) · RF-19, HU-08-01', () => {
         (festivo: { fecha: string }) => festivo.fecha === viernesSanto,
       ),
     ).toMatchObject({ nombre: 'Viernes Santo', origen: 'ley', sesiones: 1 });
-  });
+  }, 20_000);
 
   it('agrega un día institucional, sin tocar la sesión ya diligenciada', async () => {
     const libre = miercoles(1);
@@ -411,6 +412,10 @@ describe('Días festivos (e2e) · RF-19, HU-08-01', () => {
       },
     });
     expect(auditado?.id_usuario).toBe(usuarios.administrador);
+    expect(auditado?.valor_nuevo).toMatchObject({
+      nombre: 'Día cívico E2E',
+      calendariosRecalculados: creado.body.calendariosRecalculados,
+    });
   });
 
   it('al cambiar la fecha, la vieja vuelve a ser de clase y la nueva se marca', async () => {
