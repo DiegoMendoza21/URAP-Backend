@@ -16,6 +16,7 @@ import {
   type AsignaturaPlan,
   ESCALA,
   FACULTAD,
+  horasDeLaAsignatura,
   type PlanEstudioSemilla,
   PLANES_DE_ESTUDIO,
   PROGRAMA,
@@ -399,6 +400,7 @@ export async function sembrarPlanesDeEstudio(
     const ids: number[] = [];
     for (const semilla of asignaturas) {
       const { ficha } = semilla;
+      const horas = horasDeLaAsignatura(semilla);
       const existente = await buscarAsignatura(tx, plan.id, semilla);
       if (existente) {
         await completarComponente(
@@ -419,11 +421,10 @@ export async function sembrarPlanesDeEstudio(
             // Con ficha, el componente y el tipo de curso son los del formato diligenciado.
             componente: ficha?.componente ?? semilla.componente,
             tipo_curso: ficha?.tipo_curso ?? semilla.tipo_curso,
-            ...(ficha && {
-              horas_tde: ficha.horas_tde,
-              horas_tdp: ficha.horas_tdp,
-              horas_ti: ficha.horas_ti,
-              horas_totales: ficha.horas_tde + ficha.horas_tdp + ficha.horas_ti,
+            // Las del formato, o las de la regla del programa si la asignatura tiene créditos.
+            ...(horas && {
+              ...horas,
+              horas_totales: horas.horas_tde + horas.horas_tdp + horas.horas_ti,
             }),
           },
         }));

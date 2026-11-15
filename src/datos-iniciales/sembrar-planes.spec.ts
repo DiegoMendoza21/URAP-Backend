@@ -157,15 +157,15 @@ describe('sembrarPlanesDeEstudio', () => {
 
     expect(base.delPlan('1702')).toHaveLength(69);
     expect(base.delPlan('2502')).toHaveLength(74);
-    // Las cuatro «Formación humana» son cuatro filas, una por código.
+    // Formación humana I a IV son cuatro filas, una por código.
     expect(
       base
         .delPlan('2502')
-        .filter((fila) => fila.nombre === 'Formación humana')
+        .filter((fila) => String(fila.nombre).startsWith('Formación humana'))
         .map((fila) => fila.codigo_interno),
     ).toEqual(['FC72731', 'FC72737', 'FC72738', 'FC72739']);
-    // 73 vínculos con los RAP, todos del 1702, y los tres prerrequisitos de las fichas.
-    expect(base.vinculos.size).toBe(73);
+    // 73 vínculos con los RAP en el 1702 y 78 en el 2502, y los tres prerrequisitos de las fichas.
+    expect(base.vinculos.size).toBe(73 + 78);
     expect(base.requisitos.size).toBe(3);
   });
 
@@ -177,7 +177,7 @@ describe('sembrarPlanesDeEstudio', () => {
     await sembrar(base.tx);
 
     expect(base.asignaturas).toEqual(antes);
-    expect(base.vinculos.size).toBe(73);
+    expect(base.vinculos.size).toBe(73 + 78);
     expect(base.requisitos.size).toBe(3);
   });
 
@@ -195,21 +195,20 @@ describe('sembrarPlanesDeEstudio', () => {
     expect(base.asignaturas.slice(0, antes.length)).toEqual(antes);
     const nuevas = base.asignaturas.slice(antes.length);
     expect(nuevas).toHaveLength(38);
+    // Las nuevas traen las horas de la regla del programa; las que ya estaban no las ganan.
     for (const fila of nuevas) {
-      expect(fila.horas_tde).toBeUndefined();
-      expect(fila.horas_totales).toBeUndefined();
+      expect(fila.horas_totales).toBe(48 * Number(fila.creditos));
     }
   });
 
   it('sobre una base sembrada sin el componente de los semestres 1 a 5, lo completa y no toca nada más', async () => {
     const base = baseEnMemoria();
-    // Como quedaron las bases sembradas con el PR #47: las 74, sin componente en 33 de ellas.
+    // Como quedaron las bases sembradas con el PR #47: 33 asignaturas de los semestres 1 a 5 sin
+    // componente.
+    const sinComponente = (fila: AsignaturaPlan) =>
+      fila.semestre <= 5 && !fila.ficha && fila.codigo_interno !== 'FC72731';
     const comoEnEl47 = PLAN_2502.map((fila) => {
-      if (
-        fila.semestre <= 5 &&
-        !fila.ficha &&
-        fila.codigo_interno !== 'FC72731'
-      ) {
+      if (sinComponente(fila)) {
         const { componente: _quitado, ...resto } = fila;
         return resto;
       }
@@ -219,33 +218,30 @@ describe('sembrarPlanesDeEstudio', () => {
       PLANES_ANTERIORES[0],
       { ...PLANES_ANTERIORES[1], asignaturas: comoEnEl47 },
     ]);
-    // 33 de los semestres 1 a 5 y las dos Electiva VIII.
     expect(
       base.delPlan('2502').filter((fila) => (fila.componente ?? null) === null),
-    ).toHaveLength(35);
+    ).toHaveLength(33);
     const antes = structuredClone(base.asignaturas);
 
     await sembrar(base.tx);
 
-    // 33 actualizaciones, solo del componente. Las dos Electiva VIII siguen sin él.
+    // 33 actualizaciones, solo del componente.
     expect(base.actualizaciones).toHaveLength(33);
     for (const cambio of base.actualizaciones) {
       expect(Object.keys(cambio).sort()).toEqual(['componente', 'id']);
     }
     expect(base.asignaturas).toHaveLength(antes.length);
-    const sinComponente = (fila: Fila) => {
+    const sinElComponente = (fila: Fila) => {
       const { componente: _quitado, ...resto } = fila;
       return resto;
     };
-    expect(base.asignaturas.map(sinComponente)).toEqual(
-      antes.map(sinComponente),
+    expect(base.asignaturas.map(sinElComponente)).toEqual(
+      antes.map(sinElComponente),
     );
     const fila = (codigo: string) =>
       base.delPlan('2502').find((a) => a.codigo_interno === codigo);
     expect(fila('FN23003')?.componente).toBe('BASICO');
     expect(fila('IX24189')?.componente).toBe('PROFESIONAL');
-    expect(fila('NC2505')?.componente).toBe('PROFESIONAL');
-    expect(fila('IX24221')?.componente).toBeUndefined();
     // Sembrar una vez más no cambia nada.
     await sembrar(base.tx);
     expect(base.actualizaciones).toHaveLength(33);
@@ -271,31 +267,57 @@ describe('sembrarPlanesDeEstudio', () => {
     expect(base.asignaturas[0].componente).toBe('PROFESIONAL');
   });
 
-  it('guarda el componente y el tipo de curso de una asignatura sin ficha, sin horas', async () => {
+  it('guarda componente, tipo de curso y las horas de la regla en una asignatura sin ficha', async () => {
     const base = baseEnMemoria();
     await sembrar(base.tx);
     const fila = (codigo: string) =>
       base.delPlan('2502').find((a) => a.codigo_interno === codigo);
 
     expect(fila('IX24209')).toMatchObject({
-      nombre: 'Electiva II - GA',
+      nombre: 'Electiva II (Administración de la calidad y la productividad)',
       semestre: 9,
       creditos: 3,
       componente: 'PROFESIONAL',
       tipo_curso: 'Electivo',
+      horas_tde: 48,
+      horas_tdp: 0,
+      horas_ti: 96,
+      horas_totales: 144,
     });
-    expect(fila('FC72737')).toMatchObject({ componente: 'COMPLEMENTARIO' });
+    expect(fila('FC72737')).toMatchObject({
+      nombre: 'Formación humana II',
+      componente: 'COMPLEMENTARIO',
+      horas_totales: 96,
+    });
     expect(fila('FC72737')?.tipo_curso).toBeUndefined();
-    expect(fila('IX24221')?.componente).toBeUndefined();
+    expect(fila('IX24221')).toMatchObject({
+      componente: 'COMPLEMENTARIO',
+      horas_tde: 80,
+      horas_ti: 160,
+      horas_totales: 240,
+    });
     // Con ficha siguen saliendo de ella, con sus horas.
     expect(fila('NC2505')).toMatchObject({
-      componente: 'PROFESIONAL',
+      componente: 'BASICO',
       tipo_curso: 'Obligatorio',
       horas_tde: 48,
       horas_tdp: 0,
       horas_ti: 96,
       horas_totales: 144,
     });
+    // Del 1702, las que tienen créditos ganan horas y las que no, no.
+    const del1702 = (nombre: string) =>
+      base.delPlan('1702').find((a) => a.nombre === nombre);
+    expect(del1702('Mercados')).toMatchObject({
+      creditos: 3,
+      horas_totales: 144,
+    });
+    expect(del1702('Prácticas profesionales')).toMatchObject({
+      creditos: 8,
+      horas_tde: 128,
+      horas_ti: 256,
+    });
+    expect(del1702('Finanzas a corto plazo')?.horas_tde).toBeUndefined();
   });
 
   it('busca por código: dos asignaturas con el mismo nombre son dos filas', async () => {

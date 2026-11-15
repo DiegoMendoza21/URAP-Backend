@@ -47,10 +47,15 @@ nombre de un festivo), hay que corregirlo también en las bases ya sembradas.
   rúbricas reales (versión 1, vigentes: 25 indicadores y 100 descriptores). Los indicadores de
   los RAP 1 y 3 a 7 son los del informe 2024-2; sus descriptores siguen la regla de la rúbrica
   del RAP 2.
-- **Plan de estudios:** 69 asignaturas con su semestre y sus 73 vínculos con los RAP. Cuatro
-  traen la ficha completa (código, componente, tipo, créditos, horas y prerrequisitos) y
-  Finanzas a corto plazo trae su código. Las demás quedan solo con nombre, semestre y RAP hasta
-  que el programa entregue sus datos.
+- **Planes de estudio:** los dos vigentes del programa.
+  - **1702:** 69 asignaturas con su semestre y 73 vínculos con los RAP. Las 35 que tienen
+    créditos traen también sus horas; las otras 34 quedan solo con nombre, semestre y RAP hasta
+    que el programa entregue sus datos.
+  - **2502:** 74 asignaturas con código, créditos, componente, horas y sus 78 vínculos con los
+    RAP (PEP 2025).
+  - **Horas:** salen de la regla del programa, TDE = 16 × créditos, TDP = 0 y TI = 32 ×
+    créditos, salvo en las cinco asignaturas con formato diligenciado, que traen su ficha
+    completa (componente, tipo, créditos, horas y prerrequisitos).
 
 Los datos del programa y sus fuentes están en `docs/datos-institucionales.md`.
 
