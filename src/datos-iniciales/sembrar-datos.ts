@@ -10,12 +10,7 @@ import {
   TIPOS_NOTIFICACION,
   TIPOS_SESION,
 } from './catalogos.js';
-import {
-  PERIODO,
-  RECESO_2026_2,
-  RUBRICAS_PROVISIONALES,
-  USUARIOS_DEMO,
-} from './demostracion.js';
+import { PERIODO, RECESO_2026_2, USUARIOS_DEMO } from './demostracion.js';
 import { permisosInicialesDe } from './matriz-permisos.js';
 import {
   type AsignaturaPlan,
@@ -25,7 +20,7 @@ import {
   PLANES_DE_ESTUDIO,
   PROGRAMA,
   RAPS,
-  RUBRICA_RAP_2,
+  RUBRICAS,
   type RubricaSemilla,
 } from './programa.js';
 import { type ArchivoDemo, sembrarRecorridoDemo } from './sembrar-recorrido.js';
@@ -59,9 +54,9 @@ export interface ResultadoSembrado {
 export const LIMITE_TRANSACCION_SEMBRADO_MS = 600_000;
 
 /**
- * Carga los datos base (catálogos, programa, RAP, rúbrica del RAP 2 y planes de estudio), que
- * sirven en cualquier ambiente, y, si se piden, los de demostración: período 2026-2 con su
- * receso, rúbricas provisionales, usuarios ficticios y el recorrido (proyectos en todos los
+ * Carga los datos base (catálogos, programa con su escala y su meta, RAP, rúbricas de los siete
+ * RAP y planes de estudio), que sirven en cualquier ambiente, y, si se piden, los de
+ * demostración: período 2026-2 con su receso, usuarios ficticios y el recorrido (proyectos en todos los
  * estados, 34 estudiantes ficticios y la medición del caso de RF-31; ver recorrido-demo.ts). Es
  * repetible: solo crea lo que falta y nunca modifica lo que ya existe, para no pisar lo que se
  * cambie desde la aplicación. Todo va en una transacción: si algo falla, la base queda como estaba.
@@ -99,14 +94,13 @@ export async function sembrarEn(
   await sembrarCatalogos(tx);
   const idPrograma = await sembrarPrograma(tx);
   const idsRap = await sembrarRaps(tx, idPrograma);
-  await sembrarRubrica(tx, idPrograma, idsRap, RUBRICA_RAP_2);
+  for (const rubrica of RUBRICAS) {
+    await sembrarRubrica(tx, idPrograma, idsRap, rubrica);
+  }
   await sembrarPlanesDeEstudio(tx, idPrograma, idsRap);
   let archivos: ArchivoDemo[] = [];
   if (demostracion) {
     const idPeriodo = await sembrarPeriodo(tx);
-    for (const rubrica of RUBRICAS_PROVISIONALES) {
-      await sembrarRubrica(tx, idPrograma, idsRap, rubrica);
-    }
     await sembrarUsuariosDemo(tx, {
       idPrograma,
       idPeriodo,

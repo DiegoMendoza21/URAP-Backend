@@ -1,6 +1,6 @@
 # Datos institucionales reales — Administración Industrial
 
-**Versión 3.3 — 11 de noviembre de 2026.** Los cambios de cada versión están al final, apartado por
+**Versión 3.4 — 15 de noviembre de 2026.** Los cambios de cada versión están al final, apartado por
 apartado. **Este archivo es público:** no lleva nombres de personas, cédulas ni correos; a las
 personas se las nombra por su función.
 
@@ -13,6 +13,17 @@ Fuentes:
 - `Matriz Consistencia RAP` — Vicerrectoría de Docencia, Desarrollo Profesoral. Responsables: el
   director del programa y una docente del programa.
 - `INFORME EVALUACIÓN RAP 2023-II — Administración Industrial`.
+- `Informe de resultados RAP 2024-2 — Administración Industrial` (2025): escala (Tabla 2),
+  estudiantes evaluados por RAP (Tabla 3) e indicadores de los siete RAP (Tabla 8). **Su Tabla 1
+  trae los nombres de los líderes y de los docentes: no se copian.**
+- `Proyecto Educativo del Programa (PEP) de Administración Industrial` — Facultad de Ciencias
+  Económicas, 2025. Describe el plan 2502: textos de los RAP (apartado 6.1.7.1), nivel de
+  desempeño esperado (Tabla 18), mapeo de asignaturas a RAP (Tabla 19), componentes (Tablas 20
+  a 23 y 28) y créditos y horas semanales de cada asignatura (Tabla 29). La versión de 2022
+  dice lo mismo en todo lo que usa este archivo. **Las dos traen nombres de directivos: no se
+  copian.**
+- `Regla de las horas` — anotada por el equipo el 15 de noviembre de 2026 en las preguntas al
+  programa: TDE = 16 × créditos, TDP solo en clases prácticas, TI = 2 × (TDE + TDP).
 - `Producto 1 — Arquitectura del Negocio URAP`, Tablas 10 y 11.
 - `FO-DO/PC-023 v00` — Medición de resultado de aprendizaje del programa por asignatura.
 - `FO-DO/PC-023 diligenciado` — medición del RAP 2 en Finanzas de corto plazo, primer período
@@ -114,8 +125,9 @@ que verifique el rol pero no el alcance está incompleto.
 
 ## 2. Resultados de Aprendizaje del Programa (RAP 1 a 7)
 
-Texto oficial, literal, de la Matriz de Consistencia del programa. Son siete y no cambian por
-asignatura ni por período: pertenecen al programa.
+Texto oficial, literal, de la Matriz de Consistencia del programa. El PEP 2025 (apartado
+6.1.7.1 y Tabla 18) trae los mismos siete textos, así que valen para los dos planes, el 1702 y
+el 2502. No cambian por asignatura ni por período: pertenecen al programa.
 
 | N° | Texto oficial |
 |---|---|
@@ -129,24 +141,29 @@ asignatura ni por período: pertenecen al programa.
 
 ### Número de indicadores de desempeño por RAP
 
-Medición 2023-II. Cada RAP se mide con 3 o 4 indicadores, nunca más de cuatro: el formato
-FO-DO/PC-023 solo tiene cuatro columnas de indicador.
+Medición 2023-II, confirmada por el informe 2024-2 (Tabla 8). Cada RAP se mide con 3 o 4
+indicadores, nunca más de cuatro: el formato FO-DO/PC-023 solo tiene cuatro columnas de
+indicador. Los vínculos son filas de `asignatura_rap` de cada plan (apartado 4).
 
-| RAP | Asignaturas vinculadas | Indicadores de desempeño |
-|---|---|---|
-| 1 | 7 | 4 |
-| 2 | 8 | 4 |
-| 3 | 16 | 4 |
-| 4 | 18 | 4 |
-| 5 | 3 | 3 |
-| 6 | 5 | 3 |
-| 7 | 16 | 3 |
-| **Total** | **73** | **25** |
+| RAP | Vínculos 1702 | Vínculos 2502 | Indicadores de desempeño |
+|---|---|---|---|
+| 1 | 7 | 7 | 4 |
+| 2 | 8 | 8 | 4 |
+| 3 | 16 | 14 | 4 |
+| 4 | 18 | 17 | 4 |
+| 5 | 3 | 5 | 3 |
+| 6 | 5 | 5 | 3 |
+| 7 | 16 | 22 | 3 |
+| **Total** | **73** | **78** | **25** |
+
+En el 2502, el RAP 7 tiene 22 vínculos porque la práctica tiene dos códigos, uno por línea de
+énfasis; el PEP cuenta 21 asignaturas.
 
 ### Rúbrica real del RAP 2
 
 Es la rúbrica con la que se midió el RAP 2 en Finanzas de corto plazo en 2024-1, tomada del
 formato FO-DO/PC-023 diligenciado. Va al seed como versión 1 de la rúbrica del RAP 2 (RF-06).
+El informe 2024-2 trae los mismos cuatro indicadores.
 
 | Indicador | Texto |
 |---|---|
@@ -162,9 +179,43 @@ ejemplo, dice literalmente «Raras veces identifica las variables del entorno ec
 financiero de las organizaciones». Así están en la rúbrica oficial: genera los dieciséis textos
 con esa regla.
 
-Las rúbricas de los otros seis RAP existen (el informe 2023-II reporta sus indicadores), pero no
-las tenemos. Hasta que lleguen, sus textos en el seed empiezan con «PROVISIONAL —», para que
-nadie las confunda con las reales en una demostración.
+### Indicadores de los RAP 1, 3, 4, 5, 6 y 7
+
+Texto literal de la Tabla 8 del informe de resultados RAP 2024-2, sin el punto final que traen
+algunos. Van al seed como versión 1 de la rúbrica de cada RAP (RF-06), en lugar de los textos
+«PROVISIONAL —».
+
+| RAP | Indicador | Texto |
+|---|---|---|
+| 1 | 1 | Comprende los conceptos matemáticos, estadísticos y el método científico en el ámbito organizacional |
+| 1 | 2 | Aplica los conceptos y herramientas matemáticas, estadísticas y el método científico en el ámbito organizacional |
+| 1 | 3 | Propone la solución de problemas con el apoyo de herramientas matemáticas, estadísticas y el método científico en el ámbito organizacional |
+| 1 | 4 | Valora resultados y alternativas de solución de problemas con el apoyo de las matemáticas, estadísticas y el método científico en el ámbito organizacional |
+| 3 | 1 | Identifica las necesidades, restricciones y oportunidades asociadas a las organizaciones y su contexto, que inciden en la mejora de su gestión integral |
+| 3 | 2 | Comprende conceptos, modelos, técnicas y/o herramientas adecuadas a las distintas temáticas relacionadas con la mejora en la gestión integral de las organizaciones |
+| 3 | 3 | Aplica modelos, técnicas y/o herramientas orientadas a la mejora de la gestión integral de las organizaciones |
+| 3 | 4 | Propone y valora alternativas que coadyuvan a la mejora de la gestión integral de las organizaciones |
+| 4 | 1 | Comprende los requerimientos, recursos y restricciones de un problema de producción y operaciones en las organizaciones |
+| 4 | 2 | Analiza soluciones a problemas de producción y operaciones en las organizaciones |
+| 4 | 3 | Aplica conceptos, principios, métodos y herramientas de la producción y operaciones requeridos en la formulación de un problema de producción y operaciones en las organizaciones |
+| 4 | 4 | Evalúa resultados y alternativas de solución a problemas de producción y operaciones en las organizaciones |
+| 5 | 1 | Comprende los elementos fundamentales aplicables al mercadeo y el entorno digital en el desarrollo de estrategias de valor para las organizaciones |
+| 5 | 2 | Aplica los conocimientos del mercadeo y del entorno digital en el desarrollo de estrategias de valor para las organizaciones |
+| 5 | 3 | Valora las estrategias propuestas en la generación de valor aplicadas al mercadeo y el entorno digital en las organizaciones |
+| 6 | 1 | Comprende los conocimientos y procesos de gestión humana en las organizaciones desde una visión integral de las personas apoyado en la legislación laboral |
+| 6 | 2 | Aplica los conocimientos y procesos de gestión humana en las organizaciones desde una visión integral de las personas apoyado en la legislación laboral |
+| 6 | 3 | Valora los conocimientos y procesos de gestión humana en las organizaciones desde una visión integral de las personas apoyado en la legislación laboral |
+| 7 | 1 | Comprende conceptos y técnicas de comunicación asertivas, desarrollo sostenible, principios éticos y demás conocimientos asociados a las ciencias sociales y jurídicas |
+| 7 | 2 | Aplica conceptos y técnicas de comunicación asertivas, desarrollo sostenible, principios éticos y demás conceptos asociados a las ciencias sociales y jurídicas |
+| 7 | 3 | Evalúa conceptos y técnicas de comunicación asertivas, desarrollo sostenible, principios éticos y demás conceptos asociados a las ciencias sociales y jurídicas |
+
+**Las descripciones por nivel salen de la regla del RAP 2.** El informe no las trae, así que
+el seed las genera con la misma regla de la rúbrica real: «No», «Raras veces»,
+«Frecuentemente» o «Siempre», seguido del texto del indicador con la primera letra en
+minúscula. Es la redacción del programa aplicada a sus indicadores oficiales, y está en el
+apartado 8 para que el programa la confirme. La regla produce frases como «No propone y valora
+alternativas…» (RAP 3, indicador 4): se dejan así. Si el programa corrige un texto, se hace
+desde la aplicación, con una nueva versión de la rúbrica.
 
 ---
 
@@ -184,8 +235,9 @@ por eso vive en `escala_valoracion` / `nivel_escala` y no en el código.
 lo dice («Valor numérico, según el nivel de desempeño (1: Principiante, 2: En Desarrollo…)») y la
 medición real del RAP 2 de 2024-1 lo confirma: cada estudiante tiene un nivel de 1 a 4 por
 indicador, sin ninguna nota. Es lo que ya guarda `valoracion_estudiante.id_nivel`. La tabla de
-rangos de nota de arriba es solo la conversión que usó el informe 2023-II para consolidar
-resultados: **no implementes conversión de notas.**
+rangos de nota de arriba es solo la conversión que usaron los informes 2023-II y 2024-2 para
+consolidar resultados (en el de 2024-2 es la Tabla 2, definida por el Comité Curricular): **no
+implementes conversión de notas.**
 
 ### Cómo se mide el cumplimiento de un RAP
 
@@ -197,11 +249,22 @@ de desempeño esperado definido para el RAP por el programa».
 El modelo ya tiene las tres piezas: `escala_valoracion.umbral_cumplimiento = 3` (desde qué nivel
 cuenta como logrado), `escala_valoracion.porcentaje_esperado` (el valor que fija el programa) y
 `medicion_rap.porcentaje_esperado` (la copia congelada en cada medición, para que cambiar la meta
-no reescriba las mediciones pasadas). **Lo único que falta es el número**: en la medición real
-de 2024-1 la casilla quedó en cero. Déjalo sin valor por defecto y que la pantalla diga «meta no
-definida por el programa». Si el programa responde que la meta es distinta para cada RAP, se
-agrega un `porcentaje_esperado` opcional en `rap` que prevalece sobre el de la escala; ese cambio
-entra primero al DBML, así que no lo hagas antes de la respuesta.
+no reescriba las mediciones pasadas).
+
+**La meta es 60 %, la misma para los siete RAP.** El PEP 2025 (Tabla 18) fija para cada RAP el
+mismo nivel de desempeño esperado: «Nota cuantitativa promedio superior a 3.0 o 60%». En la
+medición real de 2024-1 la casilla había quedado en cero, y en las preguntas al programa quedó
+anotado que no hay metas por RAP y que, mientras el comité curricular las define, puede usarse
+una sola. Carga `escala_valoracion.porcentaje_esperado = 60`.
+
+Cómo se aplica: URAP compara el 60 % con el porcentaje de valoraciones en nivel 3 o 4, que es lo
+que compara la casilla del formato. La «nota promedio superior a 3,0» no se calcula, porque el
+docente registra el nivel y no la nota (arriba). Es nuestra lectura del «o» de la tabla, y está
+en el apartado 8 para que el programa la confirme. El PEP dice «superior a»: si el sistema
+compara con «≥», la diferencia solo aparece con un logro de exactamente 60,00 %, y no se cambia
+antes de la entrega. Si el programa define después metas distintas por RAP, se agrega un
+`porcentaje_esperado` opcional en `rap` que prevalece sobre el de la escala; ese cambio entra
+primero al DBML y queda para después de la entrega.
 
 ### Un solo número por RAP
 
@@ -218,8 +281,8 @@ RF-32, de todas las mediciones cerradas de ese RAP en el período.
 - Entre asignaturas **no se promedian porcentajes: se suman valoraciones**. En 2023-II el RAP 3
   se midió en cuatro asignaturas, una con 8 estudiantes y otra con 39; promediando porcentajes,
   la de 8 pesaría lo mismo que la de 39. El informe 2023-II del programa sumó los estudiantes de
-  todas las asignaturas de cada RAP (126 registros en el RAP 1), así que esta regla reproduce su
-  método.
+  todas las asignaturas de cada RAP (126 registros en el RAP 1), y el de 2024-2 hizo lo mismo
+  (705 registros, Tabla 3), así que esta regla reproduce su método.
 - El juicio de cumplimiento compara ese número con la meta. Además, **cada indicador se compara
   con la meta y se señala el que quede por debajo**, aunque el RAP cumpla: es lo que muestra el
   gráfico del formato, y es como el informe 2023-II decidió priorizar la intervención en el RAP 2
@@ -251,7 +314,8 @@ formativa, 34 estudiantes, dio estos conteos:
 forma arbitraria que reproduzcan los conteos de cada indicador, y verifica que el consolidado dé
 exactamente esos cuatro porcentajes y, como logro del RAP, 63,97 % (87 de 136 valoraciones en
 nivel 3 o 4). En esa medición el tamaño de la muestra y el de la cohorte fueron iguales (34): el
-docente valoró al grupo completo.
+docente valoró al grupo completo. Con la meta de 60 %, el RAP 2 queda alcanzado (63,97 %), y se
+señalan los indicadores 3 y 4 (50,00 %), que quedan por debajo.
 
 ---
 
@@ -268,12 +332,13 @@ planes, son dos filas, una por plan.
 
 ### Plan 1702: asignaturas y mapeo a RAP
 
-Es el plan del informe 2023-II y de la matriz de consistencia, y **el único cuyo mapeo a RAP
-conocemos**: 69 asignaturas en 10 semestres y 73 vínculos asignatura–RAP (el informe menciona
-«69 asignaturas que tributan a los RAP del programa»). Es la tabla de `asignatura` y de
-`asignatura_rap` del plan 1702. Código y créditos salen de la programación 2026-1 y de los
-formatos diligenciados; donde dice «—», ese semestre del 1702 ya no tuvo grupos en 2026-1 y el
-dato hay que pedirlo.
+Es el plan de la matriz de consistencia y de los informes 2023-II y 2024-2: 69 asignaturas en 10
+semestres y 73 vínculos asignatura–RAP (el informe 2023-II menciona «69 asignaturas que tributan
+a los RAP del programa»). El informe 2024-2 midió 21 de esos vínculos, y todos coinciden con esta
+tabla. Es la tabla de `asignatura` y de `asignatura_rap` del plan 1702. Código y créditos salen
+de la programación 2026-1 y de los formatos diligenciados; donde dice «—», ese semestre del 1702
+ya no tuvo grupos en 2026-1 y el dato hay que pedirlo. Las horas salen de la regla de «Horas de
+las asignaturas», más abajo.
 
 | Sem. | Asignatura | Código | Créd. | RAP |
 |---|---|---|---|---|
@@ -357,146 +422,170 @@ la serie se esperaría 4917024. Se carga como viene y se pregunta (apartado 8, p
 
 ### Plan 2502: asignaturas
 
-Son 74 filas, con código y créditos para los diez semestres. Los semestres 1 a 5 ya estaban,
-por la programación 2026-1; se agrega una asignatura del semestre 5 (FC72731) y los semestres
-6 a 10 completos. El plan trae asignaturas que no existen en el 1702 (Inglés I a VI, Analítica
-de datos I y II, Desarrollo del espíritu emprendedor, Costos) y **no tiene mapeo a RAP
-conocido**. Hasta que llegue, sus asignaturas van al seed sin filas en `asignatura_rap`, y el
-asistente de RF-08 deja elegir entre todos los RAP del programa. Que el 2502 use los mismos RAP
-1 a 7 es un supuesto (SUP-16).
+Son 74 filas, con código y créditos para los diez semestres. El plan trae asignaturas que no
+existen en el 1702 (Inglés I a VI, Analítica de datos I y II, Desarrollo del espíritu
+emprendedor, Costos). **Su mapeo a RAP es el de la Tabla 19 del PEP 2025** (columna RAP), con los
+mismos siete RAP del programa: el PEP 2025 describe este plan y trae los mismos textos, así que
+el supuesto SUP-16 queda confirmado. Son 78 filas de `asignatura_rap`: 74 asignaturas, cuatro de
+ellas con dos RAP.
 
 **De dónde sale cada columna.** El semestre, el código y los créditos son de la malla del SMA.
 El nombre es el de la programación 2026-1 en los semestres 1 a 5; en los semestres 6 a 10, la
-malla lo muestra cortado y se completó con el plan de estudios público. El componente es el del
-plan de estudios público, y usa los tres valores de `asignatura.componente`. Ninguna asignatura
-del plan público quedó sin fila en la malla, salvo «Prácticas empresariales».
+malla lo muestra cortado y se completó con el plan de estudios público. Los nombres de las
+electivas, de Formación humana y de la práctica salen del PEP 2025 (Tablas 19, 22, 23 y 29). El
+componente es el del plan de estudios público, confirmado por las Tablas 20 a 23 y 28 del PEP,
+y usa los tres valores de `asignatura.componente`. La columna RAP es la Tabla 19 del PEP.
 
 **Las cuentas cuadran con las dos fuentes.** Por semestre son 19, 20, 19, 19, 19, 20, 19, 22, 30
 y 16 créditos, que suman 203. Eso cuenta las dos líneas de cada electiva (GA y GP). Un estudiante
-cursa una sola línea, y así el total es 177, el mismo del plan de estudios público.
+cursa una sola línea, y así el total es 177, el mismo del plan de estudios público y de la
+Tabla 29 del PEP 2025.
 
-| Sem. | Código | Asignatura | Créd. | Componente |
-|---|---|---|---|---|
-| 1 | FN23003 | Inglés I | 2 | Básico |
-| 1 | FN72726 | Cátedra institucional | 2 | Básico |
-| 1 | FN72727 | Producción y comprensión textual I | 2 | Básico |
-| 1 | NC2501 | Matemática I | 4 | Básico |
-| 1 | NC2507 | Fundamentos de administración | 3 | Profesional |
-| 1 | NC2508 | Fundamentos de contabilidad | 3 | Profesional |
-| 1 | NC2509 | Fundamentos de economía | 3 | Profesional |
-| 2 | FN24033 | Inglés II | 2 | Básico |
-| 2 | FN24047 | Humanidades | 2 | Básico |
-| 2 | FN72732 | Producción y comprensión textual II | 2 | Básico |
-| 2 | IX24100 | Costos | 2 | Profesional |
-| 2 | IX24165 | Teoría general de la administración | 3 | Profesional |
-| 2 | NC2502 | Matemática II | 4 | Básico |
-| 2 | NC2503 | Estadística I | 3 | Básico |
-| 2 | NC2506 | Derecho constitucional | 2 | Básico |
-| 3 | CFBD294 | Matemáticas III | 4 | Básico |
-| 3 | FN24035 | Inglés III | 2 | Básico |
-| 3 | FN72725 | Ética | 2 | Básico |
-| 3 | IX24182 | Planeación y control | 3 | Profesional |
-| 3 | IX25263 | Desarrollo del espíritu emprendedor | 2 | Básico |
-| 3 | NC2504 | Estadística II | 3 | Básico |
-| 3 | NC2505 | Fundamentos de investigación científica | 3 | Por confirmar |
-| 4 | CFBD297 | Investigación aplicada | 3 | Básico |
-| 4 | FN24036 | Inglés IV | 2 | Básico |
-| 4 | IX24184 | Organización y dirección | 3 | Profesional |
-| 4 | IX24185 | Matemática financiera | 3 | Profesional |
-| 4 | IX24186 | Analítica de datos I | 3 | Profesional |
-| 4 | IX24187 | Dibujo técnico - expresión gráfica | 2 | Profesional |
-| 4 | NC2510 | Microeconomía I | 3 | Profesional |
-| 5 | FN24037 | Inglés V | 2 | Básico |
-| 5 | IX24188 | Química industrial | 3 | Profesional |
-| 5 | IX24189 | Finanzas a corto plazo | 3 | Profesional |
-| 5 | IX24190 | Analítica de datos II | 3 | Profesional |
-| 5 | IX24191 | Sistema de producción | 2 | Profesional |
-| 5 | IX24192 | Macroeconomía | 2 | Profesional |
-| 5 | IX24193 | Comportamiento organizacional | 2 | Profesional |
-| 5 | FC72731 | Formación humana | 2 | Complementario |
-| 6 | IX24194 | Procesos de manufactura | 4 | Profesional |
-| 6 | IX24195 | Estudio del trabajo | 3 | Profesional |
-| 6 | IX24197 | Finanzas y negocios internacionales | 3 | Profesional |
-| 6 | IX24198 | Mercados | 3 | Profesional |
-| 6 | IX24199 | Procesos industriales | 3 | Profesional |
-| 6 | IX24200 | Legislación laboral | 2 | Profesional |
-| 6 | FN24038 | Inglés VI | 2 | Básico |
-| 7 | IX24201 | Emprendimiento e innovación | 3 | Profesional |
-| 7 | IX24202 | Planeación y organización de la producción | 3 | Profesional |
-| 7 | IX24203 | Investigación de operaciones I | 3 | Profesional |
-| 7 | IX24204 | Gestión del talento humano | 2 | Profesional |
-| 7 | IX24205 | Gestión de la cadena de suministro | 2 | Profesional |
-| 7 | IX24206 | Seguridad y salud en el trabajo | 2 | Profesional |
-| 7 | FC72737 | Formación humana | 2 | Complementario |
-| 7 | FC72738 | Formación humana | 2 | Complementario |
-| 8 | IX24222 | Gestión de la calidad | 3 | Profesional |
-| 8 | IX24224 | Control de la producción | 3 | Profesional |
-| 8 | IX24225 | Formulación y evaluación de proyectos | 3 | Profesional |
-| 8 | IX24226 | Investigación de operaciones II | 3 | Profesional |
-| 8 | IX24227 | Gestión ambiental | 2 | Profesional |
-| 8 | FC72739 | Formación humana | 2 | Complementario |
-| 8 | IX24207 | Electiva I - GA | 3 | Profesional |
-| 8 | IX24208 | Electiva I - GP | 3 | Profesional |
-| 9 | IX24209 | Electiva II - GA | 3 | Profesional |
-| 9 | IX24210 | Electiva II - GP | 3 | Profesional |
-| 9 | IX24211 | Electiva III - GA | 3 | Profesional |
-| 9 | IX24212 | Electiva III - GP | 3 | Profesional |
-| 9 | IX24213 | Electiva IV - GA | 3 | Profesional |
-| 9 | IX24214 | Electiva IV - GP | 3 | Profesional |
-| 9 | IX24215 | Electiva V - GA | 3 | Profesional |
-| 9 | IX24216 | Electiva V - GPO | 3 | Profesional |
-| 9 | IX24217 | Electiva VI - GA | 3 | Profesional |
-| 9 | IX24218 | Electiva VI - GP | 3 | Profesional |
-| 10 | IX24219 | Electiva VII - GA | 3 | Profesional |
-| 10 | IX24220 | Electiva VII - GP | 3 | Profesional |
-| 10 | IX24221 | Electiva VIII - GA | 5 | — |
-| 10 | IX24228 | Electiva VIII - GP | 5 | — |
+| Sem. | Código | Asignatura | Créd. | Componente | RAP |
+|---|---|---|---|---|---|
+| 1 | FN23003 | Inglés I | 2 | Básico | 7 |
+| 1 | FN72726 | Cátedra institucional | 2 | Básico | 7 |
+| 1 | FN72727 | Producción y comprensión textual I | 2 | Básico | 7 |
+| 1 | NC2501 | Matemática I | 4 | Básico | 1 |
+| 1 | NC2507 | Fundamentos de administración | 3 | Profesional | 3 |
+| 1 | NC2508 | Fundamentos de contabilidad | 3 | Profesional | 2 |
+| 1 | NC2509 | Fundamentos de economía | 3 | Profesional | 2 |
+| 2 | FN24033 | Inglés II | 2 | Básico | 7 |
+| 2 | FN24047 | Humanidades | 2 | Básico | 7 |
+| 2 | FN72732 | Producción y comprensión textual II | 2 | Básico | 7 |
+| 2 | IX24100 | Costos | 2 | Profesional | 2 |
+| 2 | IX24165 | Teoría general de la administración | 3 | Profesional | 3 |
+| 2 | NC2502 | Matemática II | 4 | Básico | 1 |
+| 2 | NC2503 | Estadística I | 3 | Básico | 1 |
+| 2 | NC2506 | Derecho constitucional | 2 | Básico | 7 |
+| 3 | CFBD294 | Matemáticas III | 4 | Básico | 1 |
+| 3 | FN24035 | Inglés III | 2 | Básico | 7 |
+| 3 | FN72725 | Ética | 2 | Básico | 7 |
+| 3 | IX24182 | Planeación y control | 3 | Profesional | 3 |
+| 3 | IX25263 | Desarrollo del espíritu emprendedor | 2 | Básico | 7 |
+| 3 | NC2504 | Estadística II | 3 | Básico | 1 |
+| 3 | NC2505 | Fundamentos de investigación científica | 3 | Básico | 1, 7 |
+| 4 | CFBD297 | Investigación aplicada | 3 | Básico | 1, 7 |
+| 4 | FN24036 | Inglés IV | 2 | Básico | 7 |
+| 4 | IX24184 | Organización y dirección | 3 | Profesional | 3, 7 |
+| 4 | IX24185 | Matemática financiera | 3 | Profesional | 2 |
+| 4 | IX24186 | Analítica de datos I | 3 | Profesional | 5 |
+| 4 | IX24187 | Dibujo técnico - expresión gráfica | 2 | Profesional | 4 |
+| 4 | NC2510 | Microeconomía I | 3 | Profesional | 2 |
+| 5 | FN24037 | Inglés V | 2 | Básico | 7 |
+| 5 | IX24188 | Química industrial | 3 | Profesional | 4 |
+| 5 | IX24189 | Finanzas a corto plazo | 3 | Profesional | 2 |
+| 5 | IX24190 | Analítica de datos II | 3 | Profesional | 5 |
+| 5 | IX24191 | Sistema de producción | 2 | Profesional | 4 |
+| 5 | IX24192 | Macroeconomía | 2 | Profesional | 2 |
+| 5 | IX24193 | Comportamiento organizacional | 2 | Profesional | 6 |
+| 5 | FC72731 | Formación humana I | 2 | Complementario | 7 |
+| 6 | IX24194 | Procesos de manufactura | 4 | Profesional | 4 |
+| 6 | IX24195 | Estudio del trabajo | 3 | Profesional | 4 |
+| 6 | IX24197 | Finanzas y negocios internacionales | 3 | Profesional | 2 |
+| 6 | IX24198 | Mercados | 3 | Profesional | 5 |
+| 6 | IX24199 | Procesos industriales | 3 | Profesional | 4 |
+| 6 | IX24200 | Legislación laboral | 2 | Profesional | 6 |
+| 6 | FN24038 | Inglés VI | 2 | Básico | 7 |
+| 7 | IX24201 | Emprendimiento e innovación | 3 | Profesional | 5 |
+| 7 | IX24202 | Planeación y organización de la producción | 3 | Profesional | 4 |
+| 7 | IX24203 | Investigación de operaciones I | 3 | Profesional | 4 |
+| 7 | IX24204 | Gestión del talento humano | 2 | Profesional | 6 |
+| 7 | IX24205 | Gestión de la cadena de suministro | 2 | Profesional | 3 |
+| 7 | IX24206 | Seguridad y salud en el trabajo | 2 | Profesional | 3, 6 |
+| 7 | FC72737 | Formación humana II | 2 | Complementario | 7 |
+| 7 | FC72738 | Formación humana III | 2 | Complementario | 7 |
+| 8 | IX24222 | Gestión de la calidad | 3 | Profesional | 3 |
+| 8 | IX24224 | Control de la producción | 3 | Profesional | 4 |
+| 8 | IX24225 | Formulación, gestión y evaluación de proyectos | 3 | Profesional | 5 |
+| 8 | IX24226 | Investigación de operaciones II | 3 | Profesional | 4 |
+| 8 | IX24227 | Gestión ambiental | 2 | Profesional | 3 |
+| 8 | FC72739 | Formación humana IV | 2 | Complementario | 7 |
+| 8 | IX24207 | Electiva I (Estudios prospectivos) | 3 | Profesional | 3 |
+| 8 | IX24208 | Electiva I GPO (Control estadístico de la calidad) | 3 | Profesional | 4 |
+| 9 | IX24209 | Electiva II (Administración de la calidad y la productividad) | 3 | Profesional | 3 |
+| 9 | IX24210 | Electiva II GPO (Mejoramiento de procesos) | 3 | Profesional | 4 |
+| 9 | IX24211 | Electiva III (Sistemas de información gerencial) | 3 | Profesional | 3 |
+| 9 | IX24212 | Electiva III GPO (Simulación de procesos) | 3 | Profesional | 4 |
+| 9 | IX24213 | Electiva IV (Administración de sueldos y salarios) | 3 | Profesional | 6 |
+| 9 | IX24214 | Electiva IV GPO (Tópicos avanzados de productividad) | 3 | Profesional | 4 |
+| 9 | IX24215 | Electiva V (Gestión logística del comercio internacional) | 3 | Profesional | 3 |
+| 9 | IX24216 | Electiva V GPO (Administración del mantenimiento industrial) | 3 | Profesional | 4 |
+| 9 | IX24217 | Electiva VI (Sistemas para la gestión de recursos empresariales - ERP) | 3 | Profesional | 3 |
+| 9 | IX24218 | Electiva VI GPO (Diseño de planta) | 3 | Profesional | 4 |
+| 10 | IX24219 | Electiva VII (Sistemas integrados de gestión) | 3 | Profesional | 3 |
+| 10 | IX24220 | Electiva VII GPO (Diseño de producto) | 3 | Profesional | 4 |
+| 10 | IX24221 | Prácticas profesionales (Electiva VIII GA) | 5 | Complementario | 7 |
+| 10 | IX24228 | Prácticas profesionales (Electiva VIII GPO) | 5 | Complementario | 7 |
 
 **Lo que hay que saber antes de cargarlas:**
 
-- **Electivas.** La malla solo dice «Electiva II - GA» o «Electiva II - GP». Cárgalas con ese
-  nombre, y con «Electivo» en `tipo_curso`. El plan público sí nombra cada una (tabla siguiente),
-  pero falta que el programa confirme que GA es la primera línea y GP la línea GPO.
-- **Formación humana.** Son cuatro asignaturas con el mismo nombre y códigos distintos. El plan
-  público las llama «Curso de formación humana I a IV»; la malla no dice cuál es cuál. No les
-  pongas número.
-- **Electiva VIII.** Vale 5 créditos y no está en el plan público, que en su lugar trae
-  «Prácticas empresariales», también de 5 créditos y en el componente complementario. Parece la
-  misma, pero ninguna fuente lo dice. Cárgala con el nombre de la malla y sin componente.
-- **IX24225.** La malla empieza «Formulación, ge…» y el plan público dice «Formulación y
-  evaluación de proyectos». Se dejó el nombre del plan público.
-- **Componente de NC2505.** El formato diligenciado de Fundamentos de investigación científica
-  dice «Profesional», y el plan público la ubica en el componente básico. No cambies el seed:
-  sigue como en el formato hasta que el programa responda. En las otras dos asignaturas del 2502
-  con formato (NC2507 e IX24193), el formato y el plan público coinciden.
-- **Componente básico.** El plan público lo divide en formación disciplinaria y no
-  disciplinaria. El modelo tiene un solo valor, `BASICO`, y no hace falta más.
-- **Horas y requisitos.** Ninguna de las dos fuentes trae las horas TDE, TDP y TI. La malla dibuja
-  los prerrequisitos con líneas que no se leen con seguridad, así que no se copió ninguno. Esas
-  columnas quedan vacías.
-
-**Nombres de las electivas según el plan de estudios público** (por confirmar con el programa):
-
-| Electiva | Línea GA | Línea GP (GPO) |
-|---|---|---|
-| I | Estudios prospectivos | Control estadístico de la calidad |
-| II | Administración de la calidad y la productividad | Mejoramiento de procesos |
-| III | Sistemas de información gerencial | Simulación de procesos |
-| IV | Administración de sueldos y salarios | Tópicos avanzados de productividad |
-| V | Gestión logística del comercio internacional | Administración del mantenimiento industrial |
-| VI | Sistema de gestión de recursos empresariales (ERP) | Diseño de planta |
-| VII | Sistemas integrados de gestión | Diseño de producto |
-
-Coinciden con las electivas I a VII del plan 1702, con diferencias menores de redacción en la
-II y la VI.
+- **Electivas.** GA es la línea de Gestión Administrativa y GP la de Gestión de la Producción y
+  Operaciones, GPO: son las «dos áreas de énfasis o profundización» del PEP 2025 (p. 61). Los
+  nombres son los del PEP, con el formato de las electivas del 1702: «Electiva I (Estudios
+  prospectivos)» en la línea GA y «Electiva I GPO (Control estadístico de la calidad)» en la GP.
+  Van con «Electivo» en `tipo_curso`. Coinciden con las del 1702, salvo diferencias menores de
+  redacción en la II y la VI.
+- **Formación humana I a IV.** La Tabla 29 del PEP pone la I en el semestre 5, la II y la III en
+  el 7 y la IV en el 8. FC72731 es la I y FC72739 la IV. Entre FC72737 y FC72738 ningún
+  documento dice cuál es la II: se toma el orden de los códigos (apartado 8).
+- **Electiva VIII: Prácticas profesionales.** En el semestre X, la Tabla 29 trae la Electiva VII
+  y las «Prácticas profesionales», de 5 créditos, y la Tabla 23 las pone en el componente
+  complementario como «Práctica empresarial». Es la única asignatura de 5 créditos en el PEP y en
+  la malla, así que la Electiva VIII es la práctica. Tiene un código por línea, y ningún documento
+  dice por qué: son dos filas, con componente complementario y RAP 7. En `tipo_curso` lleva el
+  mismo valor que la práctica del 1702 (4949920).
+- **IX24225.** La malla empieza «Formulación, ge…», y las Tablas 19 y 29 del PEP dicen
+  «Formulación, gestión y evaluación de proyectos». Ese es el nombre; el plan público lo abrevia.
+- **Componente de NC2505: básico.** La Tabla 20 del PEP pone Fundamentos de investigación
+  científica en la formación básica disciplinar, y solo así cuadran los totales de la Tabla 28
+  (26 créditos en 8 asignaturas). Prevalece sobre su formato diligenciado, que dice «Profesional».
+- **Componente de Desarrollo del espíritu emprendedor: básico.** La Tabla 22 del PEP la lista en
+  el componente profesional, pero los totales de la Tabla 28 (24 créditos en 12 asignaturas de la
+  básica no disciplinar, 114 en 41 de la profesional) solo cuadran si es básica, como dice el
+  plan público.
+- **Dos asignaturas con el RAP en duda.** La Tabla 19 marca Seguridad y salud en el trabajo solo
+  en el RAP 3, pero la Tabla 18 y el total impreso de la columna del RAP 6 la incluyen también en
+  el 6: va con los dos. Desarrollo del espíritu emprendedor está en el RAP 5 en la Tabla 18 y en
+  el RAP 7 en la Tabla 19: va con el 7, que es lo que dan los totales de la Tabla 19 (7, 8, 14,
+  17, 5, 5 y 21), y queda en el apartado 8.
+- **Componente básico.** El plan público y el PEP lo dividen en formación disciplinar y no
+  disciplinar. El modelo tiene un solo valor, `BASICO`, y no hace falta más.
+- **Horas.** Con la regla de «Horas de las asignaturas», más abajo.
+- **Requisitos.** La malla dibuja los prerrequisitos con líneas que no se leen con seguridad, y
+  el PEP no los trae, así que no se copió ninguno. Esa columna queda vacía.
 
 El reporte de la programación 2026-1 no separa las horas TDE, TDP y TI: trae horas semanales
 (HRS) e intensidad (INT), cuya relación con el formato no está documentada, así que esas columnas
-no se llenan con él.
+no se llenan con él: salen de la regla de «Horas de las asignaturas».
 También trae la ponderación de cada corte: 30 %, 30 % y 40 % en casi todas las asignaturas,
 20 %, 20 %, 20 % y 40 % en algunos grupos de inglés, y todo el peso en el tercer corte para
 Taller de manufactura y la práctica. Es dato del sistema académico, útil para el punto 5 del
 proyecto docente; no lo conviertas en validación mientras RF-14 no la pida.
+
+### Horas de las asignaturas
+
+Regla del programa, para los dos planes: **TDE = 16 × créditos; TDP = 0, salvo en clases
+prácticas como los laboratorios, y se fija al crear el proyecto docente; TI = 2 × (TDE + TDP)**.
+La anotó el equipo el 15 de noviembre en las preguntas al programa, y la confirman la Tabla 29
+del PEP 2025, que da por semana tantas horas de trabajo directo como créditos y el doble de
+trabajo independiente, y los cinco formatos diligenciados (abajo).
+
+En el seed, TDP = 0 en todas, así que TI = 32 × créditos y el total, 48 × créditos:
+
+| Créditos | TDE | TDP | TI | Total |
+|---|---|---|---|---|
+| 2 | 32 | 0 | 64 | 96 |
+| 3 | 48 | 0 | 96 | 144 |
+| 4 | 64 | 0 | 128 | 192 |
+| 5 | 80 | 0 | 160 | 240 |
+| 8 | 128 | 0 | 256 | 384 |
+
+Se llenan las 74 asignaturas del 2502 y las 35 del 1702 que tienen créditos; la de 8 es la
+práctica del 1702. Las 34 del 1702 sin créditos quedan sin horas. La validación de 48 horas por
+crédito es de la asignatura, que siempre lleva TDP = 0. Que el docente agregue TDP al crear el
+proyecto docente, con TI = 2 × (TDE + TDP), es funcionalidad: si el sistema no lo hace ya, queda
+para después de la entrega.
 
 ### Asignaturas con datos completos
 
@@ -507,14 +596,16 @@ autocompleta exactamente estos campos.
 | Plan | Asignatura | Código | Componente | Tipo | Créd. | TDE | TDP | TI | Total | Prerrequisito |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 2502 | Fundamentos de administración | NC2507 | Profesional | Obligatorio | 3 | 48 | 0 | 96 | 144 | — |
-| 2502 | Fundamentos de investigación científica | NC2505 | Profesional | Obligatorio | 3 | 48 | 0 | 96 | 144 | Producción y comprensión textual II |
+| 2502 | Fundamentos de investigación científica | NC2505 | Básico* | Obligatorio | 3 | 48 | 0 | 96 | 144 | Producción y comprensión textual II |
 | 2502 | Comportamiento organizacional | IX24193 | Profesional | Obligatorio | 2 | 32 | 0 | 64 | 96 | Organización y dirección |
 | 1702 | Comportamiento organizacional | FP15503 | Profesional | Obligatorio | 2 | 32 | 0 | 64 | 96 | Organización y dirección |
 | 1702 | Gestión ambiental | FP15804 | Profesional | Obligatorio | 2 | 32 | 0 | 64 | 96 | — |
 
-Ninguna tiene correquisitos. Las cinco cumplen la regla de 48 horas por crédito que valida
-`asignatura.horas_totales`, y en las cinco TDE = 16 h y TI = 32 h por crédito; no generalices esa
-proporción, porque las asignaturas prácticas (talleres, química, dibujo técnico) tendrán TDP.
+\* El formato diligenciado dice «Profesional»; prevalece el PEP 2025 (arriba). En NC2505 el
+asistente autocompleta «Básico»: si una prueba lo compara con el formato, se ajusta.
+
+Ninguna tiene correquisitos. Las cinco cumplen la regla de «Horas de las asignaturas» y la de 48
+horas por crédito que valida `asignatura.horas_totales`.
 
 **Los dos formatos de Comportamiento organizacional son idénticos salvo el código**: la misma
 docente, el mismo contenido, uno por plan. Es la mejor prueba del modelo v2.5: dos filas de
@@ -646,26 +737,30 @@ aprendizaje de este catálogo, y las estrategias que ya usaron otros proyectos d
 ## 8. Lo que todavía NO existe y hay que pedirle al programa
 
 Esto sí es lo único que falta. No lo inventes ni lo deduzcas: mientras no llegue, la aplicación
-dice «no definido». La última columna dice si la respuesta cambiaría el modelo; como el modelo se
-congela el 15 de noviembre (las funcionalidades, el 18), lo que lo cambie y llegue después queda
-para después de la entrega.
+hace lo que dice la columna «Mientras tanto». La última columna dice si la respuesta cambiaría el
+modelo; como el modelo se congeló el 15 de noviembre (las funcionalidades, el 18), lo que lo
+cambie y llegue después queda para después de la entrega.
+
+El 15 de noviembre el programa compartió el PEP 2025, el PEP 2022 y el informe de resultados RAP
+2024-2. Con ellos y con la regla de las horas quedaron resueltas las preguntas 1, 6, 7, 13 y 14,
+y la parte de las horas de la 5 (lista al final del apartado). Las que siguen abiertas conservan
+su número; las 15 a 18 son nuevas y salen de esos documentos.
 
 | # | Pregunta | Mientras tanto | ¿Cambia el modelo? |
 |---|---|---|---|
-| 1 | Meta de cumplimiento (porcentaje esperado) y si es la misma para los siete RAP | «Meta no definida» | Solo si es distinta por RAP |
-| 2 | Si se confirma la regla del logro del RAP (apartado 3) o se exige la meta a cada indicador | Regla del apartado 3 | No: una función |
+| 2 | Si se confirma la regla del logro del RAP (apartado 3) o se exige la meta a cada indicador. El informe 2024-2 suma, como el de 2023-II, los estudiantes de todas las asignaturas de cada RAP, pero tampoco junta los indicadores | Regla del apartado 3 | No: una función |
 | 3 | Si un miembro del Departamento puede aprobar un proyecto en el que es docente; RF-18 no lo prohíbe | No se permite: parámetro `revision_bloquear_autoaprobacion`, encendido | No: una regla y un parámetro |
-| 4 | Qué es un proyecto «publicado», que es lo que ve el Estudiante (RF-27) | Propuesta: aprobado o en ejecución | Solo si exige publicar a mano |
-| 5 | Las horas (TDE, TDP y TI) y los requisitos de cada asignatura de los dos planes. Del plan 2502 ya están el código y los créditos de todas (apartado 4). Del 1702 faltan además 33 códigos y 34 créditos: el código y los créditos de todas las asignaturas de I a III, de casi todas las de IV y V y de una de VI, y los créditos de Finanzas a corto plazo, que sí tiene código | Campos vacíos | No |
-| 6 | Si el plan 2502 tiene RAP propios (SUP-16) y qué asignaturas del 2502 tributan a cada RAP | RAP del programa; asignaturas del 2502 sin vínculo | Solo si tiene RAP propios |
-| 7 | Las rúbricas de los RAP 1, 3, 4, 5, 6 y 7 | Textos «PROVISIONAL —» | No |
+| 4 | Qué es un proyecto «publicado», que es lo que ve el Estudiante (RF-27). El PEP 2025 dice que los profesores dan a conocer el proyecto docente al inicio de cada período (apartado 6.1.7.4) | Propuesta: aprobado o en ejecución | Solo si exige publicar a mano |
+| 5 | Del plan 1702, 33 códigos y 34 créditos: el código y los créditos de todas las asignaturas de I a III, de casi todas las de IV y V y de una de VI, y los créditos de Finanzas a corto plazo, que sí tiene código. De los dos planes, los requisitos. Los dos PEP describen el plan 2502 y no los traen | Campos vacíos; sin créditos tampoco hay horas | No |
 | 8 | El calendario académico 2027-1 | — | No |
 | 9 | De dónde sale la lista de matriculados (SUP-03) | Carga por archivo | Puede |
-| 10 | Qué significa «cohorte» en el FO-DO/PC-023 (SUP-14) | Igual a la muestra | No |
+| 10 | Qué número va en la casilla «cohorte» del FO-DO/PC-023 (SUP-14). El PEP 2025 usa «cohorte» para los estudiantes que ingresan juntos | Igual a la muestra | No |
 | 11 | Si el código de Electiva III GPO (Simulación de procesos) es 4917204, como sale en la programación 2026-1, o 4917024, que es el que sigue la serie | 4917204, como viene en la programación | No |
 | 12 | Si un grupo con estudiantes de los dos planes es un solo proyecto docente o uno por plan | Uno por plan: el proyecto apunta a una asignatura y la asignatura a un plan, como en los dos formatos reales de Comportamiento organizacional (apartado 4) | Sí, si es uno solo: queda para después de la entrega |
-| 13 | Del plan 2502: qué nombre tiene cada código de electiva (si GA es la línea general y GP la GPO), cuál de las cuatro «Formación humana» es la I, la II, la III y la IV, y si la Electiva VIII es «Prácticas empresariales» | Nombres de la malla, sin número y sin componente en la Electiva VIII | No |
-| 14 | Si Fundamentos de investigación científica (NC2505) es del componente básico, como dice el plan de estudios público, o del profesional, como dice su formato diligenciado | «Profesional», como en el formato | No |
+| 15 | Si el 60 % del PEP 2025 se aplica, como hace URAP, al porcentaje de valoraciones en Competente o Ejemplar, y si el comité curricular definirá una meta por RAP | 60 % para los siete RAP (apartado 3) | Solo si es distinta por RAP |
+| 16 | Si las descripciones por nivel de los RAP 1, 3, 4, 5, 6 y 7 se redactan como las del RAP 2 | Generadas con la regla del RAP 2 (apartado 2) | No |
+| 17 | A qué RAP tributa Desarrollo del espíritu emprendedor: al 5 (Tabla 18 del PEP 2025) o al 7 (Tabla 19) | RAP 7 | No |
+| 18 | Cuál de FC72737 y FC72738 es Formación humana II, y por qué la práctica del 2502 tiene un código por línea de énfasis | Orden de los códigos; dos filas | No |
 
 Sobre la 3, la regla tiene respaldo propio: separar quien elabora de quien aprueba es un
 principio de control interno (Ley 87 de 1993), y en el programa el caso es real: en el informe
@@ -681,9 +776,52 @@ estrategias** está en el apartado 7. Y la 10, **«cohorte»**, no bloquea nada:
 muestra y cohorte fueron iguales (34, el grupo completo), así que `medicion_rap.tamano_cohorte`
 toma por defecto el tamaño de la muestra y ningún cálculo lo usa.
 
+**Resueltas el 15 de noviembre de 2026:**
+
+- **1. Meta de cumplimiento:** 60 % para los siete RAP (PEP 2025, Tabla 18). Apartado 3; sigue
+  abierta la 15.
+- **5, en parte. Horas:** TDE = 16 × créditos, TDP al crear el proyecto, TI = 2 × (TDE + TDP).
+  Apartado 4.
+- **6. RAP y mapeo del 2502:** los mismos siete RAP (SUP-16 confirmado) y el mapeo de la Tabla 19
+  del PEP 2025. Apartados 2 y 4; sigue abierta la 17.
+- **7. Rúbricas de los RAP 1, 3, 4, 5, 6 y 7:** los indicadores de la Tabla 8 del informe
+  2024-2. Apartado 2; sigue abierta la 16.
+- **13. Electivas, Formación humana y Electiva VIII del 2502:** líneas GA y GPO, Formación
+  humana I a IV y Prácticas profesionales. Apartado 4; sigue abierta la 18.
+- **14. Componente de NC2505:** básico (PEP 2025, Tablas 20 y 28). Apartado 4.
+
 ---
 
 ## Registro de cambios
+
+**v3.4 — 15 de noviembre de 2026.** Incorpora tres documentos que compartió el programa: el PEP
+2025, el PEP 2022 y el informe de resultados RAP 2024-2, más la regla de las horas anotada ese
+día. **No cambia el modelo ni ningún requisito:** son datos para el seed. Sí cambia lo que
+muestra la demo: la meta, las rúbricas y el plan 2502.
+
+- *Fuentes:* se agregan el informe 2024-2, los dos PEP y la regla de las horas. No se copió
+  ninguno de sus nombres de personas. Origen: documentos del programa.
+- *Apartado 2:* los textos de los RAP coinciden con el PEP 2025 y valen para los dos planes.
+  Nueva tabla con los indicadores oficiales de los RAP 1, 3, 4, 5, 6 y 7 (informe 2024-2,
+  Tabla 8), que reemplazan los textos «PROVISIONAL —»; sus descripciones por nivel se generan con
+  la regla del RAP 2. La tabla de indicadores agrega los vínculos del 2502. Origen: documento del
+  programa; generar las descripciones con la regla es propuesta mía. Historias: HU-04-03 y
+  HU-04-05.
+- *Apartado 3:* la meta es 60 % para los siete RAP (PEP 2025, Tabla 18), en
+  `escala_valoracion.porcentaje_esperado`, y se explica cómo se aplica. El caso de verificación de
+  RF-31 queda alcanzado, con los indicadores 3 y 4 señalados. Origen: documento del programa;
+  aplicar el 60 % a los niveles 3 y 4 es propuesta mía. Historias: HU-04-04 y HU-11-05.
+- *Apartado 4:* el plan 2502 gana la columna RAP (78 filas de `asignatura_rap`, Tabla 19 del
+  PEP). Cambian nombres: las catorce electivas, las cuatro Formación humana, las dos Electiva VIII
+  (Prácticas profesionales, con componente complementario) e IX24225. NC2505 pasa a «Básico». Se
+  agrega «Horas de las asignaturas», con la regla para los dos planes: 74 asignaturas del 2502 y
+  35 del 1702. En el 1702, los 21 vínculos que midió el informe 2024-2 coinciden con la tabla.
+  Origen: documentos del programa y regla de las horas; el orden de Formación humana
+  II y III, el RAP de Desarrollo del espíritu emprendedor y el RAP 6 de Seguridad y salud en el
+  trabajo son decisiones mías, explicadas en el apartado. Historias: HU-03-02, HU-04-02, HU-05-01
+  y HU-05-02.
+- *Apartado 8:* se resuelven las preguntas 1, 6, 7, 13 y 14, y las horas de la 5; se agregan de
+  la 15 a la 18.
 
 **v3.3 — 11 de noviembre de 2026.** Completa el plan 2502 con dos fuentes nuevas: el plan de
 estudios público del programa y la malla del SMA que leyó Claude Code. **No cambia el modelo ni

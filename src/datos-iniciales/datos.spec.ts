@@ -15,13 +15,7 @@ import {
   TIPOS_NOTIFICACION,
   TIPOS_SESION,
 } from './catalogos.js';
-import {
-  PERIODO,
-  PREFIJO_PROVISIONAL,
-  RECESO_2026_2,
-  RUBRICAS_PROVISIONALES,
-  USUARIOS_DEMO,
-} from './demostracion.js';
+import { PERIODO, RECESO_2026_2, USUARIOS_DEMO } from './demostracion.js';
 import {
   ESCALA,
   HORAS_POR_CREDITO,
@@ -30,6 +24,9 @@ import {
   PLANES_DE_ESTUDIO,
   RAPS,
   RUBRICA_RAP_2,
+  RUBRICAS,
+  RUBRICAS_OFICIALES,
+  descriptoresOficiales,
 } from './programa.js';
 
 const repetidos = (valores: unknown[]) =>
@@ -490,41 +487,71 @@ describe('Datos institucionales de la versión 2 del documento', () => {
     ]);
   });
 
-  it('no marca como provisional la rúbrica real del RAP 2', () => {
-    const textos = RUBRICA_RAP_2.indicadores.flatMap(
-      ({ descripcion, descriptores }) => [
-        descripcion,
-        ...descriptores.map((descriptor) => descriptor.descripcion),
-      ],
-    );
-    expect(textos.filter((texto) => texto.includes('PROVISIONAL'))).toEqual([]);
+  it('carga la meta de 60 % del PEP 2025, la misma para los siete RAP', () => {
+    expect(ESCALA.porcentaje_esperado).toBe(60);
+    expect(ESCALA.umbral_cumplimiento).toBe(3);
   });
 
-  it('marca como provisionales las rúbricas de los RAP 1 y 3 a 7, con sus indicadores de 2023-II', () => {
+  it('trae las rúbricas reales de los siete RAP, versión 1, con 25 indicadores', () => {
     expect(
-      RUBRICAS_PROVISIONALES.map(({ rap, indicadores }) => [
+      RUBRICAS.map(({ rap, version, indicadores }) => [
         rap,
+        version,
         indicadores.length,
       ]),
     ).toEqual([
-      [1, 4],
-      [3, 4],
-      [4, 4],
-      [5, 3],
-      [6, 3],
-      [7, 3],
+      [1, 1, 4],
+      [2, 1, 4],
+      [3, 1, 4],
+      [4, 1, 4],
+      [5, 1, 3],
+      [6, 1, 3],
+      [7, 1, 3],
     ]);
-    for (const { indicadores } of RUBRICAS_PROVISIONALES) {
-      for (const { descripcion, descriptores } of indicadores) {
-        expect(descripcion.startsWith(`${PREFIJO_PROVISIONAL} `)).toBe(true);
-        expect(descriptores.map(({ nivel }) => nivel)).toEqual([1, 2, 3, 4]);
-        for (const descriptor of descriptores) {
-          expect(
-            descriptor.descripcion.startsWith(`${PREFIJO_PROVISIONAL} `),
-          ).toBe(true);
-        }
+    expect(RUBRICAS.flatMap(({ indicadores }) => indicadores)).toHaveLength(25);
+  });
+
+  it('no deja ningún texto provisional en las rúbricas', () => {
+    const textos = RUBRICAS.flatMap(({ indicadores }) =>
+      indicadores.flatMap(({ descripcion, descriptores }) => [
+        descripcion,
+        ...descriptores.map((descriptor) => descriptor.descripcion),
+      ]),
+    );
+    expect(textos).toHaveLength(25 + 100);
+    expect(textos.filter((texto) => /PROVISIONAL/i.test(texto))).toEqual([]);
+  });
+
+  it('copia literal los indicadores del informe 2024-2, sin punto final', () => {
+    const delRap = (rap: number) =>
+      RUBRICAS_OFICIALES.find((rubrica) => rubrica.rap === rap)?.indicadores;
+    expect(delRap(1)?.[0].descripcion).toBe(
+      'Comprende los conceptos matemáticos, estadísticos y el método científico en el ámbito organizacional',
+    );
+    expect(delRap(3)?.[3].descripcion).toBe(
+      'Propone y valora alternativas que coadyuvan a la mejora de la gestión integral de las organizaciones',
+    );
+    expect(delRap(7)?.[2].descripcion).toBe(
+      'Evalúa conceptos y técnicas de comunicación asertivas, desarrollo sostenible, principios éticos y demás conceptos asociados a las ciencias sociales y jurídicas',
+    );
+    for (const { indicadores } of RUBRICAS_OFICIALES) {
+      for (const { descripcion } of indicadores) {
+        expect(descripcion.endsWith('.')).toBe(false);
       }
     }
+  });
+
+  it('genera los descriptores de los RAP 1 y 3 a 7 con la regla de la rúbrica del RAP 2', () => {
+    for (const { indicadores } of RUBRICAS_OFICIALES) {
+      for (const { descripcion, descriptores } of indicadores) {
+        expect(descriptores).toEqual(descriptoresOficiales(descripcion));
+      }
+    }
+    // La regla deja frases como esta, y se dejan así (apartado 2).
+    const rap3 = RUBRICAS_OFICIALES.find((rubrica) => rubrica.rap === 3);
+    expect(rap3?.indicadores[3].descriptores[0].descripcion).toBe(
+      'No propone y valora alternativas que coadyuvan a la mejora de la gestión integral de las organizaciones',
+    );
   });
 
   it('usa las fechas del período 2026-2 del Acuerdo 46', () => {

@@ -43,8 +43,10 @@ nombre de un festivo), hay que corregirlo también en las bases ya sembradas.
 - **Catálogos:** roles, módulos y permisos, estados del proyecto docente, tipos de sesión, tipos
   de notificación, parámetros del sistema y festivos de 2026.
 - **Programa:** Facultad de Ciencias Económicas, Administración Industrial, escala de cuatro
-  niveles, los RAP 1 a 7 con su texto oficial y la rúbrica real del RAP 2 (versión 1, vigente:
-  4 indicadores y 16 descriptores).
+  niveles con la meta de 60 % para los siete RAP, los RAP 1 a 7 con su texto oficial y sus
+  rúbricas reales (versión 1, vigentes: 25 indicadores y 100 descriptores). Los indicadores de
+  los RAP 1 y 3 a 7 son los del informe 2024-2; sus descriptores siguen la regla de la rúbrica
+  del RAP 2.
 - **Plan de estudios:** 69 asignaturas con su semestre y sus 73 vínculos con los RAP. Cuatro
   traen la ficha completa (código, componente, tipo, créditos, horas y prerrequisitos) y
   Finanzas a corto plazo trae su código. Las demás quedan solo con nombre, semestre y RAP hasta
@@ -57,8 +59,6 @@ Los datos del programa y sus fuentes están en `docs/datos-institucionales.md`.
 
 - el período 2026-2 con las fechas reales del Acuerdo 46 (3 de agosto a 27 de noviembre, 16
   semanas) y los seis días del receso de noviembre como días sin clase de origen `institucional`;
-- rúbricas provisionales de los RAP 1 y 3 a 7, con el número de indicadores de 2023-II y todos
-  sus textos marcados «PROVISIONAL —»;
 - un usuario ficticio por rol, todos con la contraseña de `CONTRASENA_USUARIOS_DEMO`:
 
 | Correo | Roles |
