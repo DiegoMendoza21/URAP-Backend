@@ -4,7 +4,7 @@ import {
   IntersectionType,
 } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, Min } from 'class-validator';
 import { ConsultarProyectosDocentesDto } from '../../proyectos-docentes/dto/consultas.dto.js';
 import { COLORES_SEMAFORO, type ColorSemaforo } from '../semaforo.js';
 
@@ -42,11 +42,26 @@ export class FiltrarSeguimientoDto {
   idDocente?: number;
 }
 
+/** Formatos de exportación que se piden a la consulta paginada: el PDF lo arma el navegador. */
+export const FORMATOS_EXPORTACION_PAGINADA = ['pdf'] as const;
+
 /** Los filtros con paginación, para la consulta en pantalla. */
 export class ConsultarSeguimientoDto extends IntersectionType(
   FiltrarSeguimientoDto,
   ConsultarProyectosDocentesDto,
-) {}
+) {
+  @ApiPropertyOptional({
+    enum: FORMATOS_EXPORTACION_PAGINADA,
+    description:
+      'HU-12-06: la pide la pantalla antes de imprimir el PDF. Aplica el máximo de filas ' +
+      'exportables (422 si lo supera) y registra la generación en reporte_academico.',
+  })
+  @IsOptional()
+  @IsIn(FORMATOS_EXPORTACION_PAGINADA, {
+    message: 'El formato de exportación no es válido.',
+  })
+  exportar?: (typeof FORMATOS_EXPORTACION_PAGINADA)[number];
+}
 
 export class OpcionDto {
   @ApiProperty({ example: 1 })

@@ -344,6 +344,8 @@ export class ReportesService {
     const resumen: Row[] = [
       [titulo(`Reporte de logro de los RAP · ${reporte.programa.nombre}`)],
       [`Período académico ${reporte.periodo.codigo}`],
+      // El programa ya va en el título.
+      [await this.seguimiento.textoFiltros({ idRap: consulta.idRap })],
       [`Generado el ${fechaGeneracion(new Date(reporte.generado))}`],
       [],
       encabezado([

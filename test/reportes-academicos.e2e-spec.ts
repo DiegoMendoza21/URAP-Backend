@@ -1,5 +1,6 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { readSheet } from 'read-excel-file/node';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
 import { ContrasenasService } from '../src/auth/contrasenas.service.js';
@@ -661,6 +662,11 @@ describe('Reportes académicos (e2e) · RF-28, HU-12-03, HU-12-04 y HU-12-05', (
         /ejecucion-contenidos-.*\.xlsx/,
       );
       expect((libro.body as Buffer).subarray(0, 2).toString()).toBe('PK');
+      // HU-12-06: sin filtros, el archivo lo dice, para no confundirlo con uno filtrado.
+      const filasLibro = await readSheet(libro.body as Buffer);
+      expect(filasLibro.map((fila) => fila[0])).toContain(
+        'Filtros: ninguno (todo el período)',
+      );
 
       // El curso aprobado lleva cinco filas de temas (cuatro planeados y uno no planeado): con un
       // máximo de 3, se piden filtros.

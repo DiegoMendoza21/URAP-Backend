@@ -1,11 +1,13 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { readSheet } from 'read-excel-file/node';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
 import { ContrasenasService } from '../src/auth/contrasenas.service.js';
 import { ROL } from '../src/auth/roles.js';
 import { PrismaService } from '../src/common/prisma/prisma.service.js';
 import { configurarAplicacion } from '../src/configurar-aplicacion.js';
+import { TIPO_REPORTE } from '../src/reportes/registro-reportes.service.js';
 import {
   mensajeExportacionGrande,
   PARAMETRO_EXPORTACION_MAXIMA,
@@ -335,6 +337,10 @@ describe('Tablero de seguimiento (e2e) · RF-25, HU-12-01 y HU-12-02', () => {
       await prisma.auditoria.deleteMany({
         where: { id_usuario: { in: creados.usuarios } },
       });
+      // HU-12-06: el tablero exportado queda en reporte_academico.
+      await prisma.reporte_academico.deleteMany({
+        where: { id_generado_por: { in: creados.usuarios } },
+      });
       await prisma.proyecto_docente.deleteMany({
         where: { id: { in: creados.proyectos } },
       });
@@ -483,7 +489,10 @@ describe('Tablero de seguimiento (e2e) · RF-25, HU-12-01 y HU-12-02', () => {
   });
 
   it('exporta a Excel y pide restringir los filtros si supera el límite (p5)', async () => {
-    const libro = await pedir('departamento', conPeriodo('pendientes/excel'))
+    const libro = await pedir(
+      'departamento',
+      conPeriodo('pendientes/excel', `&idPrograma=${idProgramaA}`),
+    )
       .buffer(true)
       .parse((res, listo) => {
         const partes: Buffer[] = [];
@@ -493,12 +502,35 @@ describe('Tablero de seguimiento (e2e) · RF-25, HU-12-01 y HU-12-02', () => {
       .expect(200);
     expect(libro.headers['content-type']).toContain('spreadsheetml');
     expect((libro.body as Buffer).subarray(0, 2).toString()).toBe('PK');
-    // La exportación queda en auditoría con el usuario y la IP (RF-29).
+    // HU-12-06: el archivo dice qué filtros se aplicaron.
+    const filasLibro = await readSheet(libro.body as Buffer);
+    const programa = await prisma.programa.findUniqueOrThrow({
+      where: { id: idProgramaA },
+    });
+    expect(filasLibro.map((fila) => fila[0])).toContain(
+      `Filtros: Programa: ${programa.nombre}`,
+    );
+    // HU-12-06 (RF-28, p6): la exportación queda en reporte_academico con el usuario, la fecha
+    // y los filtros, y su creación en la auditoría con la IP (RF-29).
+    const registro = await prisma.reporte_academico.findFirst({
+      where: {
+        id_generado_por: usuarios.departamento,
+        tipo: TIPO_REPORTE.seguimiento,
+      },
+      orderBy: { id: 'desc' },
+    });
+    expect(registro?.parametros).toMatchObject({
+      idPrograma: idProgramaA,
+      vista: 'pendientes',
+      formato: 'excel',
+      proyectos: 2,
+    });
     const auditada = await prisma.auditoria.findFirst({
       where: {
         id_usuario: usuarios.departamento,
-        accion: 'consulta_sensible',
-        tabla_afectada: 'proyecto_docente',
+        accion: 'crear',
+        tabla_afectada: 'reporte_academico',
+        id_registro: registro?.id,
       },
     });
     expect(auditada?.ip).toBeTruthy();
@@ -521,5 +553,38 @@ describe('Tablero de seguimiento (e2e) · RF-25, HU-12-01 y HU-12-02', () => {
       conPeriodo('tablero/excel'),
     ).expect(422);
     expect(body.mensaje).toBe(mensajeExportacionGrande(3, 2));
+  });
+
+  it('antes del PDF aplica el mismo máximo de filas y registra la generación (HU-12-06)', async () => {
+    // El máximo sigue en 2 desde la prueba anterior: el tablero tiene 3 proyectos.
+    const grande = await pedir(
+      'departamento',
+      conPeriodo('tablero', '&exportar=pdf'),
+    ).expect(422);
+    expect(grande.body.mensaje).toBe(mensajeExportacionGrande(3, 2));
+    const antes = await prisma.reporte_academico.count({
+      where: { id_generado_por: usuarios.departamento },
+    });
+    // Ver el tablero en pantalla no registra nada.
+    await pedir('departamento', conPeriodo('tablero')).expect(200);
+    // Los pendientes son 2: caben, y quedan registrados como PDF.
+    const { body } = await pedir(
+      'departamento',
+      conPeriodo('pendientes', '&exportar=pdf'),
+    ).expect(200);
+    expect(body.total).toBe(2);
+    const registros = await prisma.reporte_academico.findMany({
+      where: { id_generado_por: usuarios.departamento },
+      orderBy: { id: 'asc' },
+    });
+    expect(registros).toHaveLength(antes + 1);
+    expect(registros.at(-1)?.parametros).toMatchObject({
+      vista: 'pendientes',
+      formato: 'pdf',
+      proyectos: 2,
+    });
+    await pedir('departamento', conPeriodo('tablero', '&exportar=word')).expect(
+      400,
+    );
   });
 });
