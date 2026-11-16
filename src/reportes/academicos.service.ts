@@ -1,5 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { AuditoriaService } from '../auditoria/auditoria.service.js';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import type { UsuarioSesion } from '../auth/tipos.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
@@ -43,11 +42,16 @@ import {
   textoLargo,
   titulo,
 } from './excel.js';
+import {
+  RegistroReportesService,
+  TIPO_REPORTE,
+} from './registro-reportes.service.js';
 import { ReportesService, ROLES_PROGRAMA } from './reportes.service.js';
 import {
   contarPendientes,
   ETIQUETA_COLOR,
   type FilasExportacion,
+  filasPorAsignatura,
   nombreCompleto,
   SeguimientoService,
 } from './seguimiento.service.js';
@@ -62,12 +66,13 @@ export const SIN_ESTADO = {
   nombre: 'Sin estado',
 } as const;
 
-/** `reporte_academico.tipo` de cada reporte (RF-28, p6). */
-export const TIPO_REPORTE = {
-  cumplimiento: 'cumplimiento_periodo',
-  contribucion: 'contribucion_rac_rap',
-  ejecucion: 'ejecucion_contenidos',
-} as const;
+export { TIPO_REPORTE } from './registro-reportes.service.js';
+
+/** HU-12-06: el de contribución cuenta las filas del archivo, una por asignatura de cada RAP. */
+export const FILAS_CONTRIBUCION: FilasExportacion = {
+  unidad: 'filas',
+  filtros: 'período o RAP',
+};
 
 /** HU-12-04: el máximo exportable cuenta las filas de temas del archivo. */
 export const FILAS_TEMAS: FilasExportacion = {
@@ -92,14 +97,12 @@ export const FILAS_TEMAS: FilasExportacion = {
  */
 @Injectable()
 export class ReportesAcademicosService {
-  private readonly logger = new Logger(ReportesAcademicosService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly alcance: AlcanceService,
     private readonly seguimiento: SeguimientoService,
     private readonly reportes: ReportesService,
-    private readonly auditoria: AuditoriaService,
+    private readonly registro: RegistroReportesService,
   ) {}
 
   /** HU-12-03: proyectos, estados y diligenciamiento del período. */
@@ -129,7 +132,7 @@ export class ReportesAcademicosService {
       await this.seguimiento.exigirTamanoExportable(filas.length);
     }
     const generado = new Date();
-    await this.registrar(usuario.id, {
+    await this.registro.registrar(usuario.id, {
       tipo: TIPO_REPORTE.cumplimiento,
       nombre: `Cumplimiento del período ${periodo?.codigo ?? 'sin definir'}`,
       idPrograma: consulta.idPrograma ?? null,
@@ -337,7 +340,7 @@ export class ReportesAcademicosService {
       );
     }
     const generado = new Date();
-    await this.registrar(usuario.id, {
+    await this.registro.registrar(usuario.id, {
       tipo: TIPO_REPORTE.ejecucion,
       nombre: `Ejecución de contenidos del período ${periodo?.codigo ?? 'sin definir'}`,
       idPrograma: consulta.idPrograma ?? null,
@@ -456,9 +459,21 @@ export class ReportesAcademicosService {
   }
 
   /** HU-12-05: contribución de los RAC a los RAP, por RAP. */
-  async contribucion(
+  contribucion(
+    usuario: UsuarioSesion,
+    consulta: ConsultarContribucionDto,
+  ): Promise<ReporteContribucionDto> {
+    return this.generarContribucion(usuario, consulta, false);
+  }
+
+  /**
+   * Arma el reporte de contribución y registra su generación. Al exportar, antes de registrar,
+   * comprueba que no supere el máximo de filas (RF-25, excepción de p5; HU-12-06).
+   */
+  private async generarContribucion(
     usuario: UsuarioSesion,
     { idPeriodo, idRap }: ConsultarContribucionDto,
+    exportar: boolean,
   ): Promise<ReporteContribucionDto> {
     const periodo = await this.seguimiento.periodo(idPeriodo);
     const generado = new Date();
@@ -580,7 +595,13 @@ export class ReportesAcademicosService {
         .sort((a, b) => a.asignatura.localeCompare(b.asignatura, 'es')),
     }));
 
-    await this.registrar(usuario.id, {
+    if (exportar) {
+      await this.seguimiento.exigirTamanoExportable(
+        filasPorAsignatura(resultado),
+        FILAS_CONTRIBUCION,
+      );
+    }
+    await this.registro.registrar(usuario.id, {
       tipo: TIPO_REPORTE.contribucion,
       nombre: `Contribución RAC-RAP del período ${periodo.codigo}`,
       idPrograma: null,
@@ -595,7 +616,7 @@ export class ReportesAcademicosService {
     usuario: UsuarioSesion,
     consulta: ConsultarContribucionDto,
   ): Promise<ArchivoExcel> {
-    const reporte = await this.contribucion(usuario, consulta);
+    const reporte = await this.generarContribucion(usuario, consulta, true);
     const filas = reporte.raps.flatMap((rap) => {
       const nombre = rap.codigo ?? `RAP ${rap.numero ?? ''}`;
       if (rap.asignaturas.length === 0) {
@@ -736,53 +757,6 @@ export class ReportesAcademicosService {
           : porcentaje(sesionesRegistradas, sesionesProgramadas),
       conPendientes: contarPendientes(filas),
     };
-  }
-
-  /**
-   * RF-28, p6: registra la generación del reporte, con el usuario y la fecha, en
-   * `reporte_academico`, y la creación de esa fila en la auditoría (AuditoriaService, con la IP).
-   * Un fallo al registrar no impide entregar el reporte.
-   */
-  private async registrar(
-    idUsuario: number,
-    datos: {
-      tipo: string;
-      nombre: string;
-      idPrograma: number | null;
-      idPeriodo: number | null;
-      parametros: Prisma.InputJsonValue;
-      fecha: Date;
-    },
-  ): Promise<void> {
-    let idReporte: number;
-    try {
-      const reporte = await this.prisma.reporte_academico.create({
-        data: {
-          id_generado_por: idUsuario,
-          id_programa: datos.idPrograma,
-          id_periodo: datos.idPeriodo,
-          tipo: datos.tipo,
-          nombre: datos.nombre,
-          parametros: datos.parametros,
-          fecha_generacion: datos.fecha,
-        },
-        select: { id: true },
-      });
-      idReporte = reporte.id;
-    } catch (error) {
-      this.logger.error(
-        `No se pudo registrar la generación del reporte «${datos.tipo}».`,
-        error instanceof Error ? error.stack : String(error),
-      );
-      return;
-    }
-    // Después de confirmar la fila; AuditoriaService nunca lanza (RF-29, excepción de p3).
-    await this.auditoria.registrar({
-      accion: 'crear',
-      tablaAfectada: 'reporte_academico',
-      idRegistro: idReporte,
-      valorNuevo: { tipo: datos.tipo, parametros: datos.parametros },
-    });
   }
 }
 
