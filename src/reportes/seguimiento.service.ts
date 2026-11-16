@@ -86,6 +86,19 @@ export const FILAS_PROYECTOS: FilasExportacion = {
   filtros: 'programa, asignatura o docente',
 };
 
+/**
+ * Filas de una hoja que lista asignaturas por RAP (logro y contribución RAC-RAP, HU-12-06): una
+ * por asignatura, o una por el RAP que no tiene ninguna. Es lo que cuenta el máximo exportable.
+ */
+export function filasPorAsignatura(
+  raps: readonly { asignaturas: readonly unknown[] }[],
+): number {
+  return raps.reduce(
+    (total, rap) => total + Math.max(rap.asignaturas.length, 1),
+    0,
+  );
+}
+
 export function mensajeExportacionGrande(
   filas: number,
   maximo: number,

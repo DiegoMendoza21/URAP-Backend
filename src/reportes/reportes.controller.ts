@@ -7,10 +7,10 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiProduces,
+  ApiUnprocessableEntityResponse,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { AuditarConsulta } from '../auditoria/auditar-consulta.decorator.js';
 import { Roles } from '../auth/decoradores/roles.decorator.js';
 import { UsuarioActual } from '../auth/decoradores/usuario-actual.decorator.js';
 import { ROL } from '../auth/roles.js';
@@ -62,13 +62,13 @@ export class ReportesController {
 
   @Get()
   @Roles(ROL.administrador, ROL.departamento, ROL.direccion, ROL.liderRap)
-  @AuditarConsulta('programa')
   @ApiOperation({
     summary: 'Reporte de logro de los RAP del programa (RF-32, HU-11-08)',
     description:
       'Por cada RAP: las asignaturas que lo evaluaron con medición cerrada en el período, su ' +
       'porcentaje en los niveles de cumplimiento frente al esperado y la comparación con ' +
-      'períodos anteriores. Un RAP sin mediciones cerradas aparece como no evaluado.',
+      'períodos anteriores. Un RAP sin mediciones cerradas aparece como no evaluado. Cada ' +
+      'generación queda en reporte_academico con el usuario, la fecha y los filtros (HU-12-06).',
   })
   @ApiOkResponse({ type: ReporteLogroRapDto })
   @ApiBadRequestResponse({
@@ -89,7 +89,6 @@ export class ReportesController {
 
   @Get('excel')
   @Roles(ROL.administrador, ROL.departamento, ROL.direccion, ROL.liderRap)
-  @AuditarConsulta('programa')
   @ApiOperation({
     summary: 'Exporta el reporte de logro a Excel (RF-32, p5)',
     description:
@@ -109,6 +108,11 @@ export class ReportesController {
     type: RespuestaErrorDto,
     description:
       'El programa, el período o el RAP no existen o el usuario no tiene alcance sobre ellos',
+  })
+  @ApiUnprocessableEntityResponse({
+    type: RespuestaErrorDto,
+    description:
+      'Supera el máximo de filas exportables: hay que restringir los filtros',
   })
   async excel(
     @UsuarioActual() usuario: UsuarioSesion,

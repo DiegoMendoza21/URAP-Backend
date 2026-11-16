@@ -20,7 +20,16 @@ import {
   ADVERTENCIA_SIN_COHORTE,
   ADVERTENCIA_SIN_META,
 } from '../src/mediciones/consolidado.js';
-import { MOTIVO_SIN_PERIODOS_ANTERIORES } from '../src/reportes/reportes.service.js';
+import {
+  FILAS_LOGRO,
+  MOTIVO_SIN_PERIODOS_ANTERIORES,
+} from '../src/reportes/reportes.service.js';
+import { TIPO_REPORTE } from '../src/reportes/registro-reportes.service.js';
+import {
+  filasPorAsignatura,
+  mensajeExportacionGrande,
+  PARAMETRO_EXPORTACION_MAXIMA,
+} from '../src/reportes/seguimiento.service.js';
 import {
   borrarPlanesDePrueba,
   planDePrueba,
@@ -346,6 +355,10 @@ describe('Medición de RAP (e2e) · RF-30, HU-11-01 a HU-11-03', () => {
       await prisma.medicion_rap.deleteMany({ where: deProyectos });
       await prisma.auditoria.deleteMany({
         where: { id_usuario: { in: creados.usuarios } },
+      });
+      // HU-12-06: el reporte de logro registra cada generación.
+      await prisma.reporte_academico.deleteMany({
+        where: { id_generado_por: { in: creados.usuarios } },
       });
       await prisma.lider_rap.deleteMany({
         where: { id_rap: { in: creados.raps } },
@@ -1183,12 +1196,13 @@ describe('Medición de RAP (e2e) · RF-30, HU-11-01 a HU-11-03', () => {
       expect((unRap.body.raps as { id: number }[]).map((r) => r.id)).toEqual([
         raps.sinRubrica,
       ]);
-      // La consulta del reporte queda en auditoría con el usuario y la IP (RF-29).
+      // La generación del reporte queda en reporte_academico (HU-12-06) y su creación en la
+      // auditoría, con el usuario y la IP (RF-29).
       const auditada = await prisma.auditoria.findFirst({
         where: {
           id_usuario: usuarios.direccion,
-          accion: 'consulta_sensible',
-          tabla_afectada: 'programa',
+          accion: 'crear',
+          tabla_afectada: 'reporte_academico',
         },
       });
       expect(auditada?.ip).toBeTruthy();
@@ -1254,6 +1268,66 @@ describe('Medición de RAP (e2e) · RF-30, HU-11-01 a HU-11-03', () => {
       expect(respuesta.headers['content-disposition']).toContain('.xlsx');
       const libro = respuesta.body as Buffer;
       expect(libro.subarray(0, 2).toString()).toBe('PK');
+    });
+
+    it('registra la generación con los filtros y respeta el máximo de filas al exportar (HU-12-06)', async () => {
+      const desde = new Date(Date.now() - 1000);
+      const { body } = await conToken(
+        'direccion',
+        http().get(consulta()),
+      ).expect(200);
+      const registro = await prisma.reporte_academico.findFirst({
+        where: {
+          id_generado_por: usuarios.direccion,
+          tipo: TIPO_REPORTE.logro,
+          fecha_generacion: { gte: desde },
+        },
+        orderBy: { id: 'desc' },
+      });
+      expect(registro).toMatchObject({
+        id_programa: idPrograma,
+        id_periodo: idPeriodo,
+        parametros: { idPrograma, idPeriodo, idRap: null },
+      });
+
+      const filas = filasPorAsignatura(
+        body.raps as { asignaturas: unknown[] }[],
+      );
+      expect(filas).toBeGreaterThan(1);
+      const original = await prisma.parametro_sistema.findUnique({
+        where: { clave: PARAMETRO_EXPORTACION_MAXIMA },
+      });
+      const maximo = String(filas - 1);
+      await prisma.parametro_sistema.upsert({
+        where: { clave: PARAMETRO_EXPORTACION_MAXIMA },
+        create: {
+          clave: PARAMETRO_EXPORTACION_MAXIMA,
+          valor: maximo,
+          tipo_dato: 'entero',
+        },
+        update: { valor: maximo },
+      });
+      try {
+        const grande = await conToken(
+          'departamento',
+          http().get(consulta().replace('/logro-rap?', '/logro-rap/excel?')),
+        );
+        expect(grande.status).toBe(422);
+        expect(grande.body.mensaje).toBe(
+          mensajeExportacionGrande(filas, filas - 1, FILAS_LOGRO),
+        );
+      } finally {
+        if (original) {
+          await prisma.parametro_sistema.update({
+            where: { clave: PARAMETRO_EXPORTACION_MAXIMA },
+            data: { valor: original.valor },
+          });
+        } else {
+          await prisma.parametro_sistema.deleteMany({
+            where: { clave: PARAMETRO_EXPORTACION_MAXIMA },
+          });
+        }
+      }
     });
   });
 });

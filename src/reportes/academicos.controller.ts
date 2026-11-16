@@ -212,6 +212,11 @@ export class ReportesAcademicosController {
     description:
       'El período no existe, o el RAP no existe o no tiene acceso a él',
   })
+  @ApiUnprocessableEntityResponse({
+    type: RespuestaErrorDto,
+    description:
+      'Supera el máximo de filas exportables: hay que restringir los filtros',
+  })
   async contribucionExcel(
     @UsuarioActual() usuario: UsuarioSesion,
     @Query() consulta: ConsultarContribucionDto,
