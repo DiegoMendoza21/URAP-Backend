@@ -115,6 +115,40 @@ son las del mapeo del informe 2023-II; y solo entonces volver la columna obligat
 el índice único a `(id_plan_estudio, codigo_interno)` y eliminar `asignatura.id_programa`. Las
 consultas que filtraban asignaturas por programa pasan a hacerlo a través del plan.
 
+## Congelamiento del modelo (v2.5)
+
+**El modelo de datos v2.5 queda congelado el 16 de noviembre de 2026**, para el ensayo y la
+sustentación de la tesis. La base de `main` en ese momento lleva la etiqueta
+`modelo-v2.5-congelado`, y sus migraciones son estas tres:
+
+| Migración | Qué hace |
+|---|---|
+| `0_init` | Línea base, sacada una sola vez del DDL de la v2.4 |
+| `20261106120000_corregir_clave_plan_curso` | Corrige el sentido de la clave foránea entre `plan_curso` y `proyecto_docente` (RF-08) |
+| `20261108120000_planes_de_estudio` | Planes de estudio de la v2.5: `plan_estudio`, y la asignatura cuelga del plan (RF-04) |
+
+El DBML, `prisma/schema.prisma` y esas migraciones dicen lo mismo. Se comprobó así, sobre una
+base vacía:
+
+```bash
+npm run db:desplegar
+npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script
+```
+
+La comparación responde «This is an empty migration».
+
+**Desde ese día no entran migraciones ni cambios al DBML.** La única excepción es un error que
+bloquee la demostración, con el acuerdo de los dos y explicado en el PR. Un PR que toque
+`prisma/` o `docs/URAP_modelo_datos_v2.5.dbml` no se integra sin ese acuerdo.
+
+**Lo que sí puede cambiar sin tocar el modelo:**
+- los datos iniciales (`src/datos-iniciales/`);
+- los parámetros del sistema y los catálogos, desde la aplicación;
+- los valores nuevos de una columna de texto ya documentada, como un tipo de
+  `reporte_academico`, siempre que se anote en el comentario del DBML.
+
+Lo que quede para después de la entrega va a «Pendientes del modelo».
+
 ## Pendientes del modelo
 
 - `medicion_rap.tamano_cohorte`: el formato FO-DO/PC-023 trae la columna pero su fórmula la
@@ -124,5 +158,6 @@ consultas que filtraban asignaturas por programa pasan a hacerlo a través del p
 - La lista de estudiantes matriculados se carga por archivo mientras no exista integración con
   el sistema de información académica (supuesto SUP-03). Sin ella no funcionan RF-22, RF-27
   ni RF-30.
-- Si el programa confirma que el plan 2502 tiene RAP propios, distintos de los del 1702
-  (SUP-16), `rap` tendría que colgar también del plan. Hoy cuelga del programa.
+- **SUP-16, confirmado:** el plan 2502 usa los mismos siete RAP que el 1702 (PEP 2025, Tabla 19;
+  `docs/datos-institucionales.md`, apartado 4), así que `rap` sigue colgando del programa. Si
+  algún día un plan trae RAP propios, `rap` tendría que colgar también del plan.
