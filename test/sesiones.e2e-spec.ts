@@ -983,7 +983,10 @@ describe('Calendario de sesiones (e2e) · RF-19, HU-08-02 y HU-08-03', () => {
             .map((sesion) => sesion.diasAtraso ?? 0),
         ),
       });
-      expect(respuesta.body.resumen.vencidas).toBeGreaterThan(10);
+      // Cuántas vencidas hay depende del día en que corre la prueba: con una base sembrada,
+      // el receso y los festivos cercanos a hoy no tienen sesiones. El número exacto ya lo
+      // comprueba la igualdad de arriba; aquí basta con que haya vencidas y por vencer.
+      expect(respuesta.body.resumen.vencidas).toBeGreaterThan(0);
       expect(porVencer).toBeGreaterThan(0);
     });
 

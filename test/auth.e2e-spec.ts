@@ -108,6 +108,28 @@ describe('Autenticación (e2e) · HU-01-01', () => {
     await request(app.getHttpServer()).get('/api/auth/sesion').expect(401);
   });
 
+  it('sin sesión, la respuesta 401 trae solo el error, sin datos del recurso (caso PA-05)', async () => {
+    const camposDelError = [
+      'detalles',
+      'error',
+      'estado',
+      'fecha',
+      'mensaje',
+      'ruta',
+    ];
+    for (const ruta of [
+      '/api/auth/sesion',
+      '/api/proyectos-docentes',
+      '/api/usuarios',
+    ]) {
+      const { body } = await request(app.getHttpServer()).get(ruta).expect(401);
+      expect(body).toMatchObject({ estado: 401, mensaje: expect.any(String) });
+      for (const campo of Object.keys(body as object)) {
+        expect(camposDelError).toContain(campo);
+      }
+    }
+  });
+
   it('al cerrar sesión revoca el token: las peticiones siguientes responden 401 · HU-01-02', async () => {
     const { body } = await request(app.getHttpServer())
       .post('/api/auth/iniciar-sesion')
