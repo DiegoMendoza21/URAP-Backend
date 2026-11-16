@@ -27,6 +27,7 @@ import {
   RUBRICAS,
   RUBRICAS_OFICIALES,
   descriptoresOficiales,
+  horasDeLaAsignatura,
 } from './programa.js';
 
 const repetidos = (valores: unknown[]) =>
@@ -66,20 +67,21 @@ describe('Datos iniciales', () => {
     expect(repetidos(codigos)).toEqual([]);
   });
 
-  it('en el plan 2502 solo se repite un nombre: las cuatro «Formación humana», con códigos distintos', () => {
-    // La malla del SMA trae cuatro asignaturas con ese nombre y no dice cuál es cuál. Cualquier
-    // otro nombre repetido es una fila copiada por error.
-    const nombres = PLAN_2502.map(({ nombre }) => nombre);
-    expect([...new Set(repetidos(nombres))]).toEqual(['Formación humana']);
+  it('no repite nombres en el plan 2502: Formación humana va de la I a la IV', () => {
+    expect(repetidos(PLAN_2502.map(({ nombre }) => nombre))).toEqual([]);
     expect(
-      PLAN_2502.filter(({ nombre }) => nombre === 'Formación humana').map(
-        ({ semestre, codigo_interno }) => [semestre, codigo_interno],
-      ),
+      PLAN_2502.filter(({ nombre }) =>
+        nombre.startsWith('Formación humana'),
+      ).map(({ semestre, codigo_interno, nombre }) => [
+        semestre,
+        codigo_interno,
+        nombre,
+      ]),
     ).toEqual([
-      [5, 'FC72731'],
-      [7, 'FC72737'],
-      [7, 'FC72738'],
-      [8, 'FC72739'],
+      [5, 'FC72731', 'Formación humana I'],
+      [7, 'FC72737', 'Formación humana II'],
+      [7, 'FC72738', 'Formación humana III'],
+      [8, 'FC72739', 'Formación humana IV'],
     ]);
   });
 
@@ -172,56 +174,36 @@ describe('Datos iniciales', () => {
     expect(porSemestre.reduce((a, b) => a + b, 0)).toBe(203);
   });
 
-  describe('asignaturas del plan 2502 que salen de la malla del SMA', () => {
-    /** FC72731 del semestre 5 y los semestres 6 a 10 completos. */
-    const deLaMalla = PLAN_2502.filter(
-      ({ semestre, codigo_interno }) =>
-        semestre >= 6 || codigo_interno === 'FC72731',
-    );
+  describe('plan 2502 según el PEP 2025 (v3.4)', () => {
     const conCodigo = (...codigos: string[]) =>
       PLAN_2502.filter(({ codigo_interno }) =>
         codigos.includes(codigo_interno ?? ''),
       );
+    const componenteDe = (fila: (typeof PLAN_2502)[number]) =>
+      fila.ficha?.componente ?? fila.componente;
 
-    it('son 38, sin horas, sin prerrequisitos y sin mapeo a RAP', () => {
-      expect(deLaMalla).toHaveLength(38);
-      for (const { ficha, raps } of deLaMalla) {
-        expect(ficha).toBeUndefined();
-        expect(raps).toEqual([]);
+    it('las 74 tienen componente: 20 básicas, 48 profesionales y 6 complementarias', () => {
+      const conteo = new Map<string, number>();
+      for (const fila of PLAN_2502) {
+        const clave = componenteDe(fila) ?? 'sin componente';
+        conteo.set(clave, (conteo.get(clave) ?? 0) + 1);
       }
-    });
-
-    it('las de los semestres 1 a 5 traen el componente del plan público, sin tipo de curso', () => {
-      const anteriores = PLAN_2502.filter((fila) => !deLaMalla.includes(fila));
-      expect(anteriores).toHaveLength(36);
-      const sinFicha = anteriores.filter(({ ficha }) => !ficha);
-      expect(sinFicha).toHaveLength(33);
-      const componentes = new Map<string, number>();
-      for (const { componente, tipo_curso } of sinFicha) {
-        expect(componente).toEqual(expect.any(String));
-        expect(tipo_curso).toBeUndefined();
-        const clave = componente ?? '';
-        componentes.set(clave, (componentes.get(clave) ?? 0) + 1);
-      }
-      expect(Object.fromEntries(componentes)).toEqual({
-        BASICO: 18,
-        PROFESIONAL: 15,
+      expect(Object.fromEntries(conteo)).toEqual({
+        BASICO: 20,
+        PROFESIONAL: 48,
+        COMPLEMENTARIO: 6,
       });
-      expect(conCodigo('FN23003')[0]?.componente).toBe('BASICO');
-      expect(conCodigo('IX24189')[0]?.componente).toBe('PROFESIONAL');
     });
 
-    it('las tres con formato diligenciado siguen con el componente de su ficha', () => {
-      for (const codigo of ['NC2507', 'NC2505', 'IX24193']) {
-        const [fila] = conCodigo(codigo);
-        expect(fila?.componente).toBeUndefined();
-        // NC2505 sigue «Profesional», como en su formato, aunque el plan público diga básico.
-        expect(fila?.ficha?.componente).toBe('PROFESIONAL');
-      }
+    it('NC2505 pasa al componente básico, como en el PEP; las otras dos fichas siguen profesionales', () => {
+      expect(conCodigo('NC2505')[0]?.ficha?.componente).toBe('BASICO');
+      expect(conCodigo('NC2507')[0]?.ficha?.componente).toBe('PROFESIONAL');
+      expect(conCodigo('IX24193')[0]?.ficha?.componente).toBe('PROFESIONAL');
+      expect(conCodigo('IX25263')[0]?.componente).toBe('BASICO');
     });
 
-    it('las electivas I a VII llevan el nombre de la malla y son de tipo «Electivo»', () => {
-      const electivas = deLaMalla.filter(
+    it('las 14 electivas llevan el nombre del PEP, en el formato del 1702, y son de tipo «Electivo»', () => {
+      const electivas = PLAN_2502.filter(
         ({ tipo_curso }) => tipo_curso === 'Electivo',
       );
       expect(electivas.map(({ codigo_interno }) => codigo_interno)).toEqual(
@@ -232,61 +214,116 @@ describe('Datos iniciales', () => {
       );
       for (const { nombre, creditos, componente } of electivas) {
         expect(nombre).toMatch(
-          /^Electiva (I|II|III|IV|V|VI|VII) - (GA|GP|GPO)$/,
+          /^Electiva (I|II|III|IV|V|VI|VII)( GPO)? \(.+\)$/,
         );
         expect(creditos).toBe(3);
         expect(componente).toBe('PROFESIONAL');
       }
+      expect(
+        conCodigo('IX24207', 'IX24208').map(({ nombre }) => nombre),
+      ).toEqual([
+        'Electiva I (Estudios prospectivos)',
+        'Electiva I GPO (Control estadístico de la calidad)',
+      ]);
     });
 
-    it('Electiva VIII va con su nombre, 5 créditos y sin componente ni tipo de curso', () => {
+    it('la Electiva VIII es la práctica: dos filas complementarias, 5 créditos y RAP 7', () => {
       expect(conCodigo('IX24221', 'IX24228')).toEqual([
         {
           semestre: 10,
           codigo_interno: 'IX24221',
-          nombre: 'Electiva VIII - GA',
+          nombre: 'Prácticas profesionales (Electiva VIII GA)',
           creditos: 5,
-          raps: [],
+          raps: [7],
+          componente: 'COMPLEMENTARIO',
         },
         {
           semestre: 10,
           codigo_interno: 'IX24228',
-          nombre: 'Electiva VIII - GP',
+          nombre: 'Prácticas profesionales (Electiva VIII GPO)',
           creditos: 5,
-          raps: [],
+          raps: [7],
+          componente: 'COMPLEMENTARIO',
         },
       ]);
+      // El mismo tipo de curso que la práctica del 1702 (4949920), que no lo tiene registrado.
+      const practica1702 = PLAN_1702.find(
+        ({ codigo_interno }) => codigo_interno === '4949920',
+      );
+      expect(practica1702?.tipo_curso).toBeUndefined();
     });
 
-    it('las cuatro «Formación humana» son complementarias y no llevan número', () => {
-      const formacion = conCodigo('FC72731', 'FC72737', 'FC72738', 'FC72739');
-      expect(formacion).toHaveLength(4);
-      for (const { nombre, creditos, componente, tipo_curso } of formacion) {
-        expect(nombre).toBe('Formación humana');
-        expect(creditos).toBe(2);
-        expect(componente).toBe('COMPLEMENTARIO');
-        expect(tipo_curso).toBeUndefined();
+    it('IX24225 lleva el nombre completo del PEP', () => {
+      expect(conCodigo('IX24225')[0]?.nombre).toBe(
+        'Formulación, gestión y evaluación de proyectos',
+      );
+    });
+
+    it('trae los 78 vínculos con los RAP de la Tabla 19 del PEP 2025', () => {
+      const vinculos = PLAN_2502.flatMap(({ raps }) => raps);
+      expect(vinculos).toHaveLength(78);
+      const porRap = [1, 2, 3, 4, 5, 6, 7].map(
+        (rap) => vinculos.filter((r) => r === rap).length,
+      );
+      expect(porRap).toEqual([7, 8, 14, 17, 5, 5, 22]);
+      for (const { raps } of PLAN_2502) {
+        expect(raps.length).toBeGreaterThan(0);
+        expect(repetidos(raps)).toEqual([]);
+      }
+      expect(
+        PLAN_2502.filter(({ raps }) => raps.length > 1).map(
+          ({ codigo_interno, raps }) => [codigo_interno, raps],
+        ),
+      ).toEqual([
+        ['NC2505', [1, 7]],
+        ['CFBD297', [1, 7]],
+        ['IX24184', [3, 7]],
+        ['IX24206', [3, 6]],
+      ]);
+    });
+  });
+
+  describe('horas de las asignaturas (regla del programa)', () => {
+    it('TDE = 16 × créditos, TDP = 0 y TI = 2 × (TDE + TDP) sin ficha', () => {
+      expect(horasDeLaAsignatura({ creditos: 2 })).toEqual({
+        horas_tde: 32,
+        horas_tdp: 0,
+        horas_ti: 64,
+      });
+      expect(horasDeLaAsignatura({ creditos: 8 })).toEqual({
+        horas_tde: 128,
+        horas_tdp: 0,
+        horas_ti: 256,
+      });
+      expect(horasDeLaAsignatura({})).toBeNull();
+    });
+
+    it('las cinco fichas cumplen la misma regla', () => {
+      for (const fila of [...PLAN_1702, ...PLAN_2502]) {
+        if (fila.ficha) {
+          expect(horasDeLaAsignatura(fila)).toEqual(
+            horasDeLaAsignatura({ creditos: fila.creditos }),
+          );
+        }
       }
     });
 
-    it('las demás traen el componente del plan de estudios público', () => {
-      const componentes = new Map<string, number>();
-      for (const { componente } of deLaMalla) {
-        const clave = componente ?? 'sin componente';
-        componentes.set(clave, (componentes.get(clave) ?? 0) + 1);
+    it('da horas a las 74 del plan 2502 y a las 35 del 1702 con créditos, no a las otras 34', () => {
+      expect(
+        PLAN_2502.filter((fila) => horasDeLaAsignatura(fila)),
+      ).toHaveLength(74);
+      const del1702 = PLAN_1702.filter((fila) => horasDeLaAsignatura(fila));
+      expect(del1702).toHaveLength(35);
+      expect(PLAN_1702.length - del1702.length).toBe(34);
+      for (const fila of [...PLAN_1702, ...PLAN_2502]) {
+        const horas = horasDeLaAsignatura(fila);
+        if (horas) {
+          // La validación de la asignatura: 48 horas por crédito.
+          expect(horas.horas_tde + horas.horas_tdp + horas.horas_ti).toBe(
+            HORAS_POR_CREDITO * (fila.creditos ?? 0),
+          );
+        }
       }
-      // 31 profesionales (17 obligatorias y 14 electivas), Inglés VI, cuatro de formación
-      // humana y las dos Electiva VIII.
-      expect(Object.fromEntries(componentes)).toEqual({
-        PROFESIONAL: 31,
-        BASICO: 1,
-        COMPLEMENTARIO: 4,
-        'sin componente': 2,
-      });
-      expect(conCodigo('FN24038')[0]).toMatchObject({
-        nombre: 'Inglés VI',
-        componente: 'BASICO',
-      });
     });
   });
 
@@ -300,10 +337,6 @@ describe('Datos iniciales', () => {
         expect(tipo_curso).toBeUndefined();
       }
     }
-  });
-
-  it('deja el plan 2502 sin mapeo a RAP mientras el programa no lo entregue (SUP-16)', () => {
-    expect(PLAN_2502.flatMap(({ raps }) => raps)).toEqual([]);
   });
 
   it('trae los 73 vínculos asignatura–RAP del informe 2023-II', () => {
@@ -642,6 +675,8 @@ describe('Datos institucionales de la versión 2 del documento', () => {
         nombre: 'Fundamentos de investigación científica',
         codigo_interno: 'NC2505',
         ...comunes,
+        // El formato dice «Profesional»; prevalece el PEP 2025 (v3.4).
+        componente: 'BASICO',
         creditos: 3,
         horas_tde: 48,
         horas_tdp: 0,
