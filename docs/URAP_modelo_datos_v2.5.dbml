@@ -777,7 +777,9 @@ Table reporte_academico {
   id_periodo integer
   id_generado_por integer
   nombre varchar
-  tipo varchar // cumplimiento | ejecucion_contenidos | contribucion_rac_rap | medicion_rap
+  tipo varchar // cumplimiento_periodo | ejecucion_contenidos | contribucion_rac_rap |
+               // medicion_rap | seguimiento (tablero de RF-25, HU-12-06). Texto libre:
+               // un tipo nuevo no requiere migración
   parametros json // filtros aplicados
   url varchar
   fecha_generacion datetime

@@ -198,6 +198,17 @@ Complete:
   Si la contraseña tiene `@ : / ? #`, escríbalos codificados (`%40`, `%3A`, `%2F`, `%3F`, `%23`).
 - `JWT_SECRETO`: el resultado de `openssl rand -base64 48`.
 - `CONTRASENA_USUARIOS_DEMO`: solo si va a cargar los datos de demostración (paso 8).
+- `BASE_DATOS_CONEXIONES_MAXIMAS` (opcional): cuántas conexiones mantiene abiertas la API con
+  la base. Si no se define, son 20; se aceptan de 1 a 25.
+  - **Por qué 20:** en la prueba de carga (NFR-001), con las 10 que trae el conector, 50
+    usuarios a la vez hacían fila para usar la base.
+  - **El techo:** RDS calcula `max_connections` según la memoria; en `db.t4g.micro` (1 GiB) son
+    unas 60. La API abre todas sus conexiones al arrancar, el sembrado (paso 8) abre otras
+    tantas mientras la API sigue corriendo, y `migrate deploy` y la consola de MySQL usan unas
+    pocas más. Con 20 quedan unas 45 en el peor caso.
+  - **Para confirmar el techo de su base,** desde la consola del paso 6:
+    `SHOW GLOBAL VARIABLES LIKE 'max_connections';`. Si cambia a una clase más grande, puede
+    subir el valor hasta 25.
 
 Cada línea ya trae el nombre de la variable y el `=`: escriba o pegue **solo el valor**
 después del `=`. Si pega la línea completa, queda `DATABASE_URL=DATABASE_URL=mysql://…` y

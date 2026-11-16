@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../../generated/prisma/client.js';
 import {
+  BASE_DATOS_CONEXIONES_POR_DEFECTO,
   Entorno,
   PARAMETRO_CERTIFICADO_CA,
   type VariablesEntorno,
@@ -42,6 +43,7 @@ function crearAdaptador(
     opcionesConexion(
       config.get('DATABASE_URL', { infer: true }),
       config.get('NODE_ENV', { infer: true }),
+      config.get('BASE_DATOS_CONEXIONES_MAXIMAS', { infer: true }),
     ),
   );
 }
@@ -54,10 +56,14 @@ function crearAdaptador(
  *
  * MySQL 8.4 autentica con caching_sha2_password: sin TLS, el conector tiene que pedirle la
  * llave pública al servidor. Eso solo se permite fuera de producción, contra la base local.
+ *
+ * `conexionesMaximas` es el tamaño del grupo de conexiones del conector (`connectionLimit`,
+ * NFR-001); sale de `BASE_DATOS_CONEXIONES_MAXIMAS`.
  */
 export function opcionesConexion(
   textoUrl: string,
   entorno: Entorno,
+  conexionesMaximas: number = BASE_DATOS_CONEXIONES_POR_DEFECTO,
   leerArchivo: (ruta: string) => string = (ruta) => readFileSync(ruta, 'utf8'),
 ): ConstructorParameters<typeof PrismaMariaDb>[0] {
   const url = new URL(textoUrl);
@@ -68,6 +74,7 @@ export function opcionesConexion(
     user: decodeURIComponent(url.username),
     password: decodeURIComponent(url.password),
     database: decodeURIComponent(url.pathname.replace(/^\//, '')),
+    connectionLimit: conexionesMaximas,
     ...(certificado
       ? {
           ssl: { ca: leerArchivo(certificado), rejectUnauthorized: true },

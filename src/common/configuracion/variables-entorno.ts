@@ -16,6 +16,23 @@ import {
   validateSync,
 } from 'class-validator';
 
+/**
+ * Conexiones de la API con la base cuando `BASE_DATOS_CONEXIONES_MAXIMAS` no está definida
+ * (NFR-001). Medido con la prueba de carga del informe de pruebas (k6, 25 a 100 usuarios): con
+ * las 10 que trae el conector `mariadb` por defecto, las peticiones esperaban turno para usar
+ * una conexión.
+ *
+ * El techo lo pone la base del despliegue: Amazon RDS calcula `max_connections` como
+ * {DBInstanceClassMemory/12582880}, unas 60 en una instancia de 1 GiB como db.t4g.micro. El
+ * grupo se abre completo al arrancar, y el sembrado (`sembrar.js`) levanta otro igual mientras
+ * la API sigue corriendo; `prisma migrate deploy` y una consola de MySQL usan pocas más. Con 20,
+ * en el peor caso son 20 + 20 + unas 5 = 45, con margen.
+ */
+export const BASE_DATOS_CONEXIONES_POR_DEFECTO = 20;
+
+/** Máximo que admite la validación: dos grupos de 25 (API y sembrado) caben en 60. */
+export const BASE_DATOS_CONEXIONES_TECHO = 25;
+
 export enum Entorno {
   Desarrollo = 'development',
   Pruebas = 'test',
@@ -88,6 +105,31 @@ export class VariablesEntorno {
     message: 'INICIO_SESION_VENTANA_SEGUNDOS no puede ser mayor que 3600',
   })
   INICIO_SESION_VENTANA_SEGUNDOS: number = 60;
+
+  /**
+   * Conexiones que la API mantiene abiertas con la base (NFR-001). Cada petición hace decenas
+   * de consultas y las va pidiendo de este grupo: con pocas conexiones, los usuarios hacen
+   * fila. Ver `BASE_DATOS_CONEXIONES_POR_DEFECTO` sobre el valor y el techo de Amazon RDS.
+   */
+  // Vacía en el .env (`BASE_DATOS_CONEXIONES_MAXIMAS=`) cuenta como no definida: sin esto la
+  // conversión implícita la dejaría en 0 y la API no arrancaría. Se mira el texto original
+  // (`obj`), porque `value` ya llega convertido a número.
+  @Transform(
+    ({ value, obj }: { value: unknown; obj: Record<string, unknown> }) => {
+      const original = obj.BASE_DATOS_CONEXIONES_MAXIMAS;
+      return typeof original === 'string' && original.trim() === ''
+        ? BASE_DATOS_CONEXIONES_POR_DEFECTO
+        : value;
+    },
+  )
+  @IsInt({ message: 'BASE_DATOS_CONEXIONES_MAXIMAS debe ser un número entero' })
+  @Min(1, {
+    message: 'BASE_DATOS_CONEXIONES_MAXIMAS debe ser mayor que cero',
+  })
+  @Max(BASE_DATOS_CONEXIONES_TECHO, {
+    message: `BASE_DATOS_CONEXIONES_MAXIMAS no puede ser mayor que ${BASE_DATOS_CONEXIONES_TECHO}: la base del despliegue (Amazon RDS db.t4g.micro) admite unas 60 conexiones en total`,
+  })
+  BASE_DATOS_CONEXIONES_MAXIMAS: number = BASE_DATOS_CONEXIONES_POR_DEFECTO;
 
   /** Orígenes autorizados por CORS (NFR-006). En el .env van separados por coma. */
   @Transform(({ value }: { value: unknown }) =>
