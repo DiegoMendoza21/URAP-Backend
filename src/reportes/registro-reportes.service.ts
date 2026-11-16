@@ -3,12 +3,13 @@ import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
 
-/** `reporte_academico.tipo` de cada reporte (RF-28, p6; RF-32). */
+/** `reporte_academico.tipo` de cada reporte (RF-28, p6; RF-32; el tablero de RF-25). */
 export const TIPO_REPORTE = {
   cumplimiento: 'cumplimiento_periodo',
   contribucion: 'contribucion_rac_rap',
   ejecucion: 'ejecucion_contenidos',
   logro: 'medicion_rap',
+  seguimiento: 'seguimiento',
 } as const;
 
 export interface GeneracionReporte {

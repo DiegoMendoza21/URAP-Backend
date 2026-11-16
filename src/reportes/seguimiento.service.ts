@@ -37,12 +37,17 @@ import {
   seDicta,
 } from '../sesiones/sesiones.service.js';
 import type {
+  ConsultarSeguimientoDto,
   FiltrarSeguimientoDto,
   FiltrosSeguimientoDto,
   PaginaSeguimientoDto,
   ProyectoSeguimientoDto,
   ResumenSeguimientoDto,
 } from './dto/seguimiento.dto.js';
+import {
+  RegistroReportesService,
+  TIPO_REPORTE,
+} from './registro-reportes.service.js';
 import {
   type ArchivoExcel,
   encabezado,
@@ -173,6 +178,7 @@ export class SeguimientoService {
     private readonly prisma: PrismaService,
     private readonly alcance: AlcanceService,
     private readonly parametros: ParametrosService,
+    private readonly registro: RegistroReportesService,
   ) {}
 
   /** RF-25, p2: opciones de los filtros dentro del alcance del usuario. */
@@ -263,9 +269,10 @@ export class SeguimientoService {
   /** HU-12-01: todos los proyectos del período, con su color. */
   async tablero(
     usuario: UsuarioSesion,
-    consulta: FiltrarSeguimientoDto & { pagina: number; tamano: number },
+    consulta: ConsultarSeguimientoDto,
   ): Promise<PaginaSeguimientoDto> {
     const { periodo, filas } = await this.consultar(usuario, consulta);
+    await this.antesDelPdf(usuario, consulta, periodo, filas.length, false);
     return paginar(periodo, filas, filas, consulta);
   }
 
@@ -278,7 +285,117 @@ export class SeguimientoService {
     consulta: FiltrarSeguimientoDto & { pagina: number; tamano: number },
   ): Promise<PaginaSeguimientoDto> {
     const { periodo, filas } = await this.consultar(usuario, consulta);
-    return paginar(periodo, filas, conPendientes(filas), consulta);
+    const lista = conPendientes(filas);
+    await this.antesDelPdf(usuario, consulta, periodo, lista.length, true);
+    return paginar(periodo, filas, lista, consulta);
+  }
+
+  /**
+   * HU-12-06: el PDF del tablero lo imprime el navegador, que antes pide la consulta con
+   * `exportar=pdf`. Con ella se aplica el mismo máximo de filas que al Excel y se registra la
+   * generación. La consulta en pantalla, sin `exportar`, no registra nada.
+   */
+  private async antesDelPdf(
+    usuario: UsuarioSesion,
+    consulta: ConsultarSeguimientoDto,
+    periodo: ConsultaSeguimiento['periodo'],
+    filas: number,
+    soloPendientes: boolean,
+  ): Promise<void> {
+    if (consulta.exportar !== 'pdf') {
+      return;
+    }
+    await this.exigirTamanoExportable(filas);
+    await this.registrarGeneracion(usuario, consulta, periodo, {
+      soloPendientes,
+      formato: 'pdf',
+      filas,
+    });
+  }
+
+  /** HU-12-06 (RF-28, p6): el tablero exportado queda en `reporte_academico`. */
+  private registrarGeneracion(
+    usuario: UsuarioSesion,
+    { idPeriodo, idPrograma, idAsignatura, idDocente }: FiltrarSeguimientoDto,
+    periodo: ConsultaSeguimiento['periodo'],
+    {
+      soloPendientes,
+      formato,
+      filas,
+    }: { soloPendientes: boolean; formato: 'excel' | 'pdf'; filas: number },
+  ): Promise<void> {
+    return this.registro.registrar(usuario.id, {
+      tipo: TIPO_REPORTE.seguimiento,
+      nombre: `${soloPendientes ? 'Proyectos con pendientes' : 'Tablero de seguimiento'} del período ${periodo?.codigo ?? 'sin definir'}`,
+      idPrograma: idPrograma ?? null,
+      idPeriodo: periodo?.id ?? null,
+      parametros: {
+        idPeriodo: idPeriodo ?? null,
+        idPrograma: idPrograma ?? null,
+        idAsignatura: idAsignatura ?? null,
+        idDocente: idDocente ?? null,
+        vista: soloPendientes ? 'pendientes' : 'tablero',
+        formato,
+        proyectos: filas,
+      },
+      fecha: new Date(),
+    });
+  }
+
+  /**
+   * HU-12-06: los filtros aplicados, en palabras, para la cabecera de lo exportado («conserva
+   * los filtros aplicados»). El período va en su propia fila. Sin filtros, lo dice: así un
+   * archivo del período completo no se confunde con uno filtrado.
+   */
+  async textoFiltros(filtros: {
+    idPrograma?: number;
+    idAsignatura?: number;
+    idDocente?: number;
+    idRap?: number;
+    estado?: string;
+  }): Promise<string> {
+    const [programa, asignatura, docente, rap, estado] = await Promise.all([
+      filtros.idPrograma
+        ? this.prisma.programa.findUnique({
+            where: { id: filtros.idPrograma },
+            select: { nombre: true },
+          })
+        : null,
+      filtros.idAsignatura
+        ? this.prisma.asignatura.findUnique({
+            where: { id: filtros.idAsignatura },
+            select: { nombre: true },
+          })
+        : null,
+      filtros.idDocente
+        ? this.prisma.usuario.findUnique({
+            where: { id: filtros.idDocente },
+            select: { nombres: true, apellidos: true },
+          })
+        : null,
+      filtros.idRap
+        ? this.prisma.rap.findUnique({
+            where: { id: filtros.idRap },
+            select: { codigo: true, numero: true },
+          })
+        : null,
+      filtros.estado
+        ? this.prisma.estado_proyecto.findUnique({
+            where: { codigo: filtros.estado },
+            select: { nombre: true },
+          })
+        : null,
+    ]);
+    const partes = [
+      programa && `Programa: ${programa.nombre ?? filtros.idPrograma}`,
+      asignatura && `Asignatura: ${asignatura.nombre ?? filtros.idAsignatura}`,
+      docente && `Docente: ${nombreCompleto(docente) || filtros.idDocente}`,
+      rap && `RAP: ${rap.codigo ?? `RAP ${rap.numero ?? filtros.idRap}`}`,
+      estado && `Estado: ${estado.nombre ?? filtros.estado}`,
+    ].filter(Boolean);
+    return partes.length > 0
+      ? `Filtros: ${partes.join(' · ')}`
+      : 'Filtros: ninguno (todo el período)';
   }
 
   /** RF-25, p5: el tablero o la lista de pendientes en Excel. */
@@ -290,6 +407,11 @@ export class SeguimientoService {
     const { periodo, filas: todas } = await this.consultar(usuario, filtros);
     const filas = soloPendientes ? conPendientes(todas) : todas;
     await this.exigirTamanoExportable(filas.length);
+    await this.registrarGeneracion(usuario, filtros, periodo, {
+      soloPendientes,
+      formato: 'excel',
+      filas: filas.length,
+    });
 
     const generado = new Date();
     const datos = [
@@ -301,6 +423,7 @@ export class SeguimientoService {
         ),
       ],
       [`Período académico ${periodo?.codigo ?? 'sin definir'}`],
+      [await this.textoFiltros(filtros)],
       [`Generado el ${fechaGeneracion(generado)}`],
       [],
       encabezado([

@@ -11,7 +11,6 @@ import {
   ApiUnauthorizedResponse,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
-import { AuditarConsulta } from '../auditoria/auditar-consulta.decorator.js';
 import { Roles } from '../auth/decoradores/roles.decorator.js';
 import { UsuarioActual } from '../auth/decoradores/usuario-actual.decorator.js';
 import { ROL } from '../auth/roles.js';
@@ -82,6 +81,11 @@ export class SeguimientoController {
     type: RespuestaErrorDto,
     description: 'El período no existe',
   })
+  @ApiUnprocessableEntityResponse({
+    type: RespuestaErrorDto,
+    description:
+      'Con exportar=pdf: supera el máximo de filas exportables y hay que restringir los filtros',
+  })
   tablero(
     @UsuarioActual() usuario: UsuarioSesion,
     @Query() consulta: ConsultarSeguimientoDto,
@@ -91,7 +95,6 @@ export class SeguimientoController {
 
   @Get('tablero/excel')
   @Roles(ROL.administrador, ROL.departamento, ROL.direccion)
-  @AuditarConsulta('proyecto_docente')
   @ApiOperation({ summary: 'Exporta el tablero a Excel (RF-25, p5)' })
   @ApiProduces(TIPO_EXCEL)
   @ApiOkResponse({
@@ -135,6 +138,11 @@ export class SeguimientoController {
     type: RespuestaErrorDto,
     description: 'El período no existe',
   })
+  @ApiUnprocessableEntityResponse({
+    type: RespuestaErrorDto,
+    description:
+      'Con exportar=pdf: supera el máximo de filas exportables y hay que restringir los filtros',
+  })
   pendientes(
     @UsuarioActual() usuario: UsuarioSesion,
     @Query() consulta: ConsultarSeguimientoDto,
@@ -144,7 +152,6 @@ export class SeguimientoController {
 
   @Get('pendientes/excel')
   @Roles(ROL.administrador, ROL.departamento, ROL.direccion)
-  @AuditarConsulta('proyecto_docente')
   @ApiOperation({
     summary: 'Exporta la lista de pendientes a Excel (HU-12-02)',
   })
