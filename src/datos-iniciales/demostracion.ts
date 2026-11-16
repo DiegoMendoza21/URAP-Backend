@@ -1,11 +1,10 @@
 import type { NombreRol } from './catalogos.js';
-import { ESCALA, type RubricaSemilla } from './programa.js';
 
 /**
- * Datos de demostración: el período 2026-2 con su receso, las rúbricas provisionales y los
- * usuarios ficticios. Solo se cargan con `npm run db:sembrar:demo`, nunca en producción. Los
- * datos institucionales del programa (facultad, escala, RAP, rúbrica del RAP 2 y plan de
- * estudios) están en programa.ts y son datos base.
+ * Datos de demostración: el período 2026-2 con su receso y los usuarios ficticios. Solo se
+ * cargan con `npm run db:sembrar:demo`, nunca en producción. Los datos institucionales del
+ * programa (facultad, escala con su meta, RAP, rúbricas de los siete RAP y planes de estudio)
+ * están en programa.ts y son datos base.
  */
 
 /**
@@ -36,42 +35,6 @@ export const RECESO_2026_2 = [
   '2026-11-13',
   '2026-11-14',
 ].map((fecha) => ({ fecha, nombre: 'Receso de fiestas novembrinas' }));
-
-/** Prefijo de los textos de las rúbricas que todavía no entrega el programa. */
-export const PREFIJO_PROVISIONAL = 'PROVISIONAL —';
-
-/**
- * Indicadores de desempeño de cada RAP según la medición 2023-II. Las rúbricas de los RAP 1 y 3
- * a 7 existen, pero el programa no las ha entregado.
- */
-const INDICADORES_POR_RAP: [rap: number, indicadores: number][] = [
-  [1, 4],
-  [3, 4],
-  [4, 4],
-  [5, 3],
-  [6, 3],
-  [7, 3],
-];
-
-/**
- * Rúbricas provisionales de los RAP 1 y 3 a 7, versión 1, para que la demostración pueda medir
- * todos los RAP. Cada texto empieza con «PROVISIONAL —», para que nadie las confunda con las
- * reales; se reemplazan cuando el programa las entregue. La real del RAP 2 está en programa.ts.
- */
-export const RUBRICAS_PROVISIONALES: RubricaSemilla[] = INDICADORES_POR_RAP.map(
-  ([rap, cantidad]) => ({
-    rap,
-    version: 1,
-    indicadores: Array.from({ length: cantidad }, (_, i) => ({
-      numero: i + 1,
-      descripcion: `${PREFIJO_PROVISIONAL} Indicador ${i + 1} del RAP ${rap}, pendiente de la rúbrica oficial del programa.`,
-      descriptores: ESCALA.niveles.map(({ valor, etiqueta }) => ({
-        nivel: valor,
-        descripcion: `${PREFIJO_PROVISIONAL} Nivel ${etiqueta} en el indicador ${i + 1} del RAP ${rap}.`,
-      })),
-    })),
-  }),
-);
 
 export interface UsuarioDemo {
   correo: string;

@@ -10,14 +10,22 @@ export const FACULTAD = { nombre: 'Facultad de Ciencias Económicas' };
 export const PROGRAMA = { nombre: 'Administración Industrial' };
 
 /**
- * RF-07 y docs/glosario-dominio.md: escala de cuatro niveles, logrado desde el nivel 3. El
- * porcentaje esperado no está definido por el programa: sin él, RF-31 presenta el consolidado
- * sin el juicio de cumplimiento.
+ * RF-07 y docs/glosario-dominio.md: escala de cuatro niveles, logrado desde el nivel 3.
+ *
+ * La meta es 60 %, la misma para los siete RAP: el PEP 2025 (Tabla 18) fija para cada uno
+ * «Nota cuantitativa promedio superior a 3.0 o 60%» (docs/datos-institucionales.md, apartado 3).
+ * Se compara con el porcentaje de valoraciones en nivel 3 o 4. Cada medición copia la meta al
+ * crearse, así que cambiarla después no reescribe las mediciones pasadas.
  */
-export const ESCALA = {
+export const ESCALA: {
+  nombre: string;
+  umbral_cumplimiento: number;
+  porcentaje_esperado: number | null;
+  niveles: { valor: number; etiqueta: string }[];
+} = {
   nombre: 'Escala de valoración de los RAP',
   umbral_cumplimiento: 3,
-  porcentaje_esperado: null,
+  porcentaje_esperado: 60,
   niveles: [
     { valor: 1, etiqueta: 'Principiante' },
     { valor: 2, etiqueta: 'En Desarrollo' },
@@ -742,3 +750,65 @@ export const RUBRICA_RAP_2: RubricaSemilla = {
     descriptores: descriptoresOficiales(descripcion),
   })),
 };
+
+/** Una rúbrica oficial, versión 1, con los descriptores de la regla del RAP 2. */
+function rubricaOficial(rap: number, indicadores: string[]): RubricaSemilla {
+  return {
+    rap,
+    version: 1,
+    indicadores: indicadores.map((descripcion, i) => ({
+      numero: i + 1,
+      descripcion,
+      descriptores: descriptoresOficiales(descripcion),
+    })),
+  };
+}
+
+/**
+ * RF-06: rúbricas reales de los RAP 1, 3, 4, 5, 6 y 7, versión 1 y vigentes. Los indicadores
+ * son el texto literal de la Tabla 8 del informe de resultados RAP 2024-2, sin el punto final
+ * que traen algunos (docs/datos-institucionales.md, apartado 2). El informe no trae los
+ * descriptores por nivel: salen de la misma regla de la rúbrica real del RAP 2, y el programa
+ * todavía debe confirmarlos (apartado 8). Si corrige un texto, lo hace con una versión nueva.
+ */
+export const RUBRICAS_OFICIALES: RubricaSemilla[] = [
+  rubricaOficial(1, [
+    'Comprende los conceptos matemáticos, estadísticos y el método científico en el ámbito organizacional',
+    'Aplica los conceptos y herramientas matemáticas, estadísticas y el método científico en el ámbito organizacional',
+    'Propone la solución de problemas con el apoyo de herramientas matemáticas, estadísticas y el método científico en el ámbito organizacional',
+    'Valora resultados y alternativas de solución de problemas con el apoyo de las matemáticas, estadísticas y el método científico en el ámbito organizacional',
+  ]),
+  rubricaOficial(3, [
+    'Identifica las necesidades, restricciones y oportunidades asociadas a las organizaciones y su contexto, que inciden en la mejora de su gestión integral',
+    'Comprende conceptos, modelos, técnicas y/o herramientas adecuadas a las distintas temáticas relacionadas con la mejora en la gestión integral de las organizaciones',
+    'Aplica modelos, técnicas y/o herramientas orientadas a la mejora de la gestión integral de las organizaciones',
+    'Propone y valora alternativas que coadyuvan a la mejora de la gestión integral de las organizaciones',
+  ]),
+  rubricaOficial(4, [
+    'Comprende los requerimientos, recursos y restricciones de un problema de producción y operaciones en las organizaciones',
+    'Analiza soluciones a problemas de producción y operaciones en las organizaciones',
+    'Aplica conceptos, principios, métodos y herramientas de la producción y operaciones requeridos en la formulación de un problema de producción y operaciones en las organizaciones',
+    'Evalúa resultados y alternativas de solución a problemas de producción y operaciones en las organizaciones',
+  ]),
+  rubricaOficial(5, [
+    'Comprende los elementos fundamentales aplicables al mercadeo y el entorno digital en el desarrollo de estrategias de valor para las organizaciones',
+    'Aplica los conocimientos del mercadeo y del entorno digital en el desarrollo de estrategias de valor para las organizaciones',
+    'Valora las estrategias propuestas en la generación de valor aplicadas al mercadeo y el entorno digital en las organizaciones',
+  ]),
+  rubricaOficial(6, [
+    'Comprende los conocimientos y procesos de gestión humana en las organizaciones desde una visión integral de las personas apoyado en la legislación laboral',
+    'Aplica los conocimientos y procesos de gestión humana en las organizaciones desde una visión integral de las personas apoyado en la legislación laboral',
+    'Valora los conocimientos y procesos de gestión humana en las organizaciones desde una visión integral de las personas apoyado en la legislación laboral',
+  ]),
+  rubricaOficial(7, [
+    'Comprende conceptos y técnicas de comunicación asertivas, desarrollo sostenible, principios éticos y demás conocimientos asociados a las ciencias sociales y jurídicas',
+    'Aplica conceptos y técnicas de comunicación asertivas, desarrollo sostenible, principios éticos y demás conceptos asociados a las ciencias sociales y jurídicas',
+    'Evalúa conceptos y técnicas de comunicación asertivas, desarrollo sostenible, principios éticos y demás conceptos asociados a las ciencias sociales y jurídicas',
+  ]),
+];
+
+/** Las rúbricas de los siete RAP del programa, en el orden de los RAP. */
+export const RUBRICAS: RubricaSemilla[] = [
+  RUBRICA_RAP_2,
+  ...RUBRICAS_OFICIALES,
+].sort((a, b) => a.rap - b.rap);
