@@ -2,6 +2,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import {
   ALMACENAMIENTO_DIRECTORIO_DESARROLLO,
+  BASE_DATOS_CONEXIONES_POR_DEFECTO,
+  BASE_DATOS_CONEXIONES_TECHO,
   directorioAlmacenamiento,
   Entorno,
   MENSAJE_BASE_SIN_TLS,
@@ -182,6 +184,36 @@ describe('validarVariablesEntorno', () => {
       validarVariablesEntorno({ ...VARIABLES_VALIDAS, [clave]: valor }),
     ).toThrow(new RegExp(clave));
   });
+
+  it('usa el número de conexiones con la base por defecto, y acepta otro (NFR-001)', () => {
+    expect(
+      validarVariablesEntorno(VARIABLES_VALIDAS).BASE_DATOS_CONEXIONES_MAXIMAS,
+    ).toBe(BASE_DATOS_CONEXIONES_POR_DEFECTO);
+    expect(
+      validarVariablesEntorno({
+        ...VARIABLES_VALIDAS,
+        BASE_DATOS_CONEXIONES_MAXIMAS: '15',
+      }).BASE_DATOS_CONEXIONES_MAXIMAS,
+    ).toBe(15);
+    expect(
+      validarVariablesEntorno({
+        ...VARIABLES_VALIDAS,
+        BASE_DATOS_CONEXIONES_MAXIMAS: ' ',
+      }).BASE_DATOS_CONEXIONES_MAXIMAS,
+    ).toBe(BASE_DATOS_CONEXIONES_POR_DEFECTO);
+  });
+
+  it.each(['0', 'muchas', '2.5', String(BASE_DATOS_CONEXIONES_TECHO + 1)])(
+    'rechaza BASE_DATOS_CONEXIONES_MAXIMAS inválido (%s)',
+    (valor) => {
+      expect(() =>
+        validarVariablesEntorno({
+          ...VARIABLES_VALIDAS,
+          BASE_DATOS_CONEXIONES_MAXIMAS: valor,
+        }),
+      ).toThrow(/BASE_DATOS_CONEXIONES_MAXIMAS/);
+    },
+  );
 
   it('impide arrancar sin secreto JWT', () => {
     expect(() => validarVariablesEntorno(sin('JWT_SECRETO'))).toThrow(
