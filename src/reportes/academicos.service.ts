@@ -157,6 +157,7 @@ export class ReportesAcademicosService {
     const datos = [
       [titulo('Reporte de cumplimiento del diligenciamiento')],
       [`Período académico ${reporte.periodo?.codigo ?? 'sin definir'}`],
+      [await this.seguimiento.textoFiltros(consulta)],
       [`Generado el ${fechaGeneracion(new Date(reporte.generado))}`],
       [],
       encabezado(['Indicador', 'Valor']),
@@ -370,6 +371,7 @@ export class ReportesAcademicosService {
     const datos = [
       [titulo('Reporte de ejecución de contenidos')],
       [`Período académico ${reporte.periodo?.codigo ?? 'sin definir'}`],
+      [await this.seguimiento.textoFiltros(consulta)],
       [`Generado el ${fechaGeneracion(new Date(reporte.generado))}`],
       [],
       encabezado(['Indicador', 'Valor']),
@@ -654,6 +656,7 @@ export class ReportesAcademicosService {
           data: [
             [titulo('Reporte de contribución de los RAC a los RAP')],
             [`Período académico ${reporte.periodo?.codigo ?? 'sin definir'}`],
+            [await this.seguimiento.textoFiltros({ idRap: consulta.idRap })],
             [`Generado el ${fechaGeneracion(new Date(reporte.generado))}`],
             [],
             encabezado([
